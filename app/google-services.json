@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "267340299054",
+    "project_id": "macaumembershipdeliverydriver",
+    "storage_bucket": "macaumembershipdeliverydriver.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:267340299054:android:45f24b8dda7440a7cf98bf",
+        "android_client_info": {
+          "package_name": "com.membershipdeliverydriver.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBorqvif9iwkbpjFZSLGO525aBX361JamM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

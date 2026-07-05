@@ -1,0 +1,17 @@
+.gradle/
+build/
+app/build/
+app/.cxx/
+local.properties
+*.iml
+.idea/
+
+**/.next/
+**/node_modules/
+**/.vercel/
+**/.env.local
+**/.env*.local
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
