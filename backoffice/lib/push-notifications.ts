@@ -1,7 +1,22 @@
-import { getMessaging } from "firebase-admin/messaging";
-
 import { getFirebaseAdminApp } from "./firebase-admin";
 import { createServiceRoleSupabaseClient } from "./supabase";
+
+const firebaseAdminMessaging = require("firebase-admin/messaging") as {
+  getMessaging: () => {
+    sendEachForMulticast: (payload: {
+      tokens: string[];
+      notification: { title: string; body: string };
+      data?: Record<string, string>;
+      android?: {
+        priority?: string;
+        notification?: {
+          channelId?: string;
+          sound?: string;
+        };
+      };
+    }) => Promise<{ successCount: number; failureCount: number }>;
+  };
+};
 
 type SendPushOptions = {
   title: string;
@@ -42,7 +57,7 @@ export async function sendPushToDriver(driverId: string, payload: SendPushOption
   }
 
   getFirebaseAdminApp();
-  const messaging = getMessaging();
+  const messaging = firebaseAdminMessaging.getMessaging();
   const soundKey = payload.soundKey ?? "new_order";
   const channelId =
     soundKey === "urgent_order"
