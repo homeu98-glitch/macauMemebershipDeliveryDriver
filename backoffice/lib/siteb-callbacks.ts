@@ -1,5 +1,5 @@
 import { createSiteBApiToken } from "./siteb-api-auth";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase";
+import { createServiceRoleSupabaseClient } from "./supabase";
 
 type DispatchCallbackInput = {
   orderId: string;

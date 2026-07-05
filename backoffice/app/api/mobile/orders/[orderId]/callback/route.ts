@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { dispatchOrderCallback } from "@/lib/siteb-callbacks";
+import { dispatchOrderCallback } from "../../../../../../lib/siteb-callbacks";
 import { createUserSupabaseClient } from "@/lib/supabase";
 
 async function verifyDriverAccess(orderId: string, accessToken: string) {
