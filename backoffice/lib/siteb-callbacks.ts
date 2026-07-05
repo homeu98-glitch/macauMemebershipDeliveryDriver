@@ -1,4 +1,4 @@
-import { createSiteBApiToken } from "@/lib/siteb-api-auth";
+import { createSiteBApiToken } from "./siteb-api-auth";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase";
 
 type DispatchCallbackInput = {

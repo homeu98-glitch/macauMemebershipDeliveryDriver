@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { raiseOrderPriceByExternalId } from "@/lib/siteb-order-api";
-import { requireSiteBApiAuth } from "@/lib/siteb-api-auth";
+import { requireSiteBApiAuth } from "../../../../../../lib/siteb-api-auth";
 
 export async function POST(
   request: Request,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createSiteBApiToken } from "@/lib/siteb-api-auth";
+import { createSiteBApiToken } from "../../../../../lib/siteb-api-auth";
 
 export async function POST(request: Request) {
   try {
