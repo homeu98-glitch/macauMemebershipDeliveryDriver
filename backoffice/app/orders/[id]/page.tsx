@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getOrderById } from "@/lib/server-data";
+import { getOrderById } from "../../../lib/server-data";
 
 export default async function OrderDetailPage({
   params

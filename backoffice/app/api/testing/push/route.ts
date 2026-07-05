@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
-import { getSessionUser } from "@/lib/auth";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase";
-import { sendPushToDriver } from "@/lib/push-notifications";
+import { getSessionUser } from "../../../../lib/auth";
+import { createServiceRoleSupabaseClient } from "../../../../lib/supabase";
+import { sendPushToDriver } from "../../../../lib/push-notifications";
 
 export async function POST(request: Request) {
   const sessionUser = getSessionUser();

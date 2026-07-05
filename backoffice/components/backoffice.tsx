@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import type { CallbackLog, Metric, Order, PushTokenRegistration, Rider, RiderApplication, SettingRow } from "@/lib/data";
-import type { SessionUser } from "@/lib/auth";
+import type { CallbackLog, Metric, Order, PushTokenRegistration, Rider, RiderApplication, SettingRow } from "../lib/data";
+import type { SessionUser } from "../lib/auth";
 
 const navItems = [
   { href: "/dashboard", label: "儀表板" },

@@ -4,14 +4,14 @@ import {
   createSessionValue,
   SESSION_COOKIE_NAME,
   type SessionUser
-} from "@/lib/auth";
+} from "../../../../lib/auth";
 import {
   createAnonSupabaseClient,
   createServiceRoleSupabaseClient,
   hasServiceRoleKey,
   hasSessionSecretConfigured,
   isSupabaseConfigured
-} from "@/lib/supabase";
+} from "../../../../lib/supabase";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {

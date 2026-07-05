@@ -1,4 +1,4 @@
-import { BackofficeTestingPanel } from "@/components/backoffice";
+import { BackofficeTestingPanel } from "../../components/backoffice";
 
 export default function TestingPage() {
   return <BackofficeTestingPanel />;

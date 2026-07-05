@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { cancelOrderByExternalId } from "@/lib/siteb-order-api";
+import { cancelOrderByExternalId } from "../../../../../../lib/siteb-order-api";
 import { requireSiteBApiAuth } from "../../../../../../lib/siteb-api-auth";
 
 export async function POST(

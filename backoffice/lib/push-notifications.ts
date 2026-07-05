@@ -1,7 +1,7 @@
 import { getMessaging } from "firebase-admin/messaging";
 
-import { getFirebaseAdminApp } from "@/lib/firebase-admin";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase";
+import { getFirebaseAdminApp } from "./firebase-admin";
+import { createServiceRoleSupabaseClient } from "./supabase";
 
 type SendPushOptions = {
   title: string;

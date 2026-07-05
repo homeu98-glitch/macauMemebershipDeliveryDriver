@@ -2,8 +2,8 @@
 
 import { usePathname } from "next/navigation";
 
-import type { SessionUser } from "@/lib/auth";
-import { AppShell } from "@/components/backoffice";
+import type { SessionUser } from "../lib/auth";
+import { AppShell } from "./backoffice";
 
 export function RootFrame({
   children,

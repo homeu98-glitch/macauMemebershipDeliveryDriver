@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
-import { RootFrame } from "@/components/root-frame";
-import { getSessionUser } from "@/lib/auth";
+import { RootFrame } from "../components/root-frame";
+import { getSessionUser } from "../lib/auth";
 
 import "./globals.css";
 

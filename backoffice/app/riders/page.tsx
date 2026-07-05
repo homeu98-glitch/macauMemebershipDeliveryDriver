@@ -1,5 +1,5 @@
-import { RidersTable } from "@/components/backoffice";
-import { listRiders } from "@/lib/server-data";
+import { RidersTable } from "../../components/backoffice";
+import { listRiders } from "../../lib/server-data";
 
 export default async function RidersPage() {
   const riders = await listRiders();

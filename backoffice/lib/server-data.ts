@@ -1,5 +1,5 @@
-import { createServiceRoleSupabaseClient } from "@/lib/supabase";
-import type { CallbackLog, Metric, Order, PushTokenRegistration, Rider, RiderApplication } from "@/lib/data";
+import { createServiceRoleSupabaseClient } from "./supabase";
+import type { CallbackLog, Metric, Order, PushTokenRegistration, Rider, RiderApplication } from "./data";
 
 type DriverProfileRow = {
   id: string;

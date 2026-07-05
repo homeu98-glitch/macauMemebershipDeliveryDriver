@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getSessionUser } from "@/lib/auth";
-import { createServiceRoleSupabaseClient } from "@/lib/supabase";
+import { getSessionUser } from "../../../../../../lib/auth";
+import { createServiceRoleSupabaseClient } from "../../../../../../lib/supabase";
 
 export async function POST(
   request: Request,

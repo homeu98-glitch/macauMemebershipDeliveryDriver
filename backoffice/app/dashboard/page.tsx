@@ -1,4 +1,4 @@
-import { DashboardCreateOrderPanel, MetricsGrid } from "@/components/backoffice";
+import { DashboardCreateOrderPanel, MetricsGrid } from "../../components/backoffice";
 import Link from "next/link";
 import {
   getMetrics,
@@ -6,7 +6,7 @@ import {
   listOrders,
   listRiderApplications,
   listRiders
-} from "@/lib/server-data";
+} from "../../lib/server-data";
 
 function riderBadgeClass(status: "online" | "offline" | "suspended") {
   if (status === "online") return "badge badge-positive";

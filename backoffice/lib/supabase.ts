@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { ENV_PLACEHOLDERS } from "@/lib/data";
+import { ENV_PLACEHOLDERS } from "./data";
 
 function getSupabaseUrl() {
   return (

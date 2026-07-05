@@ -1,5 +1,5 @@
-import { createServiceRoleSupabaseClient } from "@/lib/supabase";
-import { sendPushToDriver, sendPushToOnlineDrivers } from "@/lib/push-notifications";
+import { createServiceRoleSupabaseClient } from "./supabase";
+import { sendPushToDriver, sendPushToOnlineDrivers } from "./push-notifications";
 
 type ShopInput = {
   externalShopId?: string;

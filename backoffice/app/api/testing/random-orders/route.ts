@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { getSessionUser } from "@/lib/auth";
-import { createOrSyncOrder, type CreateOrderInput } from "@/lib/siteb-order-api";
+import { getSessionUser } from "../../../../lib/auth";
+import { createOrSyncOrder, type CreateOrderInput } from "../../../../lib/siteb-order-api";
 
 const shopSamples = [
   {
