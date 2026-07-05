@@ -1,9 +1,27 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-import { createServiceRoleSupabaseClient, createUserSupabaseClient } from "@/lib/supabase";
+import { ENV_PLACEHOLDERS } from "../../../../../lib/data";
+import { createServiceRoleSupabaseClient } from "../../../../../lib/supabase";
+
+function createDriverUserClient(accessToken: string) {
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? ENV_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ENV_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    }
+  });
+}
 
 async function verifyDriver(accessToken: string) {
-  const userClient = createUserSupabaseClient(accessToken);
+  const userClient = createDriverUserClient(accessToken);
   const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
   if (userError || !userData.user) {
     return null;
