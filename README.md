@@ -1,117 +1,82 @@
-# Membership Delivery Driver Android App
+# Membership Delivery Driver
 
-Native Android V1 scaffold built with Kotlin and Jetpack Compose for a Macau-focused delivery driver workflow.
-
-## Included scope
-
-### Must-have V1
-- Login screen
-- Driver registration with:
-  - selfie upload placeholder
-  - Macau ID upload placeholder
-  - driving licence upload placeholder
-- Pending approval UI after registration
-- Home dashboard
-- Orders list
-- Order detail page
-- Online / offline availability toggle
-- Shop navigation entry point
-- Customer navigation entry point
-- Earnings summary and history list
-- Proof-of-delivery photo placeholder
-- Issue reporting action
-- Call actions for shop and customer
-
-### Good-for-V1 included
-- Lightweight repository pattern with fake in-memory data
-- JWT / API gateway abstractions as placeholders
-- Callback envelope models for later webhook or async integration
-- Supabase config boundary using URL + anon key only
-- StateFlow-based UI state with immutable models
+Macau-focused delivery driver project containing both the Android rider app and the Next.js backoffice.
 
 ## Project structure
 
 ```text
 MembershipDeliveryDriver/
+├─ app/                 # Android rider app (Kotlin + Jetpack Compose)
+├─ backoffice/          # Next.js backoffice
+├─ supabase/            # SQL schema and migrations
 ├─ build.gradle.kts
 ├─ settings.gradle.kts
-├─ gradle.properties
-├─ README.md
-└─ app/
-   ├─ build.gradle.kts
-   └─ src/main/
-      ├─ AndroidManifest.xml
-      └─ java/com/membershipdeliverydriver/app/
-         ├─ MainActivity.kt
-         ├─ DriverApp.kt
-         ├─ core/
-         │  ├─ AppModels.kt
-         │  ├─ ApiContracts.kt
-         │  ├─ DriverRepository.kt
-         │  ├─ DriverViewModel.kt
-         │  └─ SupabaseConfig.kt
-         └─ ui/
-            └─ Theme.kt
+└─ README.md
 ```
 
-## Architecture notes
+## Android rider app
 
-This scaffold favors a performance-friendly architecture for V1:
+The Android app includes:
 
-- `DriverAppState` is immutable and held in a single `StateFlow`.
-- `DriverViewModel` performs all state mutations in one place, which keeps Compose recomposition paths easy to reason about.
-- `DriverRepository` is the app-facing data boundary.
-- `AuthGateway` and `OrdersGateway` define backend integration contracts without hard-coding implementation details.
-- Placeholder callback models (`CallbackEnvelope`, `AuthCallback`, `RegistrationCallback`, `OrdersSyncCallback`) are ready for JWT exchange, async syncing, or server callbacks later.
-- Fake repository data keeps UI testable before backend contracts are finalized.
+- rider login and registration
+- pending approval flow
+- active order workflow
+- real `已取貨` action
+- proof-of-delivery upload flow
+- Firebase push notifications
+- per-event Cantonese notification sounds
+- earnings and profile pages
 
-## Supabase setup
+Main Android entry points:
 
-The app intentionally exposes only client-safe configuration:
+- `app/src/main/java/com/membershipdeliverydriver/app/DriverApp.kt`
+- `app/src/main/java/com/membershipdeliverydriver/app/core/DriverRepository.kt`
+- `app/src/main/java/com/membershipdeliverydriver/app/core/DriverNotifications.kt`
 
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `API_BASE_URL`
-- `JWT_ISSUER`
-- `JWT_AUDIENCE`
+## Backoffice
 
-These are defined as `BuildConfig` fields in:
+The backoffice includes:
 
-- `app/build.gradle.kts`
+- dashboard
+- rider approval workflow
+- orders list and order details
+- callback visibility
+- push-token registration visibility
+- dashboard test-order creation buttons
+- testing page for fake orders and test push
+- Firebase Admin push sending
 
-Replace:
+Main backoffice entry points:
 
-```kotlin
-buildConfigField("String", "SUPABASE_URL", "\"https://your-project.supabase.co\"")
-buildConfigField("String", "SUPABASE_ANON_KEY", "\"replace-with-your-anon-key\"")
-buildConfigField("String", "API_BASE_URL", "\"https://your-api.example.com/\"")
-buildConfigField("String", "JWT_ISSUER", "\"membership-driver\"")
-buildConfigField("String", "JWT_AUDIENCE", "\"membership-driver-api\"")
+- `backoffice/app/dashboard/page.tsx`
+- `backoffice/components/backoffice.tsx`
+- `backoffice/lib/siteb-order-api.ts`
+- `backoffice/lib/push-notifications.ts`
+
+## Backoffice local setup
+
+```powershell
+cd backoffice
+npm install
+Copy-Item '.env.example' '.env.local'
+npm run dev
 ```
 
-Important:
+## Backoffice environment variables
 
-- Do not place the Supabase `service_role` key in the Android app.
-- Keep privileged logic on a secure server or Edge Function.
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=replace-with-your-anon-key
+NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com
+SUPABASE_SERVICE_ROLE_KEY=replace-with-your-service-role-key
+BACKOFFICE_SESSION_SECRET=replace-with-a-long-random-session-secret
+JWT_SHARED_SECRET=replace-with-your-jwt-shared-secret
+FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"..."}
+```
 
-## How to open and run
+## Notes
 
-1. Open the project in Android Studio.
-2. Let Gradle sync.
-3. Replace the placeholder Supabase URL and anon key in `app/build.gradle.kts`.
-4. Run the `app` configuration on an emulator or device.
-
-## Demo behavior
-
-- Demo login password: `demo123`
-- Registration submission always routes to pending approval
-- Uploads use the platform content picker as placeholders
-- Order, earnings, issue, and proof-of-delivery data are currently fake in-memory data
-
-## Recommended next backend steps
-
-1. Replace `PlaceholderAuthGateway` with real auth and token refresh handling.
-2. Replace `PlaceholderOrdersGateway` with assigned-order sync and status update APIs.
-3. Persist JWT and session metadata securely.
-4. Replace generic map intents with the production navigation provider you choose.
-5. Add camera capture, offline caching, and background sync for delivery operations.
+- Keep service-role and Firebase Admin credentials server-side only.
+- Do not place privileged keys inside the Android app.
+- The Android app is built from the repo root with Gradle.
+- The backoffice is deployed separately from `backoffice/`.
