@@ -41,8 +41,8 @@ export async function sendPushToDriver(driverId: string, payload: SendPushOption
     return { successCount: 0, failureCount: 0, message: "No registered push tokens found." };
   }
 
-  const app = getFirebaseAdminApp();
-  const messaging = getMessaging(app);
+  getFirebaseAdminApp();
+  const messaging = getMessaging();
   const soundKey = payload.soundKey ?? "new_order";
   const channelId =
     soundKey === "urgent_order"

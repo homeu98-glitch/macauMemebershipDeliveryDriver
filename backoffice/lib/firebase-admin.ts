@@ -1,9 +1,17 @@
-import { cert, getApps, initializeApp, App } from "firebase-admin/app";
-
 type ServiceAccountShape = {
   project_id: string;
   client_email: string;
   private_key: string;
+};
+
+const firebaseAdminApp = require("firebase-admin/app") as {
+  cert: (serviceAccount: {
+    projectId: string;
+    clientEmail: string;
+    privateKey: string;
+  }) => unknown;
+  getApps: () => unknown[];
+  initializeApp: (options: { credential: unknown }) => unknown;
 };
 
 function parseServiceAccount(): ServiceAccountShape {
@@ -22,15 +30,15 @@ function parseServiceAccount(): ServiceAccountShape {
   throw new Error("FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON or FIREBASE_ADMIN_SERVICE_ACCOUNT_PATH is required.");
 }
 
-export function getFirebaseAdminApp(): App {
-  const existing = getApps()[0];
+export function getFirebaseAdminApp() {
+  const existing = firebaseAdminApp.getApps()[0];
   if (existing) {
     return existing;
   }
 
   const serviceAccount = parseServiceAccount();
-  return initializeApp({
-    credential: cert({
+  return firebaseAdminApp.initializeApp({
+    credential: firebaseAdminApp.cert({
       projectId: serviceAccount.project_id,
       clientEmail: serviceAccount.client_email,
       privateKey: serviceAccount.private_key,
