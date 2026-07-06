@@ -20,6 +20,10 @@ class DriverViewModel(
         refreshDashboard()
     }
 
+    fun onPushOrderUpdate() {
+        refreshDashboard()
+    }
+
     fun updateLoginPhone(value: String) {
         _uiState.update { it.copy(loginForm = it.loginForm.copy(phone = value), errorMessage = null) }
     }
@@ -202,7 +206,14 @@ class DriverViewModel(
             when (val result = repository.attachProofOfDelivery(orderId, uri)) {
                 is ApiResult.Success -> {
                     DriverSoundEffects.playOrderCompleted(AppContextHolder.requireContext())
-                    _uiState.update { it.copy(orders = it.orders.replaceOrder(result.value)) }
+                    _uiState.update {
+                        it.copy(
+                            orders = it.orders.filterNot { order -> order.id == orderId },
+                            activeOrderId = it.orders.firstOrNull { order -> order.id != orderId }?.id,
+                        )
+                    }
+                    refreshDashboard()
+                    refreshCompletedOrders(reset = true)
                 }
                 is ApiResult.Failure -> _uiState.update { it.copy(errorMessage = result.message) }
             }
@@ -239,6 +250,7 @@ class DriverViewModel(
         if (_uiState.value.currentDriver == null) return
         viewModelScope.launch {
             val previousOrders = _uiState.value.availableOrders
+            val currentCompletedFilter = _uiState.value.completedOrdersFilter
             _uiState.update { it.copy(isRefreshing = true) }
             try {
                 val availableOrders = repository.loadAvailableOrders()
@@ -260,8 +272,20 @@ class DriverViewModel(
                             weekEarningsMop = weekEarnings,
                             completedToday = deliveredToday,
                         ),
-                        activeOrderId = current.activeOrderId ?: orders.firstOrNull()?.id,
+                        activeOrderId = orders.firstOrNull()?.id,
                         isRefreshing = false,
+                    )
+                }
+
+                val completedPage = repository.loadCompletedOrders(
+                    filter = currentCompletedFilter,
+                    page = 0,
+                )
+                _uiState.update {
+                    it.copy(
+                        completedOrders = completedPage.items,
+                        completedOrdersPage = completedPage.page,
+                        completedOrdersHasMore = completedPage.hasMore,
                     )
                 }
 
@@ -286,6 +310,44 @@ class DriverViewModel(
                 }
             }
         }
+    }
+
+    fun refreshCompletedOrders(reset: Boolean = false) {
+        if (_uiState.value.currentDriver == null) return
+        viewModelScope.launch {
+            val filter = _uiState.value.completedOrdersFilter
+            val nextPage = if (reset) 0 else _uiState.value.completedOrdersPage + 1
+            if (!reset && !_uiState.value.completedOrdersHasMore) return@launch
+
+            _uiState.update { it.copy(isLoadingCompletedOrders = true) }
+            try {
+                val result = repository.loadCompletedOrders(filter, nextPage)
+                _uiState.update { current ->
+                    current.copy(
+                        completedOrders = if (reset) result.items else current.completedOrders + result.items.filterNot { next -> current.completedOrders.any { it.id == next.id } },
+                        completedOrdersPage = result.page,
+                        completedOrdersHasMore = result.hasMore,
+                        isLoadingCompletedOrders = false,
+                    )
+                }
+            } catch (error: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoadingCompletedOrders = false,
+                        errorMessage = error.message ?: "無法載入已完成訂單。",
+                    )
+                }
+            }
+        }
+    }
+
+    fun updateCompletedOrdersFilter(filter: HistoryRange) {
+        _uiState.update { it.copy(completedOrdersFilter = filter) }
+        refreshCompletedOrders(reset = true)
+    }
+
+    fun updateEarningsFilter(filter: HistoryRange) {
+        _uiState.update { it.copy(earningsFilter = filter) }
     }
 
     enum class DocumentType {

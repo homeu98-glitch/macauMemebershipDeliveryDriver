@@ -60,5 +60,11 @@ class DriverFirebaseMessagingService : FirebaseMessagingService() {
             (System.currentTimeMillis() % 100000).toInt(),
             notification
         )
+
+        sendBroadcast(Intent(ACTION_ORDER_UPDATED))
+    }
+
+    companion object {
+        const val ACTION_ORDER_UPDATED = "com.membershipdeliverydriver.app.ORDER_UPDATED"
     }
 }

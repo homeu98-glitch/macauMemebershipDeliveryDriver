@@ -14,6 +14,14 @@ enum class OrderStatus {
     ISSUE_REPORTED,
 }
 
+enum class HistoryRange {
+    TODAY,
+    YESTERDAY,
+    THIS_WEEK,
+    THIS_MONTH,
+    ALL,
+}
+
 data class DriverProfile(
     val id: String,
     val fullName: String,
@@ -69,7 +77,10 @@ data class Order(
     val totalAmountMop: Double,
     val items: List<OrderItem>,
     val pickedUpAt: String? = null,
+    val deliveredAt: String? = null,
     val proofOfDeliveryUri: Uri? = null,
+    val proofOfDeliveryPath: String? = null,
+    val proofOfDeliveryUrl: String? = null,
     val issueNote: String = "",
 )
 
@@ -106,11 +117,23 @@ data class DriverAppState(
     ),
     val availableOrders: List<Order> = emptyList(),
     val orders: List<Order> = emptyList(),
+    val completedOrders: List<Order> = emptyList(),
     val earnings: List<EarningEntry> = emptyList(),
     val activeOrderId: String? = null,
+    val completedOrdersFilter: HistoryRange = HistoryRange.TODAY,
+    val completedOrdersPage: Int = 0,
+    val completedOrdersHasMore: Boolean = true,
     val registrationSubmitted: Boolean = false,
     val lastCallback: CallbackEnvelope? = null,
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
+    val isLoadingCompletedOrders: Boolean = false,
+    val earningsFilter: HistoryRange = HistoryRange.TODAY,
     val errorMessage: String? = null,
+)
+
+data class PagedOrdersResult(
+    val items: List<Order>,
+    val page: Int,
+    val hasMore: Boolean,
 )

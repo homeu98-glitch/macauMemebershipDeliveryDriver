@@ -10,9 +10,13 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+import java.time.temporal.TemporalAdjusters
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.pow
@@ -26,6 +30,7 @@ interface DriverRepository {
     suspend fun loadAvailableOrders(): List<Order>
     suspend fun loadOrders(): List<Order>
     suspend fun loadEarnings(): List<EarningEntry>
+    suspend fun loadCompletedOrders(filter: HistoryRange, page: Int, pageSize: Int = 10): PagedOrdersResult
     suspend fun acceptOrder(orderId: String): ApiResult<Order>
     suspend fun markOrderPickedUp(orderId: String): ApiResult<Order>
     suspend fun attachProofOfDelivery(orderId: String, uri: Uri): ApiResult<Order>
@@ -243,13 +248,57 @@ class SupabaseDriverRepository : DriverRepository {
         val orderFilter = orderIds.joinToString(",") { "\"$it\"" }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&order=promised_at.asc&id=in.($orderFilter)",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&order=promised_at.asc&id=in.($orderFilter)&status=not.in.(delivered,canceled)",
             token = token,
         )
 
         val mappedOrders = mapOrders(token, ordersArray, latestDriverLocation)
         cachedOrders = mappedOrders
         mappedOrders
+    }
+
+    override suspend fun loadCompletedOrders(
+        filter: HistoryRange,
+        page: Int,
+        pageSize: Int,
+    ): PagedOrdersResult = withContext(Dispatchers.IO) {
+        val token = session?.accessToken ?: return@withContext PagedOrdersResult(emptyList(), page, false)
+        val driverId = currentDriver?.id ?: return@withContext PagedOrdersResult(emptyList(), page, false)
+        val offset = page * pageSize
+
+        val deliveredEvents = requestArray(
+            path = buildString {
+                append("/rest/v1/order_events?select=order_id,created_at")
+                append("&actor_driver_id=eq.${urlEncode(driverId)}")
+                append("&event_type=eq.delivered")
+                append(historyRangeQuery(filter, "created_at"))
+                append("&order=created_at.desc")
+                append("&limit=$pageSize")
+                append("&offset=$offset")
+            },
+            token = token,
+        )
+
+        if (deliveredEvents.length() == 0) {
+            return@withContext PagedOrdersResult(emptyList(), page, false)
+        }
+
+        val orderIds = buildList {
+            for (index in 0 until deliveredEvents.length()) {
+                add(deliveredEvents.getJSONObject(index).getString("order_id"))
+            }
+        }
+        val latestDriverLocation = loadLatestDriverLocation(token, driverId)
+        val ordersArray = requestArray(
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
+            token = token,
+        )
+
+        PagedOrdersResult(
+            items = mapOrders(token, ordersArray, latestDriverLocation).sortedByDescending { it.deliveredAt ?: "" },
+            page = page,
+            hasMore = deliveredEvents.length() == pageSize,
+        )
     }
 
     override suspend fun acceptOrder(orderId: String): ApiResult<Order> = withContext(Dispatchers.IO) {
@@ -317,14 +366,17 @@ class SupabaseDriverRepository : DriverRepository {
     }
 
     override suspend fun loadEarnings(): List<EarningEntry> = withContext(Dispatchers.IO) {
-        val orders = loadOrders()
-        val delivered = orders.filter { it.status == OrderStatus.DELIVERED }
-        delivered.mapIndexed { index, order ->
+        val delivered = loadAllDeliveredOrders()
+        delivered.mapNotNull { order ->
+            val completedAt = order.deliveredAt?.let {
+                runCatching { OffsetDateTime.parse(it).toLocalDateTime() }.getOrNull()
+            } ?: return@mapNotNull null
+
             EarningEntry(
                 id = "earn-${order.id}",
-                title = "訂單 ${order.id}",
+                title = "${order.shop.label} → ${order.customer.label}",
                 amountMop = order.totalAmountMop,
-                completedAt = LocalDateTime.now().minusHours(index.toLong()),
+                completedAt = completedAt,
             )
         }
     }
@@ -438,16 +490,38 @@ class SupabaseDriverRepository : DriverRepository {
                 )
             }
 
-            val updatedOrder = cachedOrders.firstOrNull { it.id == orderId }?.copy(
+            val deliveredAt = OffsetDateTime.now().toString()
+            val existingOrder = cachedOrders.firstOrNull { it.id == orderId } ?: loadActiveOrderById(token, orderId)
+            val updatedOrder = existingOrder?.copy(
                 status = OrderStatus.DELIVERED,
+                deliveredAt = deliveredAt,
                 proofOfDeliveryUri = uri,
+                proofOfDeliveryPath = storagePath,
+                proofOfDeliveryUrl = proofPublicUrl(storagePath),
             )
 
             if (updatedOrder != null) {
-                cachedOrders = cachedOrders.map { if (it.id == orderId) updatedOrder else it }
+                cachedOrders = cachedOrders.filterNot { it.id == orderId }
                 ApiResult.Success(updatedOrder)
             } else {
-                ApiResult.Failure("找不到訂單。")
+                ApiResult.Success(
+                    Order(
+                        id = orderId,
+                        status = OrderStatus.DELIVERED,
+                        shop = LocationPoint("", "", 0.0, 0.0, "", ""),
+                        customer = LocationPoint("", "", 0.0, 0.0, "", ""),
+                        customerNote = "",
+                        etaMinutes = 0,
+                        deliveryDeadlineText = "",
+                        distanceKm = 0.0,
+                        totalAmountMop = 0.0,
+                        items = emptyList(),
+                        deliveredAt = deliveredAt,
+                        proofOfDeliveryUri = uri,
+                        proofOfDeliveryPath = storagePath,
+                        proofOfDeliveryUrl = proofPublicUrl(storagePath),
+                    )
+                )
             }
         } catch (error: Exception) {
             ApiResult.Failure(error.message ?: "上傳送達證明失敗。")
@@ -590,6 +664,65 @@ class SupabaseDriverRepository : DriverRepository {
         return location.optDouble("latitude", 0.0) to location.optDouble("longitude", 0.0)
     }
 
+    private fun loadAllDeliveredOrders(): List<Order> {
+        val token = session?.accessToken ?: return emptyList()
+        val driverId = currentDriver?.id ?: return emptyList()
+        val latestDriverLocation = loadLatestDriverLocation(token, driverId)
+        val deliveredEvents = requestArray(
+            path = "/rest/v1/order_events?select=order_id,created_at&actor_driver_id=eq.${urlEncode(driverId)}&event_type=eq.delivered&order=created_at.desc",
+            token = token,
+        )
+        if (deliveredEvents.length() == 0) return emptyList()
+
+        val orderIds = buildList {
+            for (index in 0 until deliveredEvents.length()) {
+                add(deliveredEvents.getJSONObject(index).getString("order_id"))
+            }
+        }
+
+        val ordersArray = requestArray(
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})",
+            token = token,
+        )
+
+        return mapOrders(token, ordersArray, latestDriverLocation).sortedByDescending { it.deliveredAt ?: "" }
+    }
+
+    private fun loadActiveOrderById(token: String, orderId: String): Order? {
+        val driverId = currentDriver?.id ?: return null
+        val latestDriverLocation = loadLatestDriverLocation(token, driverId)
+        val ordersArray = requestArray(
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&id=eq.${urlEncode(orderId)}",
+            token = token,
+        )
+        return mapOrders(token, ordersArray, latestDriverLocation).firstOrNull()
+    }
+
+    private fun proofPublicUrl(storagePath: String): String {
+        return "${BuildConfig.SUPABASE_URL}/storage/v1/object/public/delivery-proofs/$storagePath"
+    }
+
+    private fun historyRangeQuery(filter: HistoryRange, column: String): String {
+        val today = LocalDate.now()
+        val start = when (filter) {
+            HistoryRange.TODAY -> today.atStartOfDay()
+            HistoryRange.YESTERDAY -> today.minusDays(1).atStartOfDay()
+            HistoryRange.THIS_WEEK -> today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)).atStartOfDay()
+            HistoryRange.THIS_MONTH -> today.withDayOfMonth(1).atStartOfDay()
+            HistoryRange.ALL -> null
+        } ?: return ""
+
+        val end = when (filter) {
+            HistoryRange.TODAY -> today.atTime(LocalTime.MAX)
+            HistoryRange.YESTERDAY -> today.minusDays(1).atTime(LocalTime.MAX)
+            HistoryRange.THIS_WEEK -> today.atTime(LocalTime.MAX)
+            HistoryRange.THIS_MONTH -> today.atTime(LocalTime.MAX)
+            HistoryRange.ALL -> null
+        } ?: return ""
+
+        return "&$column=gte.${start.atOffset(OffsetDateTime.now().offset)}&$column=lte.${end.atOffset(OffsetDateTime.now().offset)}"
+    }
+
     private fun mapOrders(
         token: String,
         ordersArray: JSONArray,
@@ -634,11 +767,17 @@ class SupabaseDriverRepository : DriverRepository {
             path = "/rest/v1/order_events?select=order_id,event_type,created_at&order_id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=created_at.asc",
             token = token,
         )
+        val proofsArray = requestArray(
+            path = "/rest/v1/delivery_proofs?select=order_id,storage_path,created_at&order_id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=created_at.desc",
+            token = token,
+        )
 
         val shops = jsonArrayToMap(shopsArray) { it.getString("id") }
         val customers = jsonArrayToMap(customersArray) { it.getString("id") }
         val itemsByOrder = mutableMapOf<String, MutableList<OrderItem>>()
         val pickedUpAtByOrder = mutableMapOf<String, String>()
+        val deliveredAtByOrder = mutableMapOf<String, String>()
+        val proofPathByOrder = mutableMapOf<String, String>()
         for (index in 0 until itemsArray.length()) {
             val item = itemsArray.getJSONObject(index)
             val list = itemsByOrder.getOrPut(item.getString("order_id")) { mutableListOf() }
@@ -653,6 +792,16 @@ class SupabaseDriverRepository : DriverRepository {
                 (eventType == "picked_up" || eventType == "arrived_customer")
             ) {
                 pickedUpAtByOrder[orderId] = event.optString("created_at")
+            }
+            if (orderId !in deliveredAtByOrder && eventType == "delivered") {
+                deliveredAtByOrder[orderId] = event.optString("created_at")
+            }
+        }
+        for (index in 0 until proofsArray.length()) {
+            val proof = proofsArray.getJSONObject(index)
+            val orderId = proof.getString("order_id")
+            if (orderId !in proofPathByOrder) {
+                proofPathByOrder[orderId] = proof.optString("storage_path")
             }
         }
 
@@ -694,6 +843,9 @@ class SupabaseDriverRepository : DriverRepository {
                         totalAmountMop = json.optDouble("assigned_fee_mop", 0.0),
                         items = itemsByOrder[json.getString("id")] ?: emptyList(),
                         pickedUpAt = pickedUpAtByOrder[json.getString("id")],
+                        deliveredAt = deliveredAtByOrder[json.getString("id")],
+                        proofOfDeliveryPath = proofPathByOrder[json.getString("id")],
+                        proofOfDeliveryUrl = proofPathByOrder[json.getString("id")]?.let(::proofPublicUrl),
                     ),
                 )
             }

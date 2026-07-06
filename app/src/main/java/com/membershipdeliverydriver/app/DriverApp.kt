@@ -1,13 +1,16 @@
 package com.membershipdeliverydriver.app
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +48,7 @@ import androidx.compose.material.icons.filled.MoreTime
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.ReportProblem
+import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -69,6 +73,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +103,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.membershipdeliverydriver.app.core.ApprovalStatus
+import com.membershipdeliverydriver.app.core.AppContextHolder
 import com.membershipdeliverydriver.app.core.DriverAvailability
 import com.membershipdeliverydriver.app.core.DriverViewModel
 import com.membershipdeliverydriver.app.core.Order
@@ -114,8 +120,8 @@ private object Routes {
     const val PendingApproval = "pendingApproval"
     const val Home = "home"
     const val Orders = "orders"
+    const val Completed = "completed"
     const val OrderDetail = "orderDetail"
-    const val Earnings = "earnings"
     const val Profile = "profile"
 }
 
@@ -164,6 +170,37 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    LaunchedEffect(uiState.currentDriver?.id, uiState.currentDriver?.availability) {
+        if (uiState.currentDriver?.availability != DriverAvailability.ONLINE) return@LaunchedEffect
+        while (true) {
+            delay(15000)
+            viewModel.refreshDashboard()
+        }
+    }
+
+    DisposableEffect(uiState.currentDriver?.id, context) {
+        if (uiState.currentDriver == null) {
+            onDispose { }
+        } else {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(context: android.content.Context?, intent: Intent?) {
+                    if (intent?.action == com.membershipdeliverydriver.app.core.DriverFirebaseMessagingService.ACTION_ORDER_UPDATED) {
+                        viewModel.onPushOrderUpdate()
+                    }
+                }
+            }
+            ContextCompat.registerReceiver(
+                context,
+                receiver,
+                IntentFilter(com.membershipdeliverydriver.app.core.DriverFirebaseMessagingService.ACTION_ORDER_UPDATED),
+                ContextCompat.RECEIVER_NOT_EXPORTED,
+            )
+            onDispose {
+                runCatching { context.unregisterReceiver(receiver) }
+            }
         }
     }
 
@@ -236,6 +273,13 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onProofSelected = viewModel::uploadProofOfDelivery,
                 )
             }
+            composable(Routes.Completed) {
+                CompletedOrdersScreen(
+                    uiState = uiState,
+                    onFilterSelected = viewModel::updateCompletedOrdersFilter,
+                    onLoadMore = { viewModel.refreshCompletedOrders(reset = false) },
+                )
+            }
             composable(Routes.OrderDetail) {
                 val activeOrder = uiState.orders.firstOrNull { it.id == uiState.activeOrderId }
                 OrderDetailScreen(
@@ -249,12 +293,10 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     },
                 )
             }
-            composable(Routes.Earnings) {
-                EarningsScreen(uiState = uiState)
-            }
             composable(Routes.Profile) {
                 ProfileScreen(
-                    driver = uiState.currentDriver,
+                    uiState = uiState,
+                    onEarningsFilterSelected = viewModel::updateEarningsFilter,
                     onLogout = viewModel::logout,
                 )
             }
@@ -262,7 +304,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
     }
 }
 
-private val mainRoutes = setOf(Routes.Home, Routes.Orders, Routes.Earnings, Routes.Profile)
+private val mainRoutes = setOf(Routes.Home, Routes.Orders, Routes.Completed, Routes.Profile)
 
 @Composable
 private fun DriverBottomBar(navController: NavHostController) {
@@ -271,7 +313,7 @@ private fun DriverBottomBar(navController: NavHostController) {
     val items = listOf(
         BottomNavItem("首頁", Routes.Home, Icons.Default.Home),
         BottomNavItem("訂單", Routes.Orders, Icons.Default.ListAlt),
-        BottomNavItem("收入", Routes.Earnings, Icons.Default.MonetizationOn),
+        BottomNavItem("完成", Routes.Completed, Icons.Default.TaskAlt),
         BottomNavItem("我的", Routes.Profile, Icons.Default.VerifiedUser),
     )
 
@@ -1449,8 +1491,10 @@ private fun LocationCard(
 }
 
 @Composable
-private fun EarningsScreen(
+private fun CompletedOrdersScreen(
     uiState: com.membershipdeliverydriver.app.core.DriverAppState,
+    onFilterSelected: (com.membershipdeliverydriver.app.core.HistoryRange) -> Unit,
+    onLoadMore: () -> Unit,
 ) {
     val formatter = remember { DateTimeFormatter.ofPattern("MM/dd HH:mm") }
     LazyColumn(
@@ -1468,11 +1512,8 @@ private fun EarningsScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("收入紀錄", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        "查看今日與本週收入，並瀏覽已完成訂單的收入紀錄。",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text("已完成訂單", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("可查看送達時間、照片資訊與已完成紀錄。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Surface(
                     shape = RoundedCornerShape(999.dp),
@@ -1480,7 +1521,7 @@ private fun EarningsScreen(
                     border = BorderStroke(1.dp, Color(0xFFF6D56A))
                 ) {
                     Text(
-                        text = "${uiState.earnings.size} 筆",
+                        text = "${uiState.completedOrders.size} 筆",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         color = Color(0xFF6E4A00),
                         style = MaterialTheme.typography.labelLarge,
@@ -1490,15 +1531,12 @@ private fun EarningsScreen(
             }
         }
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                SummaryCard(title = "今日", value = "MOP ${uiState.dashboard.todayEarningsMop}", modifier = Modifier.weight(1f))
-                SummaryCard(title = "本週", value = "MOP ${uiState.dashboard.weekEarningsMop}", modifier = Modifier.weight(1f))
-            }
+            HistoryRangeChips(
+                selected = uiState.completedOrdersFilter,
+                onSelected = onFilterSelected,
+            )
         }
-        if (uiState.earnings.isEmpty()) {
+        if (uiState.completedOrders.isEmpty() && !uiState.isLoadingCompletedOrders) {
             item {
                 Card(
                     shape = RoundedCornerShape(24.dp),
@@ -1506,46 +1544,67 @@ private fun EarningsScreen(
                     border = BorderStroke(1.dp, Color(0xFFF1E0BE))
                 ) {
                     Text(
-                        "目前還沒有收入紀錄。",
+                        "這個時間範圍內還沒有已完成訂單。",
                         modifier = Modifier.padding(18.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
-        items(uiState.earnings, key = { it.id }) { item ->
+        items(uiState.completedOrders, key = { it.id }) { order ->
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 border = BorderStroke(1.dp, Color(0xFFF0DFC0))
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column {
-                        Text(item.title, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            formatter.format(item.completedAt),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color(0xFFFFF2CB)
+                Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "MOP ${item.amountMop}",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color(0xFF8A5A00),
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("${order.shop.label} → ${order.customer.label}", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                order.deliveredAt?.let { formatter.format(OffsetDateTime.parse(it)) } ?: "完成時間待同步",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF2CB)) {
+                            Text(
+                                "MOP ${order.totalAmountMop}",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color(0xFF8A5A00),
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
+                    Text("客戶地址：${order.customer.address}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (!order.proofOfDeliveryPath.isNullOrBlank()) "送達照片：已上傳" else "送達照片：未同步",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (!order.proofOfDeliveryUrl.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = { openExternalUrl(AppContextHolder.requireContext(), order.proofOfDeliveryUrl) },
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Text("查看送達照片")
+                        }
+                    }
+                }
+            }
+        }
+        if (uiState.completedOrdersHasMore) {
+            item {
+                OutlinedButton(
+                    onClick = onLoadMore,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Text(if (uiState.isLoadingCompletedOrders) "載入中..." else "載入更多")
                 }
             }
         }
@@ -1554,9 +1613,16 @@ private fun EarningsScreen(
 
 @Composable
 private fun ProfileScreen(
-    driver: com.membershipdeliverydriver.app.core.DriverProfile?,
+    uiState: com.membershipdeliverydriver.app.core.DriverAppState,
+    onEarningsFilterSelected: (com.membershipdeliverydriver.app.core.HistoryRange) -> Unit,
     onLogout: () -> Unit,
 ) {
+    val driver = uiState.currentDriver
+    val formatter = remember { DateTimeFormatter.ofPattern("MM/dd HH:mm") }
+    val filteredEarnings = uiState.earnings.filter { entry ->
+        matchesHistoryRange(entry.completedAt.toLocalDate(), uiState.earningsFilter)
+    }
+    val filteredTotal = filteredEarnings.sumOf { it.amountMop }
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -1585,6 +1651,73 @@ private fun ProfileScreen(
             }
         }
         item {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("收入紀錄", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                HistoryRangeChips(
+                    selected = uiState.earningsFilter,
+                    onSelected = onEarningsFilterSelected,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SummaryCard(title = "範圍收入", value = "MOP $filteredTotal", modifier = Modifier.weight(1f))
+                    SummaryCard(title = "筆數", value = "${filteredEarnings.size}", modifier = Modifier.weight(1f))
+                }
+            }
+        }
+        if (filteredEarnings.isEmpty()) {
+            item {
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, Color(0xFFF1E0BE))
+                ) {
+                    Text(
+                        "這個時間範圍內還沒有收入紀錄。",
+                        modifier = Modifier.padding(18.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        items(filteredEarnings, key = { it.id }) { item ->
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFF0DFC0))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(item.title, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            formatter.format(item.completedAt),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFFFFF2CB)
+                    ) {
+                        Text(
+                            "MOP ${item.amountMop}",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color(0xFF8A5A00),
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        }
+        item {
             Button(
                 onClick = onLogout,
                 modifier = Modifier.fillMaxWidth(),
@@ -1592,6 +1725,33 @@ private fun ProfileScreen(
             ) {
                 Text("登出")
             }
+        }
+    }
+}
+
+@Composable
+private fun HistoryRangeChips(
+    selected: com.membershipdeliverydriver.app.core.HistoryRange,
+    onSelected: (com.membershipdeliverydriver.app.core.HistoryRange) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(
+            com.membershipdeliverydriver.app.core.HistoryRange.TODAY,
+            com.membershipdeliverydriver.app.core.HistoryRange.YESTERDAY,
+            com.membershipdeliverydriver.app.core.HistoryRange.THIS_WEEK,
+            com.membershipdeliverydriver.app.core.HistoryRange.THIS_MONTH,
+            com.membershipdeliverydriver.app.core.HistoryRange.ALL,
+        ).forEach { range ->
+            FilterChip(
+                selected = selected == range,
+                onClick = { onSelected(range) },
+                label = { Text(historyRangeLabel(range)) },
+            )
         }
     }
 }
@@ -1670,6 +1830,34 @@ private fun openNavigation(
         Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude($encodedLabel)"),
     )
     context.startActivity(intent)
+}
+
+private fun openExternalUrl(context: android.content.Context, url: String) {
+    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+}
+
+private fun historyRangeLabel(range: com.membershipdeliverydriver.app.core.HistoryRange): String {
+    return when (range) {
+        com.membershipdeliverydriver.app.core.HistoryRange.TODAY -> "Today"
+        com.membershipdeliverydriver.app.core.HistoryRange.YESTERDAY -> "Yesterday"
+        com.membershipdeliverydriver.app.core.HistoryRange.THIS_WEEK -> "This week"
+        com.membershipdeliverydriver.app.core.HistoryRange.THIS_MONTH -> "This month"
+        com.membershipdeliverydriver.app.core.HistoryRange.ALL -> "ALL"
+    }
+}
+
+private fun matchesHistoryRange(
+    date: java.time.LocalDate,
+    range: com.membershipdeliverydriver.app.core.HistoryRange,
+): Boolean {
+    val today = java.time.LocalDate.now()
+    return when (range) {
+        com.membershipdeliverydriver.app.core.HistoryRange.TODAY -> date == today
+        com.membershipdeliverydriver.app.core.HistoryRange.YESTERDAY -> date == today.minusDays(1)
+        com.membershipdeliverydriver.app.core.HistoryRange.THIS_WEEK -> !date.isBefore(today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)))
+        com.membershipdeliverydriver.app.core.HistoryRange.THIS_MONTH -> date.year == today.year && date.month == today.month
+        com.membershipdeliverydriver.app.core.HistoryRange.ALL -> true
+    }
 }
 
 private fun bitmapToCacheUri(context: android.content.Context, bitmap: Bitmap): Uri? {
