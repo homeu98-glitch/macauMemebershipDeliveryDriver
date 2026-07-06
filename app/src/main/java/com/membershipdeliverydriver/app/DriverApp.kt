@@ -109,7 +109,6 @@ import com.membershipdeliverydriver.app.core.DriverAvailability
 import com.membershipdeliverydriver.app.core.DriverViewModel
 import com.membershipdeliverydriver.app.core.Order
 import com.membershipdeliverydriver.app.core.OrderStatus
-import com.membershipdeliverydriver.app.core.SupabaseConfig
 import java.time.format.DateTimeFormatter
 import java.time.Duration
 import java.time.OffsetDateTime
@@ -263,7 +262,6 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
             }
             composable(Routes.PendingApproval) {
                 PendingApprovalScreen(
-                    configStatus = SupabaseConfig.isConfigured(),
                     onBackToLogin = {
                         navController.navigate(Routes.Login) {
                             popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
@@ -621,7 +619,6 @@ private fun UploadTile(
 
 @Composable
 private fun PendingApprovalScreen(
-    configStatus: Boolean,
     onBackToLogin: () -> Unit,
 ) {
     Box(
@@ -646,12 +643,8 @@ private fun PendingApprovalScreen(
                     "後台會審核你的自拍照、澳門身份證與駕駛執照。審核通過後，你就可以正式登入並接收訂單。",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                StatusBadge(
-                    label = if (configStatus) "Supabase 已連接" else "Supabase 尚未完成設定",
-                    highlight = configStatus,
-                )
                 Text(
-                    SupabaseConfig.configNote,
+                    "如果審核還未完成，請稍後再登入查看。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

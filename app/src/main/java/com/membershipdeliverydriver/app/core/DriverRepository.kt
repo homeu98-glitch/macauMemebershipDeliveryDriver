@@ -238,18 +238,35 @@ class SupabaseDriverRepository : DriverRepository {
         try {
             val email = authEmailFromPhone(form.phone)
             val authPassword = authPasswordFromPin(form.password)
-            val signupPayload = JSONObject()
-                .put("email", email)
-                .put("password", authPassword)
-                .put("data", JSONObject().put("full_name", form.fullName))
-                .toString()
+            val authJson = try {
+                val signupPayload = JSONObject()
+                    .put("email", email)
+                    .put("password", authPassword)
+                    .put("data", JSONObject().put("full_name", form.fullName))
+                    .toString()
 
-            val authJson = requestJson(
-                path = "/auth/v1/signup",
-                method = "POST",
-                token = BuildConfig.SUPABASE_ANON_KEY,
-                body = signupPayload,
-            )
+                requestJson(
+                    path = "/auth/v1/signup",
+                    method = "POST",
+                    token = BuildConfig.SUPABASE_ANON_KEY,
+                    body = signupPayload,
+                )
+            } catch (error: Exception) {
+                val rawMessage = error.message.orEmpty()
+                if (
+                    rawMessage.contains("over_email_rate_limit", ignoreCase = true) ||
+                    rawMessage.contains("email rate limit", ignoreCase = true) ||
+                    rawMessage.contains("User already registered", ignoreCase = true) ||
+                    rawMessage.contains("user_already_exists", ignoreCase = true)
+                ) {
+                    runCatching { loginForRegistration(email, authPassword) }
+                        .getOrElse {
+                            throw IllegalStateException("目前註冊請求太多，請稍等幾分鐘後再試。")
+                        }
+                } else {
+                    throw error
+                }
+            }
 
             val accessToken = authJson.optString("access_token", "")
             val userJson = authJson.optJSONObject("user")
@@ -258,39 +275,74 @@ class SupabaseDriverRepository : DriverRepository {
 
             if (accessToken.isBlank()) {
                 return@withContext ApiResult.Failure(
-                    "註冊已建立，但目前無法自動完成文件上傳。請確認 Supabase 已允許 email/password 直接登入。"
+                    "註冊資料已送出，但目前無法自動完成開通，請稍後再試。"
                 )
             }
 
-            val profilePayload = JSONObject()
-                .put("auth_user_id", userId)
-                .put("full_name", form.fullName)
-                .put("phone", form.phone)
-                .put("vehicle_type", "電單車")
-                .put("approval_status", "pending_review")
-                .put("availability", "offline")
-                .toString()
-
-            val profileArray = requestArray(
-                path = "/rest/v1/driver_profiles",
-                method = "POST",
+            val existingProfileArray = requestArray(
+                path = "/rest/v1/driver_profiles?select=id&auth_user_id=eq.${urlEncode(userId)}",
                 token = accessToken,
-                body = profilePayload,
-                prefer = "return=representation",
             )
-            val driverId = profileArray.getJSONObject(0).getString("id")
+            val driverId =
+                if (existingProfileArray.length() > 0) {
+                    val existingDriverId = existingProfileArray.getJSONObject(0).getString("id")
+                    requestArray(
+                        path = "/rest/v1/driver_profiles?id=eq.${urlEncode(existingDriverId)}",
+                        method = "PATCH",
+                        token = accessToken,
+                        body = JSONObject()
+                            .put("full_name", form.fullName)
+                            .put("phone", form.phone)
+                            .put("vehicle_type", "電單車")
+                            .put("approval_status", "pending_review")
+                            .put("availability", "offline")
+                            .toString(),
+                        prefer = "return=representation",
+                    )
+                    existingDriverId
+                } else {
+                    val profilePayload = JSONObject()
+                        .put("auth_user_id", userId)
+                        .put("full_name", form.fullName)
+                        .put("phone", form.phone)
+                        .put("vehicle_type", "電單車")
+                        .put("approval_status", "pending_review")
+                        .put("availability", "offline")
+                        .toString()
 
-            requestArray(
-                path = "/rest/v1/driver_applications",
-                method = "POST",
+                    val profileArray = requestArray(
+                        path = "/rest/v1/driver_profiles",
+                        method = "POST",
+                        token = accessToken,
+                        body = profilePayload,
+                        prefer = "return=representation",
+                    )
+                    profileArray.getJSONObject(0).getString("id")
+                }
+
+            val existingApplicationArray = requestArray(
+                path = "/rest/v1/driver_applications?select=id&driver_id=eq.${urlEncode(driverId)}&order=created_at.desc&limit=1",
                 token = accessToken,
-                body = JSONObject().put("driver_id", driverId).toString(),
-                prefer = "return=representation",
             )
+            if (existingApplicationArray.length() == 0) {
+                requestArray(
+                    path = "/rest/v1/driver_applications",
+                    method = "POST",
+                    token = accessToken,
+                    body = JSONObject().put("driver_id", driverId).toString(),
+                    prefer = "return=representation",
+                )
+            }
 
             val selfiePath = uploadToStorage("driver-documents", "${userId}/selfie.jpg", form.selfie.uri!!, accessToken)
             val macauIdPath = uploadToStorage("driver-documents", "${userId}/macau-id.jpg", form.macauId.uri!!, accessToken)
             val licencePath = uploadToStorage("driver-documents", "${userId}/driving-licence.jpg", form.drivingLicence.uri!!, accessToken)
+
+            requestArray(
+                path = "/rest/v1/driver_documents?driver_id=eq.${urlEncode(driverId)}",
+                method = "DELETE",
+                token = accessToken,
+            )
 
             val documentsPayload = JSONArray()
                 .put(JSONObject().put("driver_id", driverId).put("document_type", "selfie").put("storage_path", selfiePath))
@@ -308,7 +360,14 @@ class SupabaseDriverRepository : DriverRepository {
 
             ApiResult.Success(ApprovalStatus.PENDING_APPROVAL)
         } catch (error: Exception) {
-            ApiResult.Failure(error.message ?: "提交註冊失敗。")
+            val rawMessage = error.message.orEmpty()
+            val userMessage = when {
+                rawMessage.contains("over_email_rate_limit", ignoreCase = true) ||
+                    rawMessage.contains("email rate limit", ignoreCase = true) ->
+                    "目前註冊請求太多，請稍等幾分鐘後再試。"
+                else -> rawMessage.ifBlank { "提交註冊失敗。" }
+            }
+            ApiResult.Failure(userMessage)
         }
     }
 
@@ -725,6 +784,20 @@ class SupabaseDriverRepository : DriverRepository {
 
     private fun authPasswordFromPin(pin: String): String {
         return "DriverPin#$pin@2026"
+    }
+
+    private fun loginForRegistration(email: String, authPassword: String): JSONObject {
+        val payload = JSONObject()
+            .put("email", email)
+            .put("password", authPassword)
+            .toString()
+
+        return requestJson(
+            path = "/auth/v1/token?grant_type=password",
+            method = "POST",
+            token = BuildConfig.SUPABASE_ANON_KEY,
+            body = payload,
+        )
     }
 
     private fun isSiteBApiConfigured(): Boolean {
