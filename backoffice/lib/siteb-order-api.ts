@@ -243,7 +243,7 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       pickupTime: input.pickupTime ?? null,
       deliveryMode: normalizeDeliveryMode(input.deliveryMode),
       deliveryDeadline: input.deliveryDeadline ?? null,
-      urgent: input.urgent ?? false,
+      urgent: false,
       currency: input.currency ?? "MOP",
       notes: input.notes ?? {},
       callback: normalizedCallback
@@ -261,17 +261,17 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
   await replaceItems(createdOrder.id as string, input.items ?? []);
   await appendEvent(createdOrder.id as string, "website.order_created", {
     externalOrderId: input.externalOrderId,
-    urgent: input.urgent ?? false
+    urgent: false
   });
 
   await sendPushToOnlineDrivers({
-    title: input.urgent ? "有緊急新訂單可接" : "有新訂單可接",
+    title: "有新訂單可接",
     body: `${input.shop.name} 有新配送工單，請立即查看首頁。`,
-    soundKey: input.urgent ? "urgent_order" : "new_order",
+    soundKey: "new_order",
     data: {
       type: "new_order",
       externalOrderId: input.externalOrderId,
-      urgent: String(input.urgent ?? false),
+      urgent: "false",
     },
   }).catch(() => undefined)
 
@@ -337,22 +337,20 @@ export async function cancelOrderByExternalId(
 
   if (assignment?.driver_id) {
     void sendPushToDriver(assignment.driver_id, {
-      title: "訂單已取消",
-      body: "唔好意思呀, 老闆取消左訂單。",
-      soundKey: "order_cancelled",
+      title: "",
+      body: "",
       data: {
-        type: "order_canceled",
+        type: "order_invalidated",
         externalOrderId
       }
     }).catch(() => undefined);
   }
 
   void sendPushToOnlineDrivers({
-    title: "訂單已取消",
-    body: "唔好意思呀, 老闆取消左訂單。",
-    soundKey: "order_cancelled",
+    title: "",
+    body: "",
     data: {
-      type: "order_canceled",
+      type: "order_invalidated",
       externalOrderId
     }
   }).catch(() => undefined);
@@ -420,6 +418,8 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     return { found: true as const, canceled: false as const, status: order.status as string };
   }
 
+  const shouldPlayCancelSound = order.status === "picked_up" || order.status === "arrived_customer";
+
   if (order.status !== "canceled") {
     const canceledAt = nowIso();
     const payload =
@@ -461,22 +461,22 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
 
   if (assignment?.driver_id) {
     void sendPushToDriver(assignment.driver_id, {
-      title: "訂單已取消",
-      body: "訂單已由後台取消。",
-      soundKey: "order_cancelled",
+      title: shouldPlayCancelSound ? "訂單已取消" : "",
+      body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+      soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
       data: {
-        type: "order_canceled",
+        type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
         externalOrderId: order.external_order_id
       }
     }).catch(() => undefined);
   }
 
   void sendPushToOnlineDrivers({
-    title: "訂單已取消",
-    body: "唔好意思呀, 老闆取消左訂單。",
-    soundKey: "order_cancelled",
+    title: shouldPlayCancelSound ? "訂單已取消" : "",
+    body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+    soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
     data: {
-      type: "order_canceled",
+      type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
       externalOrderId: order.external_order_id
     }
   }).catch(() => undefined);
@@ -574,6 +574,14 @@ export async function raiseOrderPriceByExternalId(
     .maybeSingle();
   if (error) throw error;
   if (!order) return { found: false as const };
+  if (["picked_up", "arrived_customer", "delivered", "canceled", "failed"].includes(order.status)) {
+    return {
+      found: true as const,
+      raised: false as const,
+      externalOrderId,
+      status: order.status as string
+    };
+  }
 
   const nextSourcePayload = {
     ...(order.source_payload ?? {}),
@@ -628,6 +636,7 @@ export async function raiseOrderPriceByExternalId(
 
   return {
     found: true as const,
+    raised: true as const,
     externalOrderId,
     status: order.status as string,
     deliveryFeeMop: normalizeMoney(newDeliveryFeeMop),

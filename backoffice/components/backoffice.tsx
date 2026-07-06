@@ -751,7 +751,7 @@ export function OrderDetailActions({
 
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-      {!["delivered", "canceled", "failed"].includes(rawStatus) ? (
+      {!["picked_up", "arrived_customer", "delivered", "canceled", "failed"].includes(rawStatus) ? (
         <button
           className="btn btn-secondary"
           disabled={busyAction !== null}

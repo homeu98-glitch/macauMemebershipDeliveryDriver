@@ -40,6 +40,13 @@ class DriverFirebaseMessagingService : FirebaseMessagingService() {
         }
 
         val soundKey = message.data["soundKey"]
+        val updateType = message.data["type"]
+
+        if (updateType == "order_invalidated") {
+            sendBroadcast(Intent(ACTION_ORDER_UPDATED))
+            return
+        }
+
         val title =
             message.notification?.title ?: message.data["title"] ?: "配送通知"
         val body =

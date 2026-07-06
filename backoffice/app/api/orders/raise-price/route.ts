@@ -32,6 +32,12 @@ export async function POST(request: Request) {
     if (!result.found) {
       return NextResponse.json({ message: "Order not found." }, { status: 404 });
     }
+    if ("raised" in result && result.raised === false) {
+      return NextResponse.json(
+        { message: "Price can no longer be raised after pickup or completion." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     return NextResponse.json(
@@ -40,4 +46,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

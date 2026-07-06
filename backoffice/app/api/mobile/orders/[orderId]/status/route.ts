@@ -226,7 +226,8 @@ export async function POST(
         const isUrgent =
           order.source_payload &&
           typeof order.source_payload === "object" &&
-          (order.source_payload as Record<string, unknown>).urgent === true;
+          typeof (order.source_payload as Record<string, unknown>).priceRaisedAt === "string" &&
+          Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt);
 
         await sendPushToOnlineDrivers({
           title: isUrgent ? "有急單呀, 快D睇下" : "有新訂單可接",

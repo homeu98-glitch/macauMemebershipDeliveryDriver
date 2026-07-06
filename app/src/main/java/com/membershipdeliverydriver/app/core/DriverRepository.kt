@@ -1202,7 +1202,7 @@ class SupabaseDriverRepository : DriverRepository {
                         id = json.getString("id"),
                         externalOrderId = json.optString("external_order_id", json.getString("id")),
                         status = mappedStatus,
-                        isUrgent = json.optJSONObject("source_payload")?.optBoolean("urgent", false) == true,
+                        isUrgent = json.optJSONObject("source_payload")?.optString("priceRaisedAt")?.isNotBlank() == true,
                         shop = LocationPoint(
                             label = shop.optString("name", "店舖"),
                             address = shop.optString("address", ""),
