@@ -85,6 +85,10 @@ function canAdminCancel(rawStatus: string) {
   return !["delivered", "canceled", "failed"].includes(rawStatus);
 }
 
+function canShopOwnerConfirmDriverCancel(rawStatus: string, alreadyConfirmed?: string | null) {
+  return rawStatus === "canceled" && !alreadyConfirmed;
+}
+
 export function AppShell({
   user,
   children
@@ -624,12 +628,25 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
   );
 }
 
-export function OrderDetailActions({ orderId, rawStatus }: { orderId: string; rawStatus: string }) {
+export function OrderDetailActions({
+  orderId,
+  rawStatus,
+  shopOwnerCancelConfirmedAt
+}: {
+  orderId: string;
+  rawStatus: string;
+  shopOwnerCancelConfirmedAt?: string | null;
+}) {
   const router = useRouter();
-  const [busyAction, setBusyAction] = useState<"shop-confirm" | "cancel" | null>(null);
+  const [busyAction, setBusyAction] = useState<"shop-confirm" | "cancel" | "shop-owner-cancel-confirm" | null>(null);
 
-  async function runOrderAction(action: "shop-confirm" | "cancel") {
-    const actionLabel = action === "shop-confirm" ? "確認訂單" : "取消訂單";
+  async function runOrderAction(action: "shop-confirm" | "cancel" | "shop-owner-cancel-confirm") {
+    const actionLabel =
+      action === "shop-confirm"
+        ? "確認訂單"
+        : action === "shop-owner-cancel-confirm"
+          ? "商戶確認取消"
+          : "取消訂單";
     if (action === "cancel" && !window.confirm("確定要取消這張訂單嗎？")) {
       return;
     }
@@ -676,6 +693,16 @@ export function OrderDetailActions({ orderId, rawStatus }: { orderId: string; ra
           type="button"
         >
           {busyAction === "cancel" ? "取消中..." : "取消訂單"}
+        </button>
+      ) : null}
+      {canShopOwnerConfirmDriverCancel(rawStatus, shopOwnerCancelConfirmedAt) ? (
+        <button
+          className="btn btn-secondary"
+          disabled={busyAction !== null}
+          onClick={() => runOrderAction("shop-owner-cancel-confirm")}
+          type="button"
+        >
+          {busyAction === "shop-owner-cancel-confirm" ? "確認中..." : "商戶確認取消"}
         </button>
       ) : null}
     </div>

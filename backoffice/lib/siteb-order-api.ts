@@ -470,6 +470,50 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
   return { found: true as const, canceled: true as const, status: "canceled" };
 }
 
+export async function confirmDriverCanceledOrderByShopOwner(orderId: string, confirmedBy: string) {
+  const supabase = createServiceRoleSupabaseClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("id,status,source_payload")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!order) return { found: false as const };
+  if (order.status !== "canceled") {
+    return { found: true as const, confirmed: false as const, status: order.status as string };
+  }
+
+  const payload =
+    order.source_payload && typeof order.source_payload === "object"
+      ? (order.source_payload as Record<string, unknown>)
+      : {};
+
+  if (!payload.shopOwnerCancelConfirmedAt) {
+    const confirmedAt = nowIso();
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        updated_at: confirmedAt,
+        source_payload: {
+          ...payload,
+          shopOwnerCancelConfirmedAt: confirmedAt,
+          shopOwnerCancelConfirmedBy: confirmedBy
+        }
+      })
+      .eq("id", orderId);
+    if (updateError) throw updateError;
+
+    await appendEvent(orderId, "website.shop_owner_confirmed_driver_cancel", {
+      note: "商戶已確認騎手取消訂單。",
+      confirmedBy,
+      confirmedAt
+    });
+  }
+
+  return { found: true as const, confirmed: true as const, status: order.status as string };
+}
+
 export async function raiseOrderPriceByExternalId(
   externalOrderId: string,
   newDeliveryFeeMop: number,

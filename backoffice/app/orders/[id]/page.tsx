@@ -34,7 +34,11 @@ export default async function OrderDetailPage({
         </div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-          <OrderDetailActions orderId={order.id} rawStatus={order.rawStatus} />
+          <OrderDetailActions
+            orderId={order.id}
+            rawStatus={order.rawStatus}
+            shopOwnerCancelConfirmedAt={order.shopOwnerCancelConfirmedAt}
+          />
         </div>
 
         <div className="inline-pills" style={{ marginBottom: 20 }}>
@@ -76,6 +80,31 @@ export default async function OrderDetailPage({
                   </div>
                 </div>
               </div>
+              {order.rawStatus === "canceled" ? (
+                <div className="list-item">
+                  <div>
+                    <strong>取消原因</strong>
+                    <div className="muted">
+                      {order.cancelReason || "未提供"}
+                      {order.cancelOtherReason ? ` / ${order.cancelOtherReason}` : ""}
+                    </div>
+                    <div className="muted">
+                      處理方式：
+                      {order.cancelHandling === "return_to_shop"
+                        ? "退回商戶"
+                        : order.cancelHandling === "not_returning"
+                          ? "不退回，等待商戶處理"
+                          : "未提供"}
+                    </div>
+                    <div className="muted">
+                      商戶確認：
+                      {order.shopOwnerCancelConfirmedAt
+                        ? `${order.shopOwnerCancelConfirmedAt} (${order.shopOwnerCancelConfirmedBy ?? "未記錄"})`
+                        : "尚未確認"}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </section>
 

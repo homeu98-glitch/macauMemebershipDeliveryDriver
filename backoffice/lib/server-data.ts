@@ -236,7 +236,7 @@ export async function getOrderById(id: string): Promise<Order | null> {
   const supabase = createServiceRoleSupabaseClient();
   const { data: order, error } = await supabase
     .from("orders")
-    .select("id,external_order_id,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id")
+    .select("id,external_order_id,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload")
     .eq("id", id)
     .maybeSingle();
 
@@ -256,6 +256,20 @@ export async function getOrderById(id: string): Promise<Order | null> {
   const { data: driver } = driverId
     ? await supabase.from("driver_profiles").select("full_name").eq("id", driverId).maybeSingle()
     : { data: null };
+  const sourcePayload =
+    order.source_payload && typeof order.source_payload === "object"
+      ? (order.source_payload as Record<string, any>)
+      : {};
+  const latestCancelEvent = [...(events ?? [])]
+    .reverse()
+    .find((event: any) => {
+      const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
+      return Boolean(payload.cancel_reason || payload.cancel_other_reason || payload.cancel_handling);
+    });
+  const cancelPayload =
+    latestCancelEvent?.payload && typeof latestCancelEvent.payload === "object"
+      ? (latestCancelEvent.payload as Record<string, any>)
+      : {};
 
   return {
     id: order.id,
@@ -272,10 +286,35 @@ export async function getOrderById(id: string): Promise<Order | null> {
       ? Math.max(0, Math.round((new Date(order.promised_at).getTime() - Date.now()) / 60000))
       : 0,
     items: (items ?? []).map((item) => `${item.quantity} x ${item.item_name}`),
+    cancelReason:
+      typeof cancelPayload.cancel_reason === "string"
+        ? cancelPayload.cancel_reason
+        : typeof sourcePayload.canceledReason === "string"
+          ? sourcePayload.canceledReason
+          : null,
+    cancelOtherReason:
+      typeof cancelPayload.cancel_other_reason === "string" ? cancelPayload.cancel_other_reason : null,
+    cancelHandling:
+      cancelPayload.cancel_handling === "return_to_shop" || cancelPayload.cancel_handling === "not_returning"
+        ? cancelPayload.cancel_handling
+        : null,
+    shopOwnerCancelConfirmedAt:
+      typeof sourcePayload.shopOwnerCancelConfirmedAt === "string"
+        ? formatDate(sourcePayload.shopOwnerCancelConfirmedAt)
+        : null,
+    shopOwnerCancelConfirmedBy:
+      typeof sourcePayload.shopOwnerCancelConfirmedBy === "string"
+        ? sourcePayload.shopOwnerCancelConfirmedBy
+        : null,
     timeline: (events ?? []).map((event) => ({
       label: event.event_type,
       timestamp: formatDate(event.created_at),
-      note: typeof event.payload?.note === "string" ? event.payload.note : "系統事件"
+      note:
+        typeof event.payload?.note === "string"
+          ? event.payload.note
+          : typeof event.payload?.cancel_reason === "string"
+            ? `取消原因：${event.payload.cancel_reason}`
+            : "系統事件"
     }))
   };
 }

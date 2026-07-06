@@ -54,6 +54,11 @@ export type Order = {
   createdAt: string;
   etaMinutes: number;
   items: string[];
+  cancelReason?: string | null;
+  cancelOtherReason?: string | null;
+  cancelHandling?: "return_to_shop" | "not_returning" | null;
+  shopOwnerCancelConfirmedAt?: string | null;
+  shopOwnerCancelConfirmedBy?: string | null;
   timeline: { label: string; timestamp: string; note: string }[];
 };
 
