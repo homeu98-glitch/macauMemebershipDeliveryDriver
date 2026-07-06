@@ -89,6 +89,12 @@ function canShopOwnerConfirmDriverCancel(rawStatus: string, alreadyConfirmed?: s
   return rawStatus === "canceled" && !alreadyConfirmed;
 }
 
+function renderCancelHandlingLabel(value?: string | null) {
+  if (value === "return_to_shop") return "退回商戶";
+  if (value === "not_returning") return "不退回，等待商戶處理";
+  return "未提供";
+}
+
 export function AppShell({
   user,
   children
@@ -521,8 +527,13 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
   const router = useRouter();
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  async function runOrderAction(orderId: string, action: "shop-confirm" | "cancel") {
-    const actionLabel = action === "shop-confirm" ? "確認訂單" : "取消訂單";
+  async function runOrderAction(orderId: string, action: "shop-confirm" | "cancel" | "shop-owner-cancel-confirm") {
+    const actionLabel =
+      action === "shop-confirm"
+        ? "確認訂單"
+        : action === "shop-owner-cancel-confirm"
+          ? "商戶確認取消"
+          : "取消訂單";
     if (action === "cancel" && !window.confirm("確定要取消這張訂單嗎？")) {
       return;
     }
@@ -572,6 +583,7 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
                 <th>狀態</th>
                 <th>配送費</th>
                 <th>預估</th>
+                <th>取消詳情</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -595,6 +607,23 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
                   <td>{formatCurrency(order.amountMop)}</td>
                   <td>{order.etaMinutes > 0 ? `${order.etaMinutes} 分鐘` : "已完成 / 未設定"}</td>
                   <td>
+                    {order.rawStatus === "canceled" ? (
+                      <div className="muted" style={{ minWidth: 220 }}>
+                        <div>{order.cancelReason || "未提供原因"}</div>
+                        {order.cancelOtherReason ? <div>備註：{order.cancelOtherReason}</div> : null}
+                        <div>處理：{renderCancelHandlingLabel(order.cancelHandling)}</div>
+                        <div>
+                          商戶確認：
+                          {order.shopOwnerCancelConfirmedAt
+                            ? `${order.shopOwnerCancelConfirmedAt}`
+                            : "尚未確認"}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="muted">-</span>
+                    )}
+                  </td>
+                  <td>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {canShopConfirm(order.rawStatus) ? (
                         <button
@@ -614,6 +643,16 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
                           type="button"
                         >
                           {busyAction === `${order.id}:cancel` ? "取消中..." : "取消訂單"}
+                        </button>
+                      ) : null}
+                      {canShopOwnerConfirmDriverCancel(order.rawStatus, order.shopOwnerCancelConfirmedAt) ? (
+                        <button
+                          className="btn btn-secondary"
+                          disabled={busyAction === `${order.id}:shop-owner-cancel-confirm`}
+                          onClick={() => runOrderAction(order.id, "shop-owner-cancel-confirm")}
+                          type="button"
+                        >
+                          {busyAction === `${order.id}:shop-owner-cancel-confirm` ? "確認中..." : "商戶確認取消"}
                         </button>
                       ) : null}
                     </div>

@@ -509,6 +509,12 @@ export async function confirmDriverCanceledOrderByShopOwner(orderId: string, con
       confirmedBy,
       confirmedAt
     });
+
+    await dispatchOrderCallback({
+      orderId,
+      eventType: "shop_owner_confirmed_driver_cancel",
+      note: "商戶已確認騎手取消訂單。"
+    }).catch(() => undefined);
   }
 
   return { found: true as const, confirmed: true as const, status: order.status as string };

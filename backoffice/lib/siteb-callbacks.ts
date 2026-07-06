@@ -11,7 +11,8 @@ type DispatchCallbackInput = {
     | "arrived"
     | "delivered"
     | "exception_reported"
-    | "canceled";
+    | "canceled"
+    | "shop_owner_confirmed_driver_cancel";
   note?: string | null;
   action?: string | null;
 };
@@ -214,6 +215,17 @@ function createCallbackPayload(
         cancel: {
           reason: input.note ?? "unknown",
           note: input.note ?? ""
+        }
+      };
+    case "shop_owner_confirmed_driver_cancel":
+      return {
+        eventType: "order.shop_owner_confirmed_driver_cancel",
+        externalOrderId: context.order.external_order_id,
+        status: "canceled",
+        eventTime,
+        cancelConfirmation: {
+          confirmed: true,
+          note: input.note ?? "Shop owner confirmed driver cancellation."
         }
       };
   }

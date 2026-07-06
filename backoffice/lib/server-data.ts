@@ -173,7 +173,7 @@ export async function listOrders(): Promise<Order[]> {
   const supabase = createServiceRoleSupabaseClient();
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("id,external_order_id,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id")
+    .select("id,external_order_id,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -182,10 +182,14 @@ export async function listOrders(): Promise<Order[]> {
   const shopIds = [...new Set(orders.map((item) => item.shop_id))];
   const customerIds = [...new Set(orders.map((item) => item.customer_id))];
 
-  const [{ data: shops }, { data: customers }, { data: assignments }] = await Promise.all([
+  const [{ data: shops }, { data: customers }, { data: assignments }, { data: orderEvents }] = await Promise.all([
     supabase.from("shops").select("id,name").in("id", shopIds),
     supabase.from("customers").select("id,name,address").in("id", customerIds),
-    supabase.from("order_assignments").select("order_id,driver_id,assigned_at").in("order_id", orders.map((item) => item.id))
+    supabase.from("order_assignments").select("order_id,driver_id,assigned_at").in("order_id", orders.map((item) => item.id)),
+    supabase
+      .from("order_events")
+      .select("order_id,event_type,created_at,payload")
+      .in("order_id", orders.map((item) => item.id))
   ]);
 
   const driverIds = [...new Set((assignments ?? []).map((item) => item.driver_id))];
@@ -197,6 +201,7 @@ export async function listOrders(): Promise<Order[]> {
   const customerMap = new Map((customers ?? []).map((item) => [item.id, item]));
   const driverMap = new Map((drivers ?? []).map((item) => [item.id, item]));
   const assignmentMap = new Map<string, { driver_id: string; assigned_at: string }>();
+  const cancelEventMap = new Map<string, any>();
 
   for (const assignment of assignments ?? []) {
     const current = assignmentMap.get(assignment.order_id);
@@ -205,11 +210,32 @@ export async function listOrders(): Promise<Order[]> {
     }
   }
 
+  for (const event of orderEvents ?? []) {
+    const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
+    const hasCancelPayload = Boolean(
+      (payload as any).cancel_reason || (payload as any).cancel_other_reason || (payload as any).cancel_handling
+    );
+    if (!hasCancelPayload) continue;
+    const current = cancelEventMap.get(event.order_id);
+    if (!current || new Date(event.created_at) > new Date(current.created_at)) {
+      cancelEventMap.set(event.order_id, event);
+    }
+  }
+
   return orders.map((item: any) => {
     const shop = shopMap.get(item.shop_id);
     const customer = customerMap.get(item.customer_id);
     const assignment = assignmentMap.get(item.id);
     const driver = assignment ? driverMap.get(assignment.driver_id) : null;
+    const sourcePayload =
+      item.source_payload && typeof item.source_payload === "object"
+        ? (item.source_payload as Record<string, any>)
+        : {};
+    const cancelEvent = cancelEventMap.get(item.id);
+    const cancelPayload =
+      cancelEvent?.payload && typeof cancelEvent.payload === "object"
+        ? (cancelEvent.payload as Record<string, any>)
+        : {};
     const etaMinutes = item.promised_at
       ? Math.max(0, Math.round((new Date(item.promised_at).getTime() - Date.now()) / 60000))
       : 0;
@@ -227,6 +253,26 @@ export async function listOrders(): Promise<Order[]> {
       createdAt: formatDate(item.created_at),
       etaMinutes,
       items: [],
+      cancelReason:
+        typeof cancelPayload.cancel_reason === "string"
+          ? cancelPayload.cancel_reason
+          : typeof sourcePayload.canceledReason === "string"
+            ? sourcePayload.canceledReason
+            : null,
+      cancelOtherReason:
+        typeof cancelPayload.cancel_other_reason === "string" ? cancelPayload.cancel_other_reason : null,
+      cancelHandling:
+        cancelPayload.cancel_handling === "return_to_shop" || cancelPayload.cancel_handling === "not_returning"
+          ? cancelPayload.cancel_handling
+          : null,
+      shopOwnerCancelConfirmedAt:
+        typeof sourcePayload.shopOwnerCancelConfirmedAt === "string"
+          ? formatDate(sourcePayload.shopOwnerCancelConfirmedAt)
+          : null,
+      shopOwnerCancelConfirmedBy:
+        typeof sourcePayload.shopOwnerCancelConfirmedBy === "string"
+          ? sourcePayload.shopOwnerCancelConfirmedBy
+          : null,
       timeline: []
     };
   });
