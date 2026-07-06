@@ -796,10 +796,8 @@ private fun HomeScreen(
                     }
                 }
             }
-            items(uiState.availableOrders.size, key = { index -> uiState.availableOrders[index].id }) { index ->
-                val order = uiState.availableOrders[index]
+            items(uiState.availableOrders, key = { it.id }) { order ->
                 AvailableOrderCard(
-                    displayLabel = "訂單 ${index + 1}",
                     order = order,
                     isOnline = driver?.availability == DriverAvailability.ONLINE,
                     onNavigateToShop = {
@@ -1032,7 +1030,6 @@ private fun OrdersScreen(
 
 @Composable
 private fun AvailableOrderCard(
-    displayLabel: String,
     order: Order,
     isOnline: Boolean,
     onNavigateToShop: () -> Unit,
@@ -1065,9 +1062,10 @@ private fun AvailableOrderCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        displayLabel,
+                        order.shop.label,
                         color = Color(0xFF2E4765),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
                     )
                     Text(
                         "送達時間 ${order.deliveryDeadlineText}",
@@ -1180,9 +1178,9 @@ private fun ActiveOrderCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(order.shop.label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                    Text(displayLabel, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                     Text(
-                        displayLabel,
+                        order.shop.label,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF2E4765),
                     )
@@ -1716,9 +1714,9 @@ private fun CompletedOrdersScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("${order.shop.label} → ${order.customer.label}", fontWeight = FontWeight.SemiBold)
+                            Text("訂單 ${index + 1}", fontWeight = FontWeight.SemiBold)
                             Text(
-                                "訂單 ${index + 1}",
+                                "${order.shop.label} → ${order.customer.label}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF2E4765),
                             )
@@ -2016,9 +2014,7 @@ private fun openExternalUrl(context: android.content.Context, url: String) {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    if (intent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(intent)
-    }
+    runCatching { context.startActivity(intent) }
 }
 
 private fun historyRangeLabel(range: com.membershipdeliverydriver.app.core.HistoryRange): String {

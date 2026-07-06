@@ -236,37 +236,11 @@ class SupabaseDriverRepository : DriverRepository {
 
     override suspend fun submitRegistration(form: RegistrationForm): ApiResult<ApprovalStatus> = withContext(Dispatchers.IO) {
         try {
+            ensureRegistrationAccount(form)
+
             val email = authEmailFromPhone(form.phone)
             val authPassword = authPasswordFromPin(form.password)
-            val authJson = try {
-                val signupPayload = JSONObject()
-                    .put("email", email)
-                    .put("password", authPassword)
-                    .put("data", JSONObject().put("full_name", form.fullName))
-                    .toString()
-
-                requestJson(
-                    path = "/auth/v1/signup",
-                    method = "POST",
-                    token = BuildConfig.SUPABASE_ANON_KEY,
-                    body = signupPayload,
-                )
-            } catch (error: Exception) {
-                val rawMessage = error.message.orEmpty()
-                if (
-                    rawMessage.contains("over_email_rate_limit", ignoreCase = true) ||
-                    rawMessage.contains("email rate limit", ignoreCase = true) ||
-                    rawMessage.contains("User already registered", ignoreCase = true) ||
-                    rawMessage.contains("user_already_exists", ignoreCase = true)
-                ) {
-                    runCatching { loginForRegistration(email, authPassword) }
-                        .getOrElse {
-                            throw IllegalStateException("目前註冊請求太多，請稍等幾分鐘後再試。")
-                        }
-                } else {
-                    throw error
-                }
-            }
+            val authJson = loginForRegistration(email, authPassword)
 
             val accessToken = authJson.optString("access_token", "")
             val userJson = authJson.optJSONObject("user")
@@ -687,32 +661,30 @@ class SupabaseDriverRepository : DriverRepository {
 
             cachedOrders = cachedOrders.filterNot { it.id == orderId }
 
-            runCatching {
-                val storagePath = uploadToStorage(
-                    bucket = "delivery-proofs",
-                    objectPath = "${authUserId}/order-${orderId}-proof.jpg",
-                    uri = uri,
-                    accessToken = token,
-                )
+            val storagePath = uploadToStorage(
+                bucket = "delivery-proofs",
+                objectPath = "${authUserId}/order-${orderId}-proof.jpg",
+                uri = uri,
+                accessToken = token,
+            )
 
-                requestArray(
-                    path = "/rest/v1/delivery_proofs",
-                    method = "POST",
-                    token = token,
-                    body = JSONObject()
-                        .put("order_id", orderId)
-                        .put("driver_id", driverId)
-                        .put("storage_path", storagePath)
-                        .put("proof_type", "proof_of_delivery")
-                        .toString(),
-                    prefer = "return=representation",
-                )
+            requestArray(
+                path = "/rest/v1/delivery_proofs",
+                method = "POST",
+                token = token,
+                body = JSONObject()
+                    .put("order_id", orderId)
+                    .put("driver_id", driverId)
+                    .put("storage_path", storagePath)
+                    .put("proof_type", "proof_of_delivery")
+                    .toString(),
+                prefer = "return=representation",
+            )
 
-                updatedOrder = updatedOrder?.copy(
-                    proofOfDeliveryPath = storagePath,
-                    proofOfDeliveryUrl = createSignedProofUrl(storagePath, token) ?: proofPublicUrl(storagePath),
-                )
-            }
+            updatedOrder = updatedOrder?.copy(
+                proofOfDeliveryPath = storagePath,
+                proofOfDeliveryUrl = createSignedProofUrl(storagePath, token) ?: proofPublicUrl(storagePath),
+            )
 
             val finalOrder = updatedOrder
                 ?: throw IllegalStateException("找不到已完成的訂單資料。")
@@ -798,6 +770,41 @@ class SupabaseDriverRepository : DriverRepository {
             token = BuildConfig.SUPABASE_ANON_KEY,
             body = payload,
         )
+    }
+
+    private fun ensureRegistrationAccount(form: RegistrationForm) {
+        if (BuildConfig.API_BASE_URL.contains("your-api.example.com")) {
+            throw IllegalStateException("目前無法註冊，請稍後再試。")
+        }
+
+        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+        val body = JSONObject()
+            .put("fullName", form.fullName)
+            .put("phone", form.phone)
+            .put("pin", form.password)
+            .toString()
+
+        val request = Request.Builder()
+            .url("$baseUrl/api/mobile/drivers/register")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val raw = extractErrorMessage(response.body?.string().orEmpty())
+                val userMessage = when {
+                    raw.contains("SUPABASE", ignoreCase = true) ||
+                        raw.contains("service role", ignoreCase = true) ->
+                        "註冊服務暫時無法使用，請稍後再試。"
+                    raw.contains("rate limit", ignoreCase = true) ||
+                        raw.contains("too many", ignoreCase = true) ->
+                        "目前註冊請求太多，請稍等幾分鐘後再試。"
+                    else -> raw
+                }
+                throw IllegalStateException(userMessage)
+            }
+        }
     }
 
     private fun isSiteBApiConfigured(): Boolean {
@@ -939,7 +946,7 @@ class SupabaseDriverRepository : DriverRepository {
                 path = "/storage/v1/object/sign/delivery-proofs/${encodePathSegments(storagePath)}",
                 method = "POST",
                 token = token,
-                body = JSONObject().put("expiresIn", 3600).toString(),
+                body = JSONObject().put("expiresIn", 86400).toString(),
             )
             val signedUrl = response.optString("signedURL").ifBlank { response.optString("signedUrl") }
             when {
