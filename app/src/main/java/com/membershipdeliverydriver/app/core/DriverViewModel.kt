@@ -202,20 +202,37 @@ class DriverViewModel(
     }
 
     fun uploadProofOfDelivery(orderId: String, uri: Uri) {
+        val currentOrder = _uiState.value.orders.firstOrNull { it.id == orderId }
+        if (currentOrder == null) {
+            _uiState.update { it.copy(errorMessage = "找不到要完成的訂單。") }
+            return
+        }
+
+        val optimisticOrder = currentOrder.copy(
+            status = OrderStatus.DELIVERED,
+            deliveredAt = java.time.OffsetDateTime.now().toString(),
+            proofOfDeliveryUri = uri,
+        )
+
+        _uiState.update {
+            it.copy(
+                orders = it.orders.filterNot { order -> order.id == orderId },
+                completedOrders = listOf(optimisticOrder) + it.completedOrders.filterNot { order -> order.id == orderId },
+                activeOrderId = it.orders.firstOrNull { order -> order.id != orderId }?.id,
+                errorMessage = "訂單已完成，送達照片正在背景上傳。",
+            )
+        }
+
         viewModelScope.launch {
             when (val result = repository.attachProofOfDelivery(orderId, uri)) {
                 is ApiResult.Success -> {
                     DriverSoundEffects.playOrderCompleted(AppContextHolder.requireContext())
-                    _uiState.update {
-                        it.copy(
-                            orders = it.orders.filterNot { order -> order.id == orderId },
-                            activeOrderId = it.orders.firstOrNull { order -> order.id != orderId }?.id,
-                        )
-                    }
                     refreshDashboard()
                     refreshCompletedOrders(reset = true)
                 }
-                is ApiResult.Failure -> _uiState.update { it.copy(errorMessage = result.message) }
+                is ApiResult.Failure -> _uiState.update {
+                    it.copy(errorMessage = "訂單已完成，但照片背景上傳失敗：${result.message}")
+                }
             }
         }
     }

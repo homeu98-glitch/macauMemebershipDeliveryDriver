@@ -5,6 +5,8 @@ import androidx.core.content.ContextCompat
 import android.Manifest
 import android.location.LocationManager
 import com.membershipdeliverydriver.app.BuildConfig
+import android.graphics.BitmapFactory
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -443,26 +445,7 @@ class SupabaseDriverRepository : DriverRepository {
         val authUserId = currentAuthUserId ?: return@withContext ApiResult.Failure("找不到登入身份。")
 
         try {
-            val storagePath = uploadToStorage(
-                bucket = "delivery-proofs",
-                objectPath = "${authUserId}/order-${orderId}-proof.jpg",
-                uri = uri,
-                accessToken = token,
-            )
-
-            requestArray(
-                path = "/rest/v1/delivery_proofs",
-                method = "POST",
-                token = token,
-                body = JSONObject()
-                    .put("order_id", orderId)
-                    .put("driver_id", driverId)
-                    .put("storage_path", storagePath)
-                    .put("proof_type", "proof_of_delivery")
-                    .toString(),
-                prefer = "return=representation",
-            )
-
+            val deliveredAt = OffsetDateTime.now().toString()
             requestArray(
                 path = "/rest/v1/order_events",
                 method = "POST",
@@ -472,7 +455,7 @@ class SupabaseDriverRepository : DriverRepository {
                     .put("event_type", "delivered")
                     .put("actor_type", "driver")
                     .put("actor_driver_id", driverId)
-                    .put("payload", JSONObject().put("note", "已上傳送達證明"))
+                    .put("payload", JSONObject().put("note", "騎手已完成訂單，照片背景上傳中"))
                     .toString(),
                 prefer = "return=representation",
             )
@@ -493,39 +476,63 @@ class SupabaseDriverRepository : DriverRepository {
                 )
             }
 
-            val deliveredAt = OffsetDateTime.now().toString()
             val existingOrder = cachedOrders.firstOrNull { it.id == orderId } ?: loadActiveOrderById(token, orderId)
-            val updatedOrder = existingOrder?.copy(
+            var updatedOrder = existingOrder?.copy(
                 status = OrderStatus.DELIVERED,
                 deliveredAt = deliveredAt,
                 proofOfDeliveryUri = uri,
-                proofOfDeliveryPath = storagePath,
-                proofOfDeliveryUrl = proofPublicUrl(storagePath),
             )
 
-            if (updatedOrder != null) {
-                cachedOrders = cachedOrders.filterNot { it.id == orderId }
-                ApiResult.Success(updatedOrder)
-            } else {
-                ApiResult.Success(
-                    Order(
-                        id = orderId,
-                        status = OrderStatus.DELIVERED,
-                        shop = LocationPoint("", "", 0.0, 0.0, "", ""),
-                        customer = LocationPoint("", "", 0.0, 0.0, "", ""),
-                        customerNote = "",
-                        etaMinutes = 0,
-                        deliveryDeadlineText = "",
-                        distanceKm = 0.0,
-                        totalAmountMop = 0.0,
-                        items = emptyList(),
-                        deliveredAt = deliveredAt,
-                        proofOfDeliveryUri = uri,
-                        proofOfDeliveryPath = storagePath,
-                        proofOfDeliveryUrl = proofPublicUrl(storagePath),
-                    )
+            if (updatedOrder == null) {
+                updatedOrder = Order(
+                    id = orderId,
+                    status = OrderStatus.DELIVERED,
+                    shop = LocationPoint("", "", 0.0, 0.0, "", ""),
+                    customer = LocationPoint("", "", 0.0, 0.0, "", ""),
+                    customerNote = "",
+                    etaMinutes = 0,
+                    deliveryDeadlineText = "",
+                    distanceKm = 0.0,
+                    totalAmountMop = 0.0,
+                    items = emptyList(),
+                    deliveredAt = deliveredAt,
+                    proofOfDeliveryUri = uri,
                 )
             }
+
+            cachedOrders = cachedOrders.filterNot { it.id == orderId }
+
+            runCatching {
+                val storagePath = uploadToStorage(
+                    bucket = "delivery-proofs",
+                    objectPath = "${authUserId}/order-${orderId}-proof.jpg",
+                    uri = uri,
+                    accessToken = token,
+                )
+
+                requestArray(
+                    path = "/rest/v1/delivery_proofs",
+                    method = "POST",
+                    token = token,
+                    body = JSONObject()
+                        .put("order_id", orderId)
+                        .put("driver_id", driverId)
+                        .put("storage_path", storagePath)
+                        .put("proof_type", "proof_of_delivery")
+                        .toString(),
+                    prefer = "return=representation",
+                )
+
+                updatedOrder = updatedOrder?.copy(
+                    proofOfDeliveryPath = storagePath,
+                    proofOfDeliveryUrl = proofPublicUrl(storagePath),
+                )
+            }
+
+            val finalOrder = updatedOrder
+                ?: throw IllegalStateException("找不到已完成的訂單資料。")
+
+            ApiResult.Success(finalOrder)
         } catch (error: Exception) {
             ApiResult.Failure(error.message ?: "上傳送達證明失敗。")
         }
@@ -838,16 +845,28 @@ class SupabaseDriverRepository : DriverRepository {
                 val json = ordersArray.getJSONObject(index)
                 val shop = shops[json.getString("shop_id")] ?: continue
                 val customer = customers[json.getString("customer_id")] ?: continue
+                val mappedStatus = json.optString("status").toOrderStatus()
                 val shopLat = shop.optDouble("latitude", 0.0)
                 val shopLng = shop.optDouble("longitude", 0.0)
                 val distanceToShop = latestDriverLocation?.let { (driverLat, driverLng) ->
                     haversineKm(driverLat, driverLng, shopLat, shopLng)
                 } ?: 0.0
+                val customerLat = customer.optDouble("latitude", 0.0)
+                val customerLng = customer.optDouble("longitude", 0.0)
+                val distanceToCustomer = latestDriverLocation?.let { (driverLat, driverLng) ->
+                    haversineKm(driverLat, driverLng, customerLat, customerLng)
+                } ?: 0.0
+                val activeDistance = when (mappedStatus) {
+                    OrderStatus.PICKED_UP,
+                    OrderStatus.HEADING_TO_CUSTOMER -> distanceToCustomer
+                    OrderStatus.DELIVERED -> 0.0
+                    else -> distanceToShop
+                }
 
                 add(
                     Order(
                         id = json.getString("id"),
-                        status = json.optString("status").toOrderStatus(),
+                        status = mappedStatus,
                         shop = LocationPoint(
                             label = shop.optString("name", "店舖"),
                             address = shop.optString("address", ""),
@@ -867,7 +886,7 @@ class SupabaseDriverRepository : DriverRepository {
                         customerNote = customer.optString("delivery_note", "請先聯絡客戶。"),
                         etaMinutes = calculateEtaMinutes(json.optString("promised_at", "")),
                         deliveryDeadlineText = formatDeadline(json.optString("promised_at", "")),
-                        distanceKm = distanceToShop,
+                        distanceKm = activeDistance,
                         totalAmountMop = json.optDouble("assigned_fee_mop", 0.0),
                         items = itemsByOrder[json.getString("id")] ?: emptyList(),
                         pickedUpAt = pickedUpAtByOrder[json.getString("id")],
@@ -950,14 +969,15 @@ class SupabaseDriverRepository : DriverRepository {
             }
             else -> requireNotNull(contentResolver.openInputStream(uri)) { "無法讀取檔案。" }
         }
-        val bytes = inputStream.use { it.readBytes() }
+        val rawBytes = inputStream.use { it.readBytes() }
+        val (bytes, uploadMimeType) = compressImageIfNeeded(rawBytes, mimeType)
 
         val request = Request.Builder()
             .url("${BuildConfig.SUPABASE_URL}/storage/v1/object/$bucket/$objectPath")
             .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
             .addHeader("Authorization", "Bearer $accessToken")
             .addHeader("x-upsert", "true")
-            .post(bytes.toRequestBody(mimeType.toMediaType()))
+            .post(bytes.toRequestBody(uploadMimeType.toMediaType()))
             .build()
 
         client.newCall(request).execute().use { response ->
@@ -966,6 +986,32 @@ class SupabaseDriverRepository : DriverRepository {
             }
         }
         return objectPath
+    }
+
+    private fun compressImageIfNeeded(bytes: ByteArray, mimeType: String): Pair<ByteArray, String> {
+        if (!mimeType.startsWith("image/")) return bytes to mimeType
+
+        val originalBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes to mimeType
+        val maxDimension = 1600
+        val scale = minOf(
+            1.0,
+            maxDimension.toDouble() / originalBitmap.width.toDouble(),
+            maxDimension.toDouble() / originalBitmap.height.toDouble(),
+        )
+        val targetWidth = (originalBitmap.width * scale).toInt().coerceAtLeast(1)
+        val targetHeight = (originalBitmap.height * scale).toInt().coerceAtLeast(1)
+        val scaledBitmap =
+            if (targetWidth != originalBitmap.width || targetHeight != originalBitmap.height) {
+                android.graphics.Bitmap.createScaledBitmap(originalBitmap, targetWidth, targetHeight, true)
+            } else {
+                originalBitmap
+            }
+
+        val output = ByteArrayOutputStream()
+        scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 72, output)
+        if (scaledBitmap !== originalBitmap) scaledBitmap.recycle()
+        originalBitmap.recycle()
+        return output.toByteArray() to "image/jpeg"
     }
 
     private fun requestJson(

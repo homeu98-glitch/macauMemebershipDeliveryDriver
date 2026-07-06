@@ -53,7 +53,6 @@ class DriverFirebaseMessagingService : FirebaseMessagingService() {
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setSound(null)
             .build()
 
         NotificationManagerCompat.from(this).notify(

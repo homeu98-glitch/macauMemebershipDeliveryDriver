@@ -837,6 +837,7 @@ private fun OrdersScreen(
     var completionOrderId by rememberSaveable { mutableStateOf<String?>(null) }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val orderId = completionOrderId
+        completionOrderId = null
         if (uri != null && orderId != null) {
             onProofSelected(orderId, uri)
         }
@@ -844,6 +845,7 @@ private fun OrdersScreen(
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         val orderId = completionOrderId
         val uri = if (bitmap != null) bitmapToCacheUri(context, bitmap) else null
+        completionOrderId = null
         if (uri != null && orderId != null) {
             onProofSelected(orderId, uri)
         }
@@ -935,7 +937,6 @@ private fun OrdersScreen(
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            completionOrderId = null
                             cameraLauncher.launch(null)
                         }
                     ) {
@@ -946,7 +947,6 @@ private fun OrdersScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(
                             onClick = {
-                                completionOrderId = null
                                 galleryLauncher.launch("image/*")
                             }
                         ) {
@@ -1047,7 +1047,7 @@ private fun AvailableOrderCard(
             }
 
             Text(
-                "${distanceLabel(order.distanceKm)} · 請在 ${order.deliveryDeadlineText} 前完成送達",
+                "${distanceLabel(order)} · 請在 ${order.deliveryDeadlineText} 前完成送達",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFF607286),
             )
@@ -1146,7 +1146,7 @@ private fun ActiveOrderCard(
             }
 
             Text(
-                "${distanceLabel(order.distanceKm)} · 請盡快完成本單",
+                "${distanceLabel(order)} · 請盡快完成本單",
                 color = Color(0xFF607286),
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -1885,6 +1885,11 @@ private fun bitmapToCacheUri(context: android.content.Context, bitmap: Bitmap): 
     }.getOrNull()
 }
 
-private fun distanceLabel(distanceKm: Double): String {
-    return if (distanceKm > 0) "${distanceKm} 公里到商戶" else "距離待更新"
+private fun distanceLabel(order: Order): String {
+    if (order.distanceKm <= 0) return "距離待更新"
+    return when (order.status) {
+        OrderStatus.PICKED_UP,
+        OrderStatus.HEADING_TO_CUSTOMER -> "${order.distanceKm} 公里到客戶"
+        else -> "${order.distanceKm} 公里到商戶"
+    }
 }
