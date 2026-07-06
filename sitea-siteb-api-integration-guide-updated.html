@@ -142,7 +142,7 @@
         </div>
         <div>
           <h3>Shared secret</h3>
-          <pre><code>JWT_SHARED_SECRET (same value configured on SiteB)</code></pre>
+          <pre><code>SITEB_DELIVERY_CLIENT_SECRET / JWT_SHARED_SECRET (same value configured on SiteB)</code></pre>
         </div>
       </div>
       <div class="warn">
@@ -156,8 +156,8 @@
       <p>SiteA first requests a short-lived JWT from SiteB, then sends it in the <code>Authorization</code> header.</p>
       <div class="endpoint">POST /api/v1/auth/token</div>
       <pre><code>{
-  "clientId": "sitea-production",
-  "clientSecret": "YOUR_JWT_SHARED_SECRET",
+  "clientId": "macau-ledger",
+  "clientSecret": "SITEB_DELIVERY_CLIENT_SECRET",
   "audience": "siteb-api"
 }</code></pre>
       <pre><code>{
@@ -212,6 +212,7 @@ Content-Type: application/json</code></pre>
   },
   "callback": {
     "url": "https://sitea.example.com/api/siteb/callback",
+    "secret": "SITEB_DELIVERY_WEBHOOK_SECRET",
     "headers": {
       "x-sitea-env": "production"
     }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 
 import { getSessionUser } from "../../../../../lib/auth";
-import { createSiteBApiToken } from "../../../../../lib/siteb-api-auth";
+import { createSiteBApiToken, getConfiguredWebhookSecret } from "../../../../../lib/siteb-api-auth";
 import { createServiceRoleSupabaseClient } from "../../../../../lib/supabase";
 
 export async function POST(
@@ -53,6 +53,7 @@ export async function POST(
         ? callbackMeta.secret.trim()
         : "";
   }
+  callbackSecret = callbackSecret || getConfiguredWebhookSecret();
 
   try {
     const rawBody = JSON.stringify(logRow.request_body ?? {});

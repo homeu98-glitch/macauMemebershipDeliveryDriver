@@ -53,10 +53,14 @@ Use the placeholders in `.env.example`:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=replace-with-your-anon-key
-NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com
+NEXT_PUBLIC_API_BASE_URL=https://macau-delivery.vercel.app
 SUPABASE_SERVICE_ROLE_KEY=replace-with-your-service-role-key
 BACKOFFICE_SESSION_SECRET=replace-with-a-long-random-session-secret
 JWT_SHARED_SECRET=replace-with-your-jwt-shared-secret
+SITEB_DELIVERY_CLIENT_ID=macau-ledger
+SITEB_DELIVERY_CLIENT_SECRET=replace-with-siteb-delivery-client-secret
+SITEB_DELIVERY_WEBHOOK_SECRET=replace-with-siteb-webhook-secret
+SITEB_DELIVERY_CLIENT_SECRET_PREVIOUS=
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` and `BACKOFFICE_SESSION_SECRET` are server-only values. Never expose them in the browser or Android app.

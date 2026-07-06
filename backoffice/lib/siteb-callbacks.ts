@@ -1,6 +1,6 @@
 import crypto from "crypto";
 
-import { createSiteBApiToken } from "./siteb-api-auth";
+import { createSiteBApiToken, getConfiguredWebhookSecret } from "./siteb-api-auth";
 import { createServiceRoleSupabaseClient } from "./supabase";
 
 type DispatchCallbackInput = {
@@ -215,9 +215,9 @@ export async function dispatchOrderCallback(input: DispatchCallbackInput) {
   const rawPayload = JSON.stringify(payload);
   const timestamp = new Date().toISOString();
   const signature =
-    context.callback.secret?.trim()
+    (context.callback.secret?.trim() || getConfiguredWebhookSecret())
       ? crypto
-          .createHmac("sha256", context.callback.secret.trim())
+          .createHmac("sha256", context.callback.secret?.trim() || getConfiguredWebhookSecret())
           .update(`${timestamp}.${rawPayload}`)
           .digest("hex")
       : null;

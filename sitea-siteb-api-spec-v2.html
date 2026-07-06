@@ -130,7 +130,7 @@
           </tr>
           <tr>
             <td>clientId / clientSecret</td>
-            <td>由雙方線下約定。Server 目前驗證共享 secret，並支援新舊 secret 並存。</td>
+            <td><code>clientId = macau-ledger</code>。<code>clientSecret</code> 由雙方線下保存，Server 目前驗證共享 secret，並支援新舊 secret 並存。</td>
           </tr>
         </tbody>
       </table>
@@ -144,8 +144,8 @@
       <p>SiteA 先向 SiteB 換取 JWT，再使用 Bearer Token 呼叫其他 v1 API。</p>
       <div class="endpoint">POST /api/v1/auth/token</div>
       <pre><code>{
-  "clientId": "sitea-production",
-  "clientSecret": "YOUR_SHARED_SECRET",
+  "clientId": "macau-ledger",
+  "clientSecret": "SITEB_DELIVERY_CLIENT_SECRET",
   "audience": "siteb-api"
 }</code></pre>
       <pre><code>{
@@ -226,6 +226,9 @@ Content-Type: application/json</code></pre>
           <li>當 <code>deliveryMode</code> 為 <code>"scheduled"</code> 時，<code>deliveryDeadline</code> 必填。</li>
           <li>當 <code>deliveryMode</code> 為 <code>"now"</code> 或 <code>"asap"</code> 時，<code>deliveryDeadline</code> 可省略。</li>
         </ul>
+      </div>
+      <div class="note">
+        建議 SiteA 以環境變數保存以下值：<code>SITEB_DELIVERY_BASE_URL</code>、<code>SITEB_DELIVERY_CLIENT_ID</code>、<code>SITEB_DELIVERY_CLIENT_SECRET</code>、<code>SITEB_DELIVERY_WEBHOOK_SECRET</code>。
       </div>
     </section>
 

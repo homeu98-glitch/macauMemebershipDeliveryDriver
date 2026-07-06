@@ -2,6 +2,7 @@ import crypto from "crypto";
 
 const API_ISSUER = "membership-delivery-siteb";
 const DEFAULT_AUDIENCE = "siteb-api";
+const DEFAULT_CLIENT_ID = "macau-ledger";
 
 type SiteBTokenClaims = {
   iss: string;
@@ -16,7 +17,10 @@ function base64Url(input: string) {
 }
 
 function getSharedSecret() {
-  const secret = process.env.JWT_SHARED_SECRET ?? "";
+  const secret =
+    process.env.SITEB_DELIVERY_CLIENT_SECRET ??
+    process.env.JWT_SHARED_SECRET ??
+    "";
   if (!secret.trim()) {
     throw new Error("JWT_SHARED_SECRET 尚未設定。");
   }
@@ -25,9 +29,19 @@ function getSharedSecret() {
 
 function getAllowedSecrets() {
   return [
+    process.env.SITEB_DELIVERY_CLIENT_SECRET?.trim() ?? "",
     process.env.JWT_SHARED_SECRET?.trim() ?? "",
+    process.env.SITEB_DELIVERY_CLIENT_SECRET_PREVIOUS?.trim() ?? "",
     process.env.JWT_SHARED_SECRET_PREVIOUS?.trim() ?? ""
   ].filter(Boolean);
+}
+
+export function getConfiguredClientId() {
+  return (process.env.SITEB_DELIVERY_CLIENT_ID?.trim() || DEFAULT_CLIENT_ID);
+}
+
+export function getConfiguredWebhookSecret() {
+  return process.env.SITEB_DELIVERY_WEBHOOK_SECRET?.trim() || "";
 }
 
 export function createSiteBApiToken(clientId: string, audience = DEFAULT_AUDIENCE) {

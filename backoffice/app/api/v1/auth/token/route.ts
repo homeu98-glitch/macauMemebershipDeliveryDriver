@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { createSiteBApiToken } from "../../../../../lib/siteb-api-auth";
+import { createSiteBApiToken, getConfiguredClientId } from "../../../../../lib/siteb-api-auth";
 import { apiError, apiSuccess } from "../../../../../lib/siteb-http";
 
 export async function POST(request: Request) {
@@ -14,13 +14,23 @@ export async function POST(request: Request) {
     const clientId = body.clientId?.trim();
     const clientSecret = body.clientSecret?.trim();
     const audience = body.audience?.trim() || "siteb-api";
-    const sharedSecret = process.env.JWT_SHARED_SECRET?.trim() ?? "";
-
+    const expectedClientId = getConfiguredClientId();
+    const sharedSecret =
+      process.env.SITEB_DELIVERY_CLIENT_SECRET?.trim() ??
+      process.env.JWT_SHARED_SECRET?.trim() ??
+      "";
+    const previousSecret =
+      process.env.SITEB_DELIVERY_CLIENT_SECRET_PREVIOUS?.trim() ??
+      process.env.JWT_SHARED_SECRET_PREVIOUS?.trim() ??
+      "";
     if (!clientId || !clientSecret) {
       return apiError(400, "bad_request", "clientId and clientSecret are required.");
     }
 
-    const previousSecret = process.env.JWT_SHARED_SECRET_PREVIOUS?.trim() ?? "";
+
+    if (clientId !== expectedClientId) {
+      return apiError(401, "invalid_client", "Invalid client credentials.");
+    }
 
     if (!sharedSecret) {
       return apiError(500, "server_not_configured", "JWT_SHARED_SECRET is not configured.");
