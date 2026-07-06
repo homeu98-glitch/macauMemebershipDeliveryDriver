@@ -11,6 +11,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -91,9 +93,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -293,6 +297,8 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     uiState = uiState,
                     onFilterSelected = viewModel::updateCompletedOrdersFilter,
                     onLoadMore = { viewModel.refreshCompletedOrders(reset = false) },
+                    onViewProof = viewModel::viewProof,
+                    onCloseProof = viewModel::closeProof,
                 )
             }
             composable(Routes.OrderDetail) {
@@ -1643,6 +1649,8 @@ private fun CompletedOrdersScreen(
     uiState: com.membershipdeliverydriver.app.core.DriverAppState,
     onFilterSelected: (com.membershipdeliverydriver.app.core.HistoryRange) -> Unit,
     onLoadMore: () -> Unit,
+    onViewProof: (String) -> Unit,
+    onCloseProof: () -> Unit,
 ) {
     val context = LocalContext.current
     val formatter = remember { DateTimeFormatter.ofPattern("MM/dd HH:mm") }
@@ -1741,9 +1749,9 @@ private fun CompletedOrdersScreen(
                         if (!order.proofOfDeliveryPath.isNullOrBlank()) "送達照片：已上傳" else "送達照片：未同步",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (!order.proofOfDeliveryUrl.isNullOrBlank()) {
+                    if (!order.proofOfDeliveryPath.isNullOrBlank()) {
                         OutlinedButton(
-                            onClick = { openExternalUrl(context, order.proofOfDeliveryUrl) },
+                            onClick = { onViewProof(order.id) },
                             shape = RoundedCornerShape(16.dp),
                         ) {
                             Text("查看送達照片")
@@ -1763,6 +1771,32 @@ private fun CompletedOrdersScreen(
                 }
             }
         }
+    }
+
+    if (uiState.proofViewerOrderId != null) {
+        val bitmap = remember(uiState.proofViewerBytes) {
+            uiState.proofViewerBytes?.let {
+                runCatching { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }.getOrNull()
+            }
+        }
+        AlertDialog(
+            onDismissRequest = onCloseProof,
+            title = { Text("送達照片") },
+            text = {
+                when {
+                    uiState.proofViewerLoading -> Text("正在載入照片…")
+                    bitmap != null -> Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 220.dp, max = 420.dp)
+                    )
+                    else -> Text("無法載入照片。")
+                }
+            },
+            confirmButton = { TextButton(onClick = onCloseProof) { Text("關閉") } }
+        )
     }
 }
 

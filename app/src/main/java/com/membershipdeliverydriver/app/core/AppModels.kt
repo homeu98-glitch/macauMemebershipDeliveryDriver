@@ -139,6 +139,9 @@ data class DriverAppState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val isLoadingCompletedOrders: Boolean = false,
+    val proofViewerOrderId: String? = null,
+    val proofViewerBytes: ByteArray? = null,
+    val proofViewerLoading: Boolean = false,
     val earningsFilter: HistoryRange = HistoryRange.TODAY,
     val errorMessage: String? = null,
 )

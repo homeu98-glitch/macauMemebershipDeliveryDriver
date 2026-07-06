@@ -272,6 +272,27 @@ class DriverViewModel(
         }
     }
 
+    fun viewProof(orderId: String) {
+        _uiState.update { it.copy(proofViewerOrderId = orderId, proofViewerBytes = null, proofViewerLoading = true) }
+        viewModelScope.launch {
+            when (val result = repository.fetchProofImage(orderId)) {
+                is ApiResult.Success -> _uiState.update {
+                    it.copy(proofViewerBytes = result.value, proofViewerLoading = false)
+                }
+                is ApiResult.Failure -> _uiState.update {
+                    it.copy(
+                        proofViewerLoading = false,
+                        errorMessage = result.message,
+                    )
+                }
+            }
+        }
+    }
+
+    fun closeProof() {
+        _uiState.update { it.copy(proofViewerOrderId = null, proofViewerBytes = null, proofViewerLoading = false) }
+    }
+
     fun markOrderPickedUp(orderId: String) {
         viewModelScope.launch {
             when (val result = repository.markOrderPickedUp(orderId)) {

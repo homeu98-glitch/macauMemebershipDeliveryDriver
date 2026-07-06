@@ -18,7 +18,8 @@ android {
         versionName = "1.0.0"
         buildConfigField("String", "SUPABASE_URL", "\"https://vdhdgxumnlnekdslxgmv.supabase.co\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZkaGRneHVtbmxuZWtkc2x4Z212Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwNjg5NDgsImV4cCI6MjA5ODY0NDk0OH0.htqk2Nt5hoBZmNQps_wZauTKExZl38lJejqKKghWvM0\"")
-        buildConfigField("String", "API_BASE_URL", "\"https://your-api.example.com/\"")
+        // NOTE: Must point to the deployed backoffice/API domain.
+        buildConfigField("String", "API_BASE_URL", "\"https://macau-ledger.vercel.app\"")
         buildConfigField("String", "JWT_ISSUER", "\"membership-driver\"")
         buildConfigField("String", "JWT_AUDIENCE", "\"membership-driver-api\"")
 

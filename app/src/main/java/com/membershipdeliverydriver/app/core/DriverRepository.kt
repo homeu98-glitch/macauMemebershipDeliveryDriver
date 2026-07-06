@@ -40,6 +40,7 @@ interface DriverRepository {
     suspend fun acceptOrder(orderId: String): ApiResult<Order>
     suspend fun markOrderPickedUp(orderId: String): ApiResult<Order>
     suspend fun attachProofOfDelivery(orderId: String, uri: Uri): ApiResult<Order>
+    suspend fun fetchProofImage(orderId: String): ApiResult<ByteArray>
     suspend fun cancelOrder(
         orderId: String,
         reason: String,
@@ -311,25 +312,11 @@ class SupabaseDriverRepository : DriverRepository {
             val selfiePath = uploadToStorage("driver-documents", "${userId}/selfie.jpg", form.selfie.uri!!, accessToken)
             val macauIdPath = uploadToStorage("driver-documents", "${userId}/macau-id.jpg", form.macauId.uri!!, accessToken)
             val licencePath = uploadToStorage("driver-documents", "${userId}/driving-licence.jpg", form.drivingLicence.uri!!, accessToken)
-
-            requestArray(
-                path = "/rest/v1/driver_documents?driver_id=eq.${urlEncode(driverId)}",
-                method = "DELETE",
-                token = accessToken,
-            )
-
-            val documentsPayload = JSONArray()
-                .put(JSONObject().put("driver_id", driverId).put("document_type", "selfie").put("storage_path", selfiePath))
-                .put(JSONObject().put("driver_id", driverId).put("document_type", "macau_id").put("storage_path", macauIdPath))
-                .put(JSONObject().put("driver_id", driverId).put("document_type", "driving_licence").put("storage_path", licencePath))
-                .toString()
-
-            requestArray(
-                path = "/rest/v1/driver_documents",
-                method = "POST",
-                token = accessToken,
-                body = documentsPayload,
-                prefer = "return=representation",
+            uploadDriverDocumentsViaApi(
+                accessToken = accessToken,
+                selfie = form.selfie.uri!!,
+                macauId = form.macauId.uri!!,
+                drivingLicence = form.drivingLicence.uri!!,
             )
 
             ApiResult.Success(ApprovalStatus.PENDING_APPROVAL)
@@ -599,7 +586,7 @@ class SupabaseDriverRepository : DriverRepository {
     override suspend fun attachProofOfDelivery(orderId: String, uri: Uri): ApiResult<Order> = withContext(Dispatchers.IO) {
         val token = session?.accessToken ?: return@withContext ApiResult.Failure("請先登入。")
         val driverId = currentDriver?.id ?: return@withContext ApiResult.Failure("找不到騎手資料。")
-        val authUserId = currentAuthUserId ?: return@withContext ApiResult.Failure("找不到登入身份。")
+            currentAuthUserId ?: return@withContext ApiResult.Failure("找不到登入身份。")
 
         try {
             val deliveredAt = OffsetDateTime.now().toString()
@@ -661,29 +648,10 @@ class SupabaseDriverRepository : DriverRepository {
 
             cachedOrders = cachedOrders.filterNot { it.id == orderId }
 
-            val storagePath = uploadToStorage(
-                bucket = "delivery-proofs",
-                objectPath = "${authUserId}/order-${orderId}-proof.jpg",
-                uri = uri,
-                accessToken = token,
-            )
-
-            requestArray(
-                path = "/rest/v1/delivery_proofs",
-                method = "POST",
-                token = token,
-                body = JSONObject()
-                    .put("order_id", orderId)
-                    .put("driver_id", driverId)
-                    .put("storage_path", storagePath)
-                    .put("proof_type", "proof_of_delivery")
-                    .toString(),
-                prefer = "return=representation",
-            )
+            uploadProofViaApi(orderId, uri, token)
 
             updatedOrder = updatedOrder?.copy(
-                proofOfDeliveryPath = storagePath,
-                proofOfDeliveryUrl = createSignedProofUrl(storagePath, token) ?: proofPublicUrl(storagePath),
+                proofOfDeliveryUrl = "${BuildConfig.API_BASE_URL.trimEnd('/')}/api/mobile/orders/$orderId/proof",
             )
 
             val finalOrder = updatedOrder
@@ -692,6 +660,67 @@ class SupabaseDriverRepository : DriverRepository {
             ApiResult.Success(finalOrder)
         } catch (error: Exception) {
             ApiResult.Failure(error.message ?: "上傳送達證明失敗。")
+        }
+    }
+
+    private fun uploadProofViaApi(orderId: String, uri: Uri, accessToken: String) {
+        val context = AppContextHolder.requireContext()
+        val contentResolver = context.contentResolver
+        val mimeType = contentResolver.getType(uri) ?: "image/jpeg"
+        val inputStream = when (uri.scheme) {
+            "content" -> requireNotNull(contentResolver.openInputStream(uri)) { "無法讀取檔案。" }
+            "file", null -> {
+                val filePath = requireNotNull(uri.path) { "無法讀取檔案。" }
+                java.io.File(filePath).inputStream()
+            }
+            else -> requireNotNull(contentResolver.openInputStream(uri)) { "無法讀取檔案。" }
+        }
+        val rawBytes = inputStream.use { it.readBytes() }
+        val (bytes, uploadMimeType) = compressImageIfNeeded(rawBytes, mimeType)
+
+        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+        val body = okhttp3.MultipartBody.Builder()
+            .setType(okhttp3.MultipartBody.FORM)
+            .addFormDataPart(
+                "file",
+                "proof.jpg",
+                bytes.toRequestBody(uploadMimeType.toMediaType())
+            )
+            .build()
+
+        val request = Request.Builder()
+            .url("$baseUrl/api/mobile/orders/$orderId/proof")
+            .post(body)
+            .addHeader("x-supabase-access-token", accessToken)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException(extractErrorMessage(response.body?.string().orEmpty()))
+            }
+        }
+    }
+
+    override suspend fun fetchProofImage(orderId: String): ApiResult<ByteArray> = withContext(Dispatchers.IO) {
+        val token = session?.accessToken ?: return@withContext ApiResult.Failure("請先登入。")
+        try {
+            val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+            val request = Request.Builder()
+                .url("$baseUrl/api/mobile/orders/$orderId/proof")
+                .get()
+                .addHeader("x-supabase-access-token", token)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext ApiResult.Failure(extractErrorMessage(response.body?.string().orEmpty()))
+                }
+                val bytes = response.body?.bytes()
+                    ?: return@withContext ApiResult.Failure("無法讀取照片。")
+                return@withContext ApiResult.Success(bytes)
+            }
+        } catch (error: Exception) {
+            ApiResult.Failure(error.message ?: "讀取照片失敗。")
         }
     }
 
@@ -803,6 +832,53 @@ class SupabaseDriverRepository : DriverRepository {
                     else -> raw
                 }
                 throw IllegalStateException(userMessage)
+            }
+        }
+    }
+
+    private fun uploadDriverDocumentsViaApi(
+        accessToken: String,
+        selfie: Uri,
+        macauId: Uri,
+        drivingLicence: Uri,
+    ) {
+        val context = AppContextHolder.requireContext()
+        val contentResolver = context.contentResolver
+        fun readBytes(uri: Uri): Pair<ByteArray, String> {
+            val mimeType = contentResolver.getType(uri) ?: "image/jpeg"
+            val inputStream = when (uri.scheme) {
+                "content" -> requireNotNull(contentResolver.openInputStream(uri)) { "無法讀取檔案。" }
+                "file", null -> {
+                    val filePath = requireNotNull(uri.path) { "無法讀取檔案。" }
+                    java.io.File(filePath).inputStream()
+                }
+                else -> requireNotNull(contentResolver.openInputStream(uri)) { "無法讀取檔案。" }
+            }
+            val rawBytes = inputStream.use { it.readBytes() }
+            return compressImageIfNeeded(rawBytes, mimeType)
+        }
+
+        val (selfieBytes, selfieType) = readBytes(selfie)
+        val (macauBytes, macauType) = readBytes(macauId)
+        val (licenceBytes, licenceType) = readBytes(drivingLicence)
+
+        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+        val body = okhttp3.MultipartBody.Builder()
+            .setType(okhttp3.MultipartBody.FORM)
+            .addFormDataPart("selfie", "selfie.jpg", selfieBytes.toRequestBody(selfieType.toMediaType()))
+            .addFormDataPart("macau_id", "macau-id.jpg", macauBytes.toRequestBody(macauType.toMediaType()))
+            .addFormDataPart("driving_licence", "driving-licence.jpg", licenceBytes.toRequestBody(licenceType.toMediaType()))
+            .build()
+
+        val request = Request.Builder()
+            .url("$baseUrl/api/mobile/drivers/documents")
+            .post(body)
+            .addHeader("x-supabase-access-token", accessToken)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException(extractErrorMessage(response.body?.string().orEmpty()))
             }
         }
     }
