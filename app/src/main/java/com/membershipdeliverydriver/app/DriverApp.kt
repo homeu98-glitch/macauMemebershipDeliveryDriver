@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -286,6 +287,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onRefresh = viewModel::refreshDashboard,
                     onMarkPickedUp = viewModel::markOrderPickedUp,
                     onProofSelected = viewModel::uploadProofOfDelivery,
+                    onCancelOrder = viewModel::cancelOrder,
                 )
             }
             composable(Routes.Completed) {
@@ -828,6 +830,7 @@ private fun OrdersScreen(
     onRefresh: () -> Unit,
     onMarkPickedUp: (String) -> Unit,
     onProofSelected: (String, Uri) -> Unit,
+    onCancelOrder: (String, String, String?, com.membershipdeliverydriver.app.core.CancelHandling) -> Unit,
 ) {
     val context = LocalContext.current
     val pullRefreshState = rememberPullRefreshState(
@@ -835,6 +838,10 @@ private fun OrdersScreen(
         onRefresh = onRefresh,
     )
     var completionOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+    var cancelOrderId by rememberSaveable { mutableStateOf<String?>(null) }
+    var cancelReason by rememberSaveable { mutableStateOf("臨時有事無法配送") }
+    var cancelOtherReason by rememberSaveable { mutableStateOf("") }
+    var cancelHandling by rememberSaveable { mutableStateOf(com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val orderId = completionOrderId
         completionOrderId = null
@@ -926,6 +933,12 @@ private fun OrdersScreen(
                     onCompleteOrder = {
                         completionOrderId = order.id
                     },
+                    onCancelOrder = {
+                        cancelOrderId = order.id
+                        cancelReason = "臨時有事無法配送"
+                        cancelOtherReason = ""
+                        cancelHandling = com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP
+                    },
                 )
             }
         }
@@ -956,6 +969,59 @@ private fun OrdersScreen(
                             Text("取消")
                         }
                     }
+                }
+            )
+        }
+        if (cancelOrderId != null) {
+            AlertDialog(
+                onDismissRequest = { cancelOrderId = null },
+                title = { Text("取消訂單") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("請選擇取消原因與處理方式。")
+                        HistoryChoiceChips(
+                            options = listOf("臨時有事無法配送", "車輛故障", "身體不適", "其他"),
+                            selected = cancelReason,
+                            onSelected = { cancelReason = it },
+                        )
+                        if (cancelReason == "其他") {
+                            OutlinedTextField(
+                                value = cancelOtherReason,
+                                onValueChange = { cancelOtherReason = it },
+                                label = { Text("請輸入原因") },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        HistoryChoiceChips(
+                            options = listOf("退回商戶", "不退回"),
+                            selected = if (cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) "退回商戶" else "不退回",
+                            onSelected = {
+                                cancelHandling =
+                                    if (it == "退回商戶") {
+                                        com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP
+                                    } else {
+                                        com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING
+                                    }
+                            },
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val orderId = cancelOrderId ?: return@TextButton
+                            onCancelOrder(
+                                orderId,
+                                cancelReason,
+                                cancelOtherReason.takeIf { cancelReason == "其他" && it.isNotBlank() },
+                                cancelHandling,
+                            )
+                            cancelOrderId = null
+                        }
+                    ) { Text("確認取消") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { cancelOrderId = null }) { Text("返回") }
                 }
             )
         }
@@ -1087,12 +1153,18 @@ private fun ActiveOrderCard(
     onCallCustomer: () -> Unit,
     onMarkPickedUp: () -> Unit,
     onCompleteOrder: () -> Unit,
+    onCancelOrder: () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(26.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFF0DFC0))
+        colors = CardDefaults.cardColors(
+            containerColor = if (order.status == OrderStatus.CANCELED && order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFFFECEC) else Color.White
+        ),
+        border = BorderStroke(
+            1.dp,
+            if (order.status == OrderStatus.CANCELED && order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFE58A8A) else Color(0xFFF0DFC0)
+        )
     ) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(
@@ -1150,7 +1222,32 @@ private fun ActiveOrderCard(
                 color = Color(0xFF607286),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            if (order.status == OrderStatus.HEADING_TO_SHOP || order.status == OrderStatus.ASSIGNED) {
+            if (order.status == OrderStatus.CANCELED) {
+                Text(
+                    when (order.cancelHandling) {
+                        com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP -> "已取消配送，請把商品退回商戶。"
+                        com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING -> "已取消配送且不退回，需由商戶端處理。"
+                        null -> "已取消配送。"
+                    },
+                    color = if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFB3261E) else Color(0xFF8A5A00),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Button(
+                    onClick = {
+                        if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) {
+                            onNavigateToShop()
+                        }
+                    },
+                    enabled = order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFD32F2F) else MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text(if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) "導航退回商戶" else "等待商戶處理")
+                }
+            } else if (order.status == OrderStatus.HEADING_TO_SHOP || order.status == OrderStatus.ASSIGNED) {
                 Button(
                     onClick = onMarkPickedUp,
                     modifier = Modifier.fillMaxWidth(),
@@ -1170,6 +1267,16 @@ private fun ActiveOrderCard(
                     Spacer(modifier = Modifier.size(8.dp))
                     Text("拍照後完成訂單")
                 }
+            }
+            OutlinedButton(
+                onClick = onCancelOrder,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = order.status != OrderStatus.DELIVERED,
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB3261E)),
+                border = BorderStroke(1.dp, Color(0xFFE58A8A))
+            ) {
+                Text("取消訂單")
             }
         }
     }
@@ -1217,6 +1324,25 @@ private fun ContactLocationRow(
 
 @Composable
 private fun DeliveryStageStrip(status: OrderStatus) {
+    if (status == OrderStatus.CANCELED) {
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = Color(0xFFFFEFEF),
+            border = BorderStroke(1.dp, Color(0xFFE6B7B7))
+        ) {
+            Text(
+                "此訂單已取消配送",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                color = Color(0xFFB3261E),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        return
+    }
+
     val stages = listOf(
         "前往商戶" to (status == OrderStatus.ASSIGNED || status == OrderStatus.HEADING_TO_SHOP || status == OrderStatus.PICKED_UP || status == OrderStatus.HEADING_TO_CUSTOMER || status == OrderStatus.DELIVERED),
         "已取貨" to (status == OrderStatus.PICKED_UP || status == OrderStatus.HEADING_TO_CUSTOMER || status == OrderStatus.DELIVERED),
@@ -1511,6 +1637,7 @@ private fun CompletedOrdersScreen(
     onFilterSelected: (com.membershipdeliverydriver.app.core.HistoryRange) -> Unit,
     onLoadMore: () -> Unit,
 ) {
+    val context = LocalContext.current
     val formatter = remember { DateTimeFormatter.ofPattern("MM/dd HH:mm") }
     LazyColumn(
         modifier = Modifier
@@ -1603,7 +1730,7 @@ private fun CompletedOrdersScreen(
                     )
                     if (!order.proofOfDeliveryUrl.isNullOrBlank()) {
                         OutlinedButton(
-                            onClick = { openExternalUrl(AppContextHolder.requireContext(), order.proofOfDeliveryUrl) },
+                            onClick = { openExternalUrl(context, order.proofOfDeliveryUrl) },
                             shape = RoundedCornerShape(16.dp),
                         ) {
                             Text("查看送達照片")
@@ -1622,6 +1749,28 @@ private fun CompletedOrdersScreen(
                     Text(if (uiState.isLoadingCompletedOrders) "載入中..." else "載入更多")
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HistoryChoiceChips(
+    options: List<String>,
+    selected: String,
+    onSelected: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEach { option ->
+            FilterChip(
+                selected = selected == option,
+                onClick = { onSelected(option) },
+                label = { Text(option) },
+            )
         }
     }
 }
@@ -1812,6 +1961,7 @@ private fun orderStatusLabel(status: OrderStatus): String {
         OrderStatus.PICKED_UP -> "已取貨"
         OrderStatus.HEADING_TO_CUSTOMER -> "前往客戶"
         OrderStatus.DELIVERED -> "已送達"
+        OrderStatus.CANCELED -> "已取消"
         OrderStatus.ISSUE_REPORTED -> "異常回報"
     }
 }
@@ -1848,7 +1998,12 @@ private fun openNavigation(
 }
 
 private fun openExternalUrl(context: android.content.Context, url: String) {
-    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    if (intent.resolveActivity(context.packageManager) != null) {
+        context.startActivity(intent)
+    }
 }
 
 private fun historyRangeLabel(range: com.membershipdeliverydriver.app.core.HistoryRange): String {

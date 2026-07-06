@@ -30,6 +30,7 @@ import kotlin.math.sqrt
 
 interface DriverRepository {
     suspend fun login(form: LoginForm): ApiResult<DriverProfile>
+    suspend fun restoreSession(): ApiResult<DriverProfile>?
     suspend fun submitRegistration(form: RegistrationForm): ApiResult<ApprovalStatus>
     suspend fun toggleAvailability(current: DriverAvailability): DriverAvailability
     suspend fun loadAvailableOrders(): List<Order>
@@ -39,6 +40,12 @@ interface DriverRepository {
     suspend fun acceptOrder(orderId: String): ApiResult<Order>
     suspend fun markOrderPickedUp(orderId: String): ApiResult<Order>
     suspend fun attachProofOfDelivery(orderId: String, uri: Uri): ApiResult<Order>
+    suspend fun cancelOrder(
+        orderId: String,
+        reason: String,
+        otherReason: String?,
+        handling: CancelHandling,
+    ): ApiResult<Order>
     suspend fun reportIssue(orderId: String, note: String): ApiResult<Order>
     suspend fun logout()
 }
@@ -77,9 +84,10 @@ class SupabaseDriverRepository : DriverRepository {
                 refreshToken = refreshToken,
                 expiresInSeconds = expiresIn,
             )
-            DriverSessionStore.saveAccessToken(
+            DriverSessionStore.saveSession(
                 AppContextHolder.requireContext(),
-                accessToken
+                accessToken,
+                refreshToken,
             )
             currentAuthUserId = userId
 
@@ -107,6 +115,122 @@ class SupabaseDriverRepository : DriverRepository {
             }
         } catch (error: Exception) {
             ApiResult.Failure(error.message ?: "登入失敗。")
+        }
+    }
+
+    override suspend fun restoreSession(): ApiResult<DriverProfile>? = withContext(Dispatchers.IO) {
+        val context = AppContextHolder.requireContext()
+        val refreshToken = DriverSessionStore.getRefreshToken(context) ?: return@withContext null
+
+        try {
+            val authJson = requestJson(
+                path = "/auth/v1/token?grant_type=refresh_token",
+                method = "POST",
+                token = BuildConfig.SUPABASE_ANON_KEY,
+                body = JSONObject().put("refresh_token", refreshToken).toString(),
+            )
+
+            val accessToken = authJson.getString("access_token")
+            val nextRefreshToken = authJson.optString("refresh_token", refreshToken)
+            val expiresIn = authJson.optLong("expires_in", 3600)
+            val userId = authJson.getJSONObject("user").getString("id")
+
+            session = AuthSession(
+                accessToken = accessToken,
+                refreshToken = nextRefreshToken,
+                expiresInSeconds = expiresIn,
+            )
+            currentAuthUserId = userId
+            DriverSessionStore.saveSession(context, accessToken, nextRefreshToken)
+
+            val profileArray = requestArray(
+                path = "/rest/v1/driver_profiles?select=id,full_name,phone,approval_status,availability&auth_user_id=eq.${urlEncode(userId)}",
+                token = accessToken,
+            )
+            if (profileArray.length() == 0) {
+                DriverSessionStore.clear(context)
+                session = null
+                currentAuthUserId = null
+                return@withContext null
+            }
+
+            val profile = profileArray.getJSONObject(0).toDriverProfile()
+            currentDriver = profile
+            return@withContext when (profile.approvalStatus) {
+                ApprovalStatus.APPROVED -> ApiResult.Success(profile)
+                ApprovalStatus.PENDING_APPROVAL -> ApiResult.Failure("帳號仍在審核中，請等待後台批准。")
+                ApprovalStatus.REJECTED -> ApiResult.Failure("帳號已被拒絕，請聯絡後台重新提交資料。")
+            }
+        } catch (_: Exception) {
+            DriverSessionStore.clear(context)
+            session = null
+            currentDriver = null
+            currentAuthUserId = null
+            return@withContext null
+        }
+    }
+
+    override suspend fun cancelOrder(
+        orderId: String,
+        reason: String,
+        otherReason: String?,
+        handling: CancelHandling,
+    ): ApiResult<Order> = withContext(Dispatchers.IO) {
+        val token = session?.accessToken ?: return@withContext ApiResult.Failure("請先登入。")
+        val driverId = currentDriver?.id ?: return@withContext ApiResult.Failure("找不到騎手資料。")
+
+        try {
+            requestArray(
+                path = "/rest/v1/order_events",
+                method = "POST",
+                token = token,
+                body = JSONObject()
+                    .put("order_id", orderId)
+                    .put("event_type", "issue_reported")
+                    .put("actor_type", "driver")
+                    .put("actor_driver_id", driverId)
+                    .put(
+                        "payload",
+                        JSONObject()
+                            .put("cancel_reason", reason)
+                            .put("cancel_other_reason", otherReason ?: "")
+                            .put(
+                                "cancel_handling",
+                                when (handling) {
+                                    CancelHandling.RETURN_TO_SHOP -> "return_to_shop"
+                                    CancelHandling.NOT_RETURNING -> "not_returning"
+                                }
+                            )
+                            .put("note", "騎手取消配送")
+                    )
+                    .toString(),
+                prefer = "return=representation",
+            )
+
+            requestArray(
+                path = "/rest/v1/orders?id=eq.${urlEncode(orderId)}",
+                method = "PATCH",
+                token = token,
+                body = JSONObject().put("status", "canceled").toString(),
+                prefer = "return=representation",
+            )
+
+            val updatedOrder = (cachedOrders.firstOrNull { it.id == orderId } ?: loadActiveOrderById(token, orderId))
+                ?.copy(
+                    status = OrderStatus.CANCELED,
+                    cancelReason = reason,
+                    cancelOtherReason = otherReason,
+                    cancelHandling = handling,
+                )
+
+            if (updatedOrder != null) {
+                cachedOrders = cachedOrders.map { if (it.id == orderId) updatedOrder else it }
+                ApiResult.Success(updatedOrder)
+            } else {
+                ApiResult.Failure("找不到訂單。")
+            }
+        } catch (error: Exception) {
+            ApiResult.Failure(error.message ?: "取消訂單失敗。")
         }
     }
 
@@ -253,7 +377,7 @@ class SupabaseDriverRepository : DriverRepository {
         val orderFilter = orderIds.joinToString(",") { "\"$it\"" }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&order=promised_at.asc&id=in.($orderFilter)&status=not.in.(delivered,canceled)",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
             token = token,
         )
 
@@ -525,7 +649,7 @@ class SupabaseDriverRepository : DriverRepository {
 
                 updatedOrder = updatedOrder?.copy(
                     proofOfDeliveryPath = storagePath,
-                    proofOfDeliveryUrl = proofPublicUrl(storagePath),
+                    proofOfDeliveryUrl = createSignedProofUrl(storagePath, token) ?: proofPublicUrl(storagePath),
                 )
             }
 
@@ -734,6 +858,27 @@ class SupabaseDriverRepository : DriverRepository {
         return "${BuildConfig.SUPABASE_URL}/storage/v1/object/public/delivery-proofs/$storagePath"
     }
 
+    private fun createSignedProofUrl(storagePath: String, token: String): String? {
+        return runCatching {
+            val response = requestJson(
+                path = "/storage/v1/object/sign/delivery-proofs/${encodePathSegments(storagePath)}",
+                method = "POST",
+                token = token,
+                body = JSONObject().put("expiresIn", 3600).toString(),
+            )
+            val signedUrl = response.optString("signedURL").ifBlank { response.optString("signedUrl") }
+            when {
+                signedUrl.isBlank() -> null
+                signedUrl.startsWith("http") -> signedUrl
+                else -> "${BuildConfig.SUPABASE_URL}$signedUrl"
+            }
+        }.getOrNull()
+    }
+
+    private fun encodePathSegments(path: String): String {
+        return path.split("/").joinToString("/") { urlEncode(it) }
+    }
+
     private fun historyRangeQuery(filter: HistoryRange, column: String): String {
         val today = LocalDate.now()
         val offset = OffsetDateTime.now().offset
@@ -799,7 +944,7 @@ class SupabaseDriverRepository : DriverRepository {
             token = token,
         )
         val eventsArray = requestArray(
-            path = "/rest/v1/order_events?select=order_id,event_type,created_at&order_id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=created_at.asc",
+            path = "/rest/v1/order_events?select=order_id,event_type,created_at,payload&order_id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=created_at.asc",
             token = token,
         )
         val proofsArray = requestArray(
@@ -813,6 +958,9 @@ class SupabaseDriverRepository : DriverRepository {
         val pickedUpAtByOrder = mutableMapOf<String, String>()
         val deliveredAtByOrder = mutableMapOf<String, String>()
         val proofPathByOrder = mutableMapOf<String, String>()
+        val cancelReasonByOrder = mutableMapOf<String, String>()
+        val cancelOtherReasonByOrder = mutableMapOf<String, String>()
+        val cancelHandlingByOrder = mutableMapOf<String, CancelHandling>()
         for (index in 0 until itemsArray.length()) {
             val item = itemsArray.getJSONObject(index)
             val list = itemsByOrder.getOrPut(item.getString("order_id")) { mutableListOf() }
@@ -830,6 +978,16 @@ class SupabaseDriverRepository : DriverRepository {
             }
             if (orderId !in deliveredAtByOrder && eventType == "delivered") {
                 deliveredAtByOrder[orderId] = event.optString("created_at")
+            }
+            val payload = event.optJSONObject("payload")
+            if (payload != null && payload.has("cancel_reason")) {
+                cancelReasonByOrder[orderId] = payload.optString("cancel_reason")
+                cancelOtherReasonByOrder[orderId] = payload.optString("cancel_other_reason")
+                cancelHandlingByOrder[orderId] = when (payload.optString("cancel_handling")) {
+                    "return_to_shop" -> CancelHandling.RETURN_TO_SHOP
+                    "not_returning" -> CancelHandling.NOT_RETURNING
+                    else -> CancelHandling.NOT_RETURNING
+                }
             }
         }
         for (index in 0 until proofsArray.length()) {
@@ -892,7 +1050,10 @@ class SupabaseDriverRepository : DriverRepository {
                         pickedUpAt = pickedUpAtByOrder[json.getString("id")],
                         deliveredAt = deliveredAtByOrder[json.getString("id")],
                         proofOfDeliveryPath = proofPathByOrder[json.getString("id")],
-                        proofOfDeliveryUrl = proofPathByOrder[json.getString("id")]?.let(::proofPublicUrl),
+                        proofOfDeliveryUrl = proofPathByOrder[json.getString("id")]?.let { createSignedProofUrl(it, token) ?: proofPublicUrl(it) },
+                        cancelReason = cancelReasonByOrder[json.getString("id")],
+                        cancelOtherReason = cancelOtherReasonByOrder[json.getString("id")],
+                        cancelHandling = cancelHandlingByOrder[json.getString("id")],
                     ),
                 )
             }
@@ -924,6 +1085,7 @@ class SupabaseDriverRepository : DriverRepository {
             "picked_up" -> OrderStatus.PICKED_UP
             "arrived_customer" -> OrderStatus.HEADING_TO_CUSTOMER
             "delivered" -> OrderStatus.DELIVERED
+            "canceled" -> OrderStatus.CANCELED
             else -> OrderStatus.ASSIGNED
         }
     }

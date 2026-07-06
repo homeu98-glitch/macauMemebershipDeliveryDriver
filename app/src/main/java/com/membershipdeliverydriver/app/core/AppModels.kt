@@ -11,7 +11,13 @@ enum class OrderStatus {
     PICKED_UP,
     HEADING_TO_CUSTOMER,
     DELIVERED,
+    CANCELED,
     ISSUE_REPORTED,
+}
+
+enum class CancelHandling {
+    RETURN_TO_SHOP,
+    NOT_RETURNING,
 }
 
 enum class HistoryRange {
@@ -81,6 +87,9 @@ data class Order(
     val proofOfDeliveryUri: Uri? = null,
     val proofOfDeliveryPath: String? = null,
     val proofOfDeliveryUrl: String? = null,
+    val cancelReason: String? = null,
+    val cancelOtherReason: String? = null,
+    val cancelHandling: CancelHandling? = null,
     val issueNote: String = "",
 )
 

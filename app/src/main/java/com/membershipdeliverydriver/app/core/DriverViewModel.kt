@@ -17,7 +17,18 @@ class DriverViewModel(
     val uiState: StateFlow<DriverAppState> = _uiState.asStateFlow()
 
     init {
-        refreshDashboard()
+        viewModelScope.launch {
+            when (val restored = repository.restoreSession()) {
+                is ApiResult.Success -> {
+                    _uiState.update { it.copy(currentDriver = restored.value) }
+                    refreshDashboard()
+                }
+                is ApiResult.Failure -> {
+                    _uiState.update { it.copy(errorMessage = restored.message) }
+                }
+                null -> Unit
+            }
+        }
     }
 
     fun onPushOrderUpdate() {
@@ -233,6 +244,28 @@ class DriverViewModel(
                 is ApiResult.Failure -> _uiState.update {
                     it.copy(errorMessage = "訂單已完成，但照片背景上傳失敗：${result.message}")
                 }
+            }
+        }
+    }
+
+    fun cancelOrder(
+        orderId: String,
+        reason: String,
+        otherReason: String?,
+        handling: CancelHandling,
+    ) {
+        viewModelScope.launch {
+            when (val result = repository.cancelOrder(orderId, reason, otherReason, handling)) {
+                is ApiResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            orders = it.orders.replaceOrder(result.value),
+                            errorMessage = "已取消訂單。",
+                        )
+                    }
+                    refreshDashboard()
+                }
+                is ApiResult.Failure -> _uiState.update { it.copy(errorMessage = result.message) }
             }
         }
     }
