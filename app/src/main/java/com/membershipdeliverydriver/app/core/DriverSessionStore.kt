@@ -38,6 +38,19 @@ object DriverSessionStore {
         return prefs.getString(KEY_REFRESH_TOKEN, null)
     }
 
+    fun getSavedAt(context: Context): Long {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getLong(KEY_SAVED_AT, 0L)
+    }
+
+    fun touchSession(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.contains(KEY_ACCESS_TOKEN) || !prefs.contains(KEY_REFRESH_TOKEN)) return
+        prefs.edit()
+            .putLong(KEY_SAVED_AT, System.currentTimeMillis())
+            .apply()
+    }
+
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()

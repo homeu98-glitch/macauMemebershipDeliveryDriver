@@ -8,6 +8,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.app.PendingIntent
@@ -143,7 +144,8 @@ object DriverNotifications {
         )
 
         return NotificationCompat.Builder(context, DISPATCH_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round))
             .setContentTitle("配送中樞已啟動")
             .setContentText("$driverName 目前上線中，系統會持續留意新工單。")
             .setContentIntent(pendingIntent)
@@ -177,7 +179,8 @@ object DriverNotifications {
             context,
             channelIdFor(if (urgent) SOUND_URGENT_ORDER else SOUND_NEW_ORDER)
         )
-            .setSmallIcon(android.R.drawable.stat_notify_more)
+            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round))
             .setContentTitle(title)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))

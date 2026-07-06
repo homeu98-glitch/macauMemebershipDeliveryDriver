@@ -5,14 +5,10 @@ const firebaseAdminMessaging = require("firebase-admin/messaging") as {
   getMessaging: () => {
     sendEachForMulticast: (payload: {
       tokens: string[];
-      notification: { title: string; body: string };
       data?: Record<string, string>;
       android?: {
         priority?: string;
-        notification?: {
-          channelId?: string;
-          sound?: string;
-        };
+        ttl?: number;
       };
     }) => Promise<{ successCount: number; failureCount: number }>;
   };
@@ -59,32 +55,8 @@ export async function sendPushToDriver(driverId: string, payload: SendPushOption
   getFirebaseAdminApp();
   const messaging = firebaseAdminMessaging.getMessaging();
   const soundKey = payload.soundKey ?? "new_order";
-  const channelId =
-    soundKey === "urgent_order"
-      ? "driver_urgent_order_alerts"
-      : soundKey === "customer_hurry"
-        ? "driver_customer_hurry_alerts"
-      : soundKey === "order_completed"
-        ? "driver_order_completed_alerts"
-        : soundKey === "order_cancelled"
-          ? "driver_order_cancelled_alerts"
-          : "driver_order_alerts";
-  const soundName =
-    soundKey === "urgent_order"
-      ? "sound_urgent_order"
-      : soundKey === "customer_hurry"
-        ? "sound_customer_hurry"
-      : soundKey === "order_completed"
-        ? "sound_order_completed"
-        : soundKey === "order_cancelled"
-          ? "sound_order_cancelled"
-          : "sound_new_order";
   const result = await messaging.sendEachForMulticast({
     tokens,
-    notification: {
-      title: payload.title,
-      body: payload.body,
-    },
     data: {
       ...(payload.data ?? {}),
       soundKey,
@@ -93,10 +65,7 @@ export async function sendPushToDriver(driverId: string, payload: SendPushOption
     },
     android: {
       priority: "high",
-      notification: {
-        channelId,
-        sound: soundName,
-      },
+      ttl: 24 * 60 * 60 * 1000,
     },
   });
 

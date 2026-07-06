@@ -158,7 +158,12 @@ class SupabaseDriverRepository : DriverRepository {
             val profile = profileArray.getJSONObject(0).toDriverProfile()
             currentDriver = profile
             return@withContext when (profile.approvalStatus) {
-                ApprovalStatus.APPROVED -> ApiResult.Success(profile)
+                ApprovalStatus.APPROVED -> {
+                    runCatching {
+                        FcmRegistrationManager.syncCurrentToken(accessToken)
+                    }
+                    ApiResult.Success(profile)
+                }
                 ApprovalStatus.PENDING_APPROVAL -> ApiResult.Failure("帳號仍在審核中，請等待後台批准。")
                 ApprovalStatus.REJECTED -> ApiResult.Failure("帳號已被拒絕，請聯絡後台重新提交資料。")
             }
@@ -171,13 +176,51 @@ class SupabaseDriverRepository : DriverRepository {
         }
     }
 
+    private suspend fun ensureActiveAccessToken(forceRefresh: Boolean = false): String? {
+        val context = AppContextHolder.requireContext()
+        val currentSession = session
+        val savedAt = DriverSessionStore.getSavedAt(context)
+        val needsRefresh =
+            forceRefresh ||
+                currentSession == null ||
+                savedAt == 0L ||
+                System.currentTimeMillis() - savedAt >= 45L * 60L * 1000L
+
+        if (!needsRefresh && currentSession != null) {
+            DriverSessionStore.touchSession(context)
+            return currentSession.accessToken
+        }
+
+        val refreshToken = currentSession?.refreshToken ?: DriverSessionStore.getRefreshToken(context) ?: return null
+        val authJson = requestJson(
+            path = "/auth/v1/token?grant_type=refresh_token",
+            method = "POST",
+            token = BuildConfig.SUPABASE_ANON_KEY,
+            body = JSONObject().put("refresh_token", refreshToken).toString(),
+        )
+
+        val accessToken = authJson.getString("access_token")
+        val nextRefreshToken = authJson.optString("refresh_token", refreshToken)
+        val expiresIn = authJson.optLong("expires_in", 3600)
+        session = AuthSession(
+            accessToken = accessToken,
+            refreshToken = nextRefreshToken,
+            expiresInSeconds = expiresIn,
+        )
+        DriverSessionStore.saveSession(context, accessToken, nextRefreshToken)
+        runCatching {
+            FcmRegistrationManager.syncCurrentToken(accessToken)
+        }
+        return accessToken
+    }
+
     override suspend fun cancelOrder(
         orderId: String,
         reason: String,
         otherReason: String?,
         handling: CancelHandling,
     ): ApiResult<Order> = withContext(Dispatchers.IO) {
-        val token = session?.accessToken ?: return@withContext ApiResult.Failure("請先登入。")
+        val token = ensureActiveAccessToken() ?: return@withContext ApiResult.Failure("請先登入。")
         val driverId = currentDriver?.id ?: return@withContext ApiResult.Failure("找不到騎手資料。")
 
         try {
@@ -314,7 +357,7 @@ class SupabaseDriverRepository : DriverRepository {
     }
 
     override suspend fun toggleAvailability(current: DriverAvailability): DriverAvailability = withContext(Dispatchers.IO) {
-        val token = session?.accessToken ?: return@withContext current
+        val token = ensureActiveAccessToken() ?: return@withContext current
         val driverId = currentDriver?.id ?: return@withContext current
         val next = if (current == DriverAvailability.ONLINE) DriverAvailability.OFFLINE else DriverAvailability.ONLINE
 
@@ -342,7 +385,7 @@ class SupabaseDriverRepository : DriverRepository {
     }
 
     override suspend fun loadAvailableOrders(): List<Order> = withContext(Dispatchers.IO) {
-        val token = session?.accessToken ?: return@withContext emptyList()
+        val token = ensureActiveAccessToken() ?: return@withContext emptyList()
         val driverId = currentDriver?.id ?: return@withContext emptyList()
 
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
@@ -357,7 +400,7 @@ class SupabaseDriverRepository : DriverRepository {
     }
 
     override suspend fun loadOrders(): List<Order> = withContext(Dispatchers.IO) {
-        val token = session?.accessToken ?: return@withContext emptyList()
+        val token = ensureActiveAccessToken() ?: return@withContext emptyList()
         val driverId = currentDriver?.id ?: return@withContext emptyList()
 
         val assignmentArray = requestArray(
@@ -392,7 +435,7 @@ class SupabaseDriverRepository : DriverRepository {
         page: Int,
         pageSize: Int,
     ): PagedOrdersResult = withContext(Dispatchers.IO) {
-        val token = session?.accessToken ?: return@withContext PagedOrdersResult(emptyList(), page, false)
+        val token = ensureActiveAccessToken() ?: return@withContext PagedOrdersResult(emptyList(), page, false)
         val driverId = currentDriver?.id ?: return@withContext PagedOrdersResult(emptyList(), page, false)
         val offset = page * pageSize
 
@@ -597,7 +640,7 @@ class SupabaseDriverRepository : DriverRepository {
     }
 
     override suspend fun fetchProofImage(orderId: String): ApiResult<ByteArray> = withContext(Dispatchers.IO) {
-        val token = session?.accessToken ?: return@withContext ApiResult.Failure("請先登入。")
+        val token = ensureActiveAccessToken() ?: return@withContext ApiResult.Failure("請先登入。")
         try {
             val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
             val request = Request.Builder()

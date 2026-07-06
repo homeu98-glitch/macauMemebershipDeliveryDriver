@@ -263,7 +263,7 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
     urgent: input.urgent ?? false
   });
 
-  void sendPushToOnlineDrivers({
+  await sendPushToOnlineDrivers({
     title: input.urgent ? "有緊急新訂單可接" : "有新訂單可接",
     body: `${input.shop.name} 有新配送工單，請立即查看首頁。`,
     soundKey: input.urgent ? "urgent_order" : "new_order",
