@@ -217,6 +217,7 @@ export async function listOrders(): Promise<Order[]> {
     return {
       id: item.id,
       code: item.external_order_id,
+      rawStatus: item.status,
       status: orderStatusLabel(item.status),
       customerName: customer?.name ?? "未命名客戶",
       storeName: shop?.name ?? "未命名店舖",
@@ -259,6 +260,7 @@ export async function getOrderById(id: string): Promise<Order | null> {
   return {
     id: order.id,
     code: order.external_order_id,
+    rawStatus: order.status,
     status: orderStatusLabel(order.status),
     customerName: customer?.name ?? "未命名客戶",
     storeName: shop?.name ?? "未命名店舖",

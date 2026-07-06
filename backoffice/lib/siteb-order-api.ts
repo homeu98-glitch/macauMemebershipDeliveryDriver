@@ -1,5 +1,6 @@
-import { createServiceRoleSupabaseClient } from "./supabase";
 import { sendPushToDriver, sendPushToOnlineDrivers } from "./push-notifications";
+import { dispatchOrderCallback } from "./siteb-callbacks";
+import { createServiceRoleSupabaseClient } from "./supabase";
 
 type ShopInput = {
   externalShopId?: string;
@@ -345,6 +346,126 @@ export async function cancelOrderByExternalId(
       }
     }).catch(() => undefined);
   }
+
+  return { found: true as const, canceled: true as const, status: "canceled" };
+}
+
+export async function confirmOrderById(orderId: string, confirmedBy: string) {
+  const supabase = createServiceRoleSupabaseClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("id,status,source_payload")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!order) return { found: false as const };
+
+  if (["delivered", "canceled", "failed"].includes(order.status)) {
+    return { found: true as const, confirmed: false as const, status: order.status as string };
+  }
+
+  const payload =
+    order.source_payload && typeof order.source_payload === "object"
+      ? (order.source_payload as Record<string, unknown>)
+      : {};
+
+  if (!payload.shopConfirmedAt) {
+    const confirmedAt = nowIso();
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        updated_at: confirmedAt,
+        source_payload: {
+          ...payload,
+          shopConfirmedAt: confirmedAt,
+          shopConfirmedBy: confirmedBy
+        }
+      })
+      .eq("id", orderId);
+    if (updateError) throw updateError;
+
+    await appendEvent(orderId, "website.shop_confirmed", {
+      note: "訂單已由商戶確認。",
+      confirmedBy,
+      confirmedAt
+    });
+  }
+
+  return { found: true as const, confirmed: true as const, status: order.status as string };
+}
+
+export async function adminCancelOrderById(orderId: string, requestedBy: string, reason = "backoffice_manual_cancel") {
+  const supabase = createServiceRoleSupabaseClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("id,external_order_id,status,source_payload")
+    .eq("id", orderId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!order) return { found: false as const };
+
+  if (order.status === "delivered") {
+    return { found: true as const, canceled: false as const, status: order.status as string };
+  }
+
+  if (order.status !== "canceled") {
+    const canceledAt = nowIso();
+    const payload =
+      order.source_payload && typeof order.source_payload === "object"
+        ? (order.source_payload as Record<string, unknown>)
+        : {};
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        status: "canceled",
+        updated_at: canceledAt,
+        source_payload: {
+          ...payload,
+          canceledReason: reason,
+          canceledBy: requestedBy,
+          canceledAt,
+          canceledFrom: "backoffice"
+        }
+      })
+      .eq("id", order.id);
+    if (updateError) throw updateError;
+
+    await appendEvent(order.id as string, "website.order_canceled", {
+      note: "訂單已由後台取消。",
+      reason,
+      requestedBy,
+      requestedAt: canceledAt
+    });
+  }
+
+  const { data: assignment } = await supabase
+    .from("order_assignments")
+    .select("driver_id")
+    .eq("order_id", order.id)
+    .is("canceled_at", null)
+    .order("assigned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (assignment?.driver_id) {
+    void sendPushToDriver(assignment.driver_id, {
+      title: "訂單已取消",
+      body: "訂單已由後台取消。",
+      soundKey: "order_cancelled",
+      data: {
+        type: "order_canceled",
+        externalOrderId: order.external_order_id
+      }
+    }).catch(() => undefined);
+  }
+
+  await dispatchOrderCallback({
+    orderId: order.id as string,
+    eventType: "canceled",
+    note: reason
+  }).catch(() => undefined);
 
   return { found: true as const, canceled: true as const, status: "canceled" };
 }

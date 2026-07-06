@@ -77,6 +77,14 @@ function EmptyState({ text }: { text: string }) {
   return <div className="muted" style={{ padding: "14px 4px" }}>{text}</div>;
 }
 
+function canShopConfirm(rawStatus: string) {
+  return !["delivered", "canceled", "failed"].includes(rawStatus);
+}
+
+function canAdminCancel(rawStatus: string) {
+  return !["delivered", "canceled", "failed"].includes(rawStatus);
+}
+
 export function AppShell({
   user,
   children
@@ -506,6 +514,37 @@ export function RidersTable({ riders }: { riders: Rider[] }) {
 }
 
 export function OrdersTable({ orders }: { orders: Order[] }) {
+  const router = useRouter();
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  async function runOrderAction(orderId: string, action: "shop-confirm" | "cancel") {
+    const actionLabel = action === "shop-confirm" ? "確認訂單" : "取消訂單";
+    if (action === "cancel" && !window.confirm("確定要取消這張訂單嗎？")) {
+      return;
+    }
+
+    setBusyAction(`${orderId}:${action}`);
+    try {
+      const response = await fetch(`/api/orders/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body:
+          action === "cancel"
+            ? JSON.stringify({ orderId, reason: "backoffice_manual_cancel" })
+            : JSON.stringify({ orderId })
+      });
+      const payload = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        throw new Error(payload.message ?? `${actionLabel}失敗。`);
+      }
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : `${actionLabel}失敗。`);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   return (
     <div className="card">
       <div className="card-header">
@@ -529,6 +568,7 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
                 <th>狀態</th>
                 <th>配送費</th>
                 <th>預估</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -550,12 +590,94 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
                   </td>
                   <td>{formatCurrency(order.amountMop)}</td>
                   <td>{order.etaMinutes > 0 ? `${order.etaMinutes} 分鐘` : "已完成 / 未設定"}</td>
+                  <td>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {canShopConfirm(order.rawStatus) ? (
+                        <button
+                          className="btn btn-secondary"
+                          disabled={busyAction === `${order.id}:shop-confirm`}
+                          onClick={() => runOrderAction(order.id, "shop-confirm")}
+                          type="button"
+                        >
+                          {busyAction === `${order.id}:shop-confirm` ? "確認中..." : "商戶確認"}
+                        </button>
+                      ) : null}
+                      {canAdminCancel(order.rawStatus) ? (
+                        <button
+                          className="btn btn-secondary"
+                          disabled={busyAction === `${order.id}:cancel`}
+                          onClick={() => runOrderAction(order.id, "cancel")}
+                          type="button"
+                        >
+                          {busyAction === `${order.id}:cancel` ? "取消中..." : "取消訂單"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+export function OrderDetailActions({ orderId, rawStatus }: { orderId: string; rawStatus: string }) {
+  const router = useRouter();
+  const [busyAction, setBusyAction] = useState<"shop-confirm" | "cancel" | null>(null);
+
+  async function runOrderAction(action: "shop-confirm" | "cancel") {
+    const actionLabel = action === "shop-confirm" ? "確認訂單" : "取消訂單";
+    if (action === "cancel" && !window.confirm("確定要取消這張訂單嗎？")) {
+      return;
+    }
+
+    setBusyAction(action);
+    try {
+      const response = await fetch(`/api/orders/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body:
+          action === "cancel"
+            ? JSON.stringify({ orderId, reason: "backoffice_manual_cancel" })
+            : JSON.stringify({ orderId })
+      });
+      const payload = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        throw new Error(payload.message ?? `${actionLabel}失敗。`);
+      }
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : `${actionLabel}失敗。`);
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      {canShopConfirm(rawStatus) ? (
+        <button
+          className="btn btn-secondary"
+          disabled={busyAction !== null}
+          onClick={() => runOrderAction("shop-confirm")}
+          type="button"
+        >
+          {busyAction === "shop-confirm" ? "確認中..." : "商戶確認"}
+        </button>
+      ) : null}
+      {canAdminCancel(rawStatus) ? (
+        <button
+          className="btn btn-secondary"
+          disabled={busyAction !== null}
+          onClick={() => runOrderAction("cancel")}
+          type="button"
+        >
+          {busyAction === "cancel" ? "取消中..." : "取消訂單"}
+        </button>
+      ) : null}
     </div>
   );
 }

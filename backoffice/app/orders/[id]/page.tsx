@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { OrderDetailActions } from "../../../components/backoffice";
 import { getOrderById } from "../../../lib/server-data";
 
 export default async function OrderDetailPage({
@@ -30,6 +31,10 @@ export default async function OrderDetailPage({
           <Link className="btn btn-secondary" href="/orders">
             返回訂單列表
           </Link>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+          <OrderDetailActions orderId={order.id} rawStatus={order.rawStatus} />
         </div>
 
         <div className="inline-pills" style={{ marginBottom: 20 }}>
