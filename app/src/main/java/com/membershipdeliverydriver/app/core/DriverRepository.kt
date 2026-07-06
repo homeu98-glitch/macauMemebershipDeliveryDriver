@@ -1,6 +1,9 @@
 package com.membershipdeliverydriver.app.core
 
 import android.net.Uri
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.location.LocationManager
 import com.membershipdeliverydriver.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -654,6 +657,8 @@ class SupabaseDriverRepository : DriverRepository {
     }
 
     private fun loadLatestDriverLocation(token: String, driverId: String): Pair<Double, Double>? {
+        loadDeviceLocation()?.let { return it }
+
         val locations = requestArray(
             path = "/rest/v1/driver_locations?select=latitude,longitude&driver_id=eq.${urlEncode(driverId)}&order=captured_at.desc&limit=1",
             token = token,
@@ -662,6 +667,26 @@ class SupabaseDriverRepository : DriverRepository {
         if (locations.length() == 0) return null
         val location = locations.getJSONObject(0)
         return location.optDouble("latitude", 0.0) to location.optDouble("longitude", 0.0)
+    }
+
+    private fun loadDeviceLocation(): Pair<Double, Double>? {
+        val context = AppContextHolder.requireContext()
+        val hasPermission =
+            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        if (!hasPermission) return null
+
+        val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? LocationManager
+            ?: return null
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+        val best = providers.mapNotNull { provider ->
+            runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
+        }.maxByOrNull { it.time } ?: return null
+
+        return best.latitude to best.longitude
     }
 
     private fun loadAllDeliveredOrders(): List<Order> {
@@ -917,7 +942,14 @@ class SupabaseDriverRepository : DriverRepository {
         val context = AppContextHolder.requireContext()
         val contentResolver = context.contentResolver
         val mimeType = contentResolver.getType(uri) ?: "image/jpeg"
-        val inputStream = requireNotNull(contentResolver.openInputStream(uri)) { "無法讀取檔案。" }
+        val inputStream = when (uri.scheme) {
+            "content" -> requireNotNull(contentResolver.openInputStream(uri)) { "無法讀取檔案。" }
+            "file", null -> {
+                val filePath = requireNotNull(uri.path) { "無法讀取檔案。" }
+                java.io.File(filePath).inputStream()
+            }
+            else -> requireNotNull(contentResolver.openInputStream(uri)) { "無法讀取檔案。" }
+        }
         val bytes = inputStream.use { it.readBytes() }
 
         val request = Request.Builder()
@@ -930,7 +962,7 @@ class SupabaseDriverRepository : DriverRepository {
 
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
-                throw IllegalStateException(response.body?.string() ?: "上傳失敗。")
+                throw IllegalStateException(extractErrorMessage(response.body?.string().orEmpty()))
             }
         }
         return objectPath

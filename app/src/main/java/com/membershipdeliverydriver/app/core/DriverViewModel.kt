@@ -292,6 +292,7 @@ class DriverViewModel(
                 val previousIds = previousOrders.map { it.id }.toSet()
                 val newOrders = availableOrders.filterNot { previousIds.contains(it.id) }
                 if (newOrders.isNotEmpty()) {
+                    DriverSoundEffects.playNewOrder(AppContextHolder.requireContext())
                     DriverNotifications.notifyNewOrders(
                         context = AppContextHolder.requireContext(),
                         count = newOrders.size,
