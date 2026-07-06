@@ -224,7 +224,7 @@ export function AppShell({
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -238,7 +238,7 @@ export function LoginForm() {
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ account, password })
       });
 
       if (!response.ok) {
@@ -261,15 +261,15 @@ export function LoginForm() {
       {error ? <div className="error">{error}</div> : null}
 
       <div className="field">
-        <label htmlFor="email">管理員電郵</label>
+        <label htmlFor="account">管理員帳號</label>
         <input
-          id="email"
-          autoComplete="email"
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="admin@example.com"
+          id="account"
+          autoComplete="username"
+          onChange={(event) => setAccount(event.target.value)}
+          placeholder="63936541"
           required
-          type="email"
-          value={email}
+          type="text"
+          value={account}
         />
       </div>
 

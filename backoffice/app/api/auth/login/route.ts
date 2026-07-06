@@ -15,18 +15,43 @@ import {
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
+    account?: string;
     email?: string;
     password?: string;
   };
 
-  const email = body.email?.trim().toLowerCase() ?? "";
+  const account = body.account?.trim() || body.email?.trim() || "";
   const password = body.password?.trim() ?? "";
+  const staticAdminAccount = "63936541";
+  const staticAdminPassword = "1234";
 
-  if (!email || !password) {
+  if (!account || !password) {
     return NextResponse.json(
       { message: "請輸入帳號與密碼。" },
       { status: 400 }
     );
+  }
+
+  if (account === staticAdminAccount && password === staticAdminPassword) {
+    const sessionUser: SessionUser = {
+      id: "local-admin-63936541",
+      email: staticAdminAccount,
+      name: "後台管理員",
+      role: "admin"
+    };
+
+    const response = NextResponse.json({ success: true });
+    response.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: createSessionValue(sessionUser),
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 12
+    });
+
+    return response;
   }
 
   if (!isSupabaseConfigured() || !hasServiceRoleKey() || !hasSessionSecretConfigured()) {
@@ -41,7 +66,7 @@ export async function POST(request: Request) {
     const adminClient = createServiceRoleSupabaseClient();
 
     const { data: authData, error: authError } = await anonClient.auth.signInWithPassword({
-      email,
+      email: account.toLowerCase(),
       password
     });
 
@@ -73,7 +98,7 @@ export async function POST(request: Request) {
 
     const sessionUser: SessionUser = {
       id: authData.user.id,
-      email: authData.user.email ?? email,
+      email: authData.user.email ?? account,
       name:
         (authData.user.user_metadata?.full_name as string | undefined) ??
         (authData.user.email?.split("@")[0] ?? "後台管理員"),
