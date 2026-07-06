@@ -86,6 +86,8 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [quickCreateBusy, setQuickCreateBusy] = useState<number | null>(null);
+  const [quickCreateMessage, setQuickCreateMessage] = useState("");
   const initials = useMemo(
     () =>
       user.name
@@ -101,6 +103,35 @@ export function AppShell({
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
     router.refresh();
+  }
+
+  async function handleQuickCreateOrders(count: number) {
+    setQuickCreateBusy(count);
+    setQuickCreateMessage("");
+
+    try {
+      const response = await fetch("/api/testing/random-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count })
+      });
+
+      const payload = (await response.json()) as {
+        message?: string;
+        created?: Array<{ externalOrderId: string; siteBOrderId: string; status: string }>;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? "建立測試訂單失敗。");
+      }
+
+      setQuickCreateMessage(`已建立 ${payload.created?.length ?? 0} 筆測試訂單。`);
+      router.refresh();
+    } catch (error) {
+      setQuickCreateMessage(error instanceof Error ? error.message : "建立測試訂單失敗。");
+    } finally {
+      setQuickCreateBusy(null);
+    }
   }
 
   return (
@@ -143,15 +174,37 @@ export function AppShell({
 
       <main className="content">
         <div className="card header-card">
-          <div>
+          <div className="header-copy">
             <div className="eyebrow">營運後台</div>
             <h1 className="page-title">騎手審核、訂單監控與回調處理</h1>
             <p className="page-subtitle">
               使用真實 Supabase 資料管理騎手帳號、查看訂單流轉與重試 callback。
             </p>
+            {quickCreateMessage ? <div className="hint">{quickCreateMessage}</div> : null}
           </div>
 
           <div className="header-actions">
+            <div className="header-quick-actions">
+              <button
+                className="btn btn-primary"
+                disabled={quickCreateBusy !== null}
+                onClick={() => handleQuickCreateOrders(1)}
+                type="button"
+              >
+                {quickCreateBusy === 1 ? "建立中..." : "建立 1 筆"}
+              </button>
+              <button
+                className="btn btn-secondary"
+                disabled={quickCreateBusy !== null}
+                onClick={() => handleQuickCreateOrders(5)}
+                type="button"
+              >
+                {quickCreateBusy === 5 ? "建立中..." : "建立 5 筆"}
+              </button>
+              <Link className="btn btn-secondary" href="/testing">
+                建立測試訂單
+              </Link>
+            </div>
             <div>
               <div className="muted">目前登入</div>
               <strong>{user.email}</strong>

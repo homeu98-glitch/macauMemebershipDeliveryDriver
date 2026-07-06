@@ -307,10 +307,22 @@ select {
   margin-bottom: 24px;
 }
 
+.header-copy {
+  flex: 1;
+  min-width: 0;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+.header-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .avatar {
@@ -535,6 +547,11 @@ select {
   .header-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .header-quick-actions {
+    width: 100%;
+    justify-content: stretch;
   }
 
   .metrics-grid,
