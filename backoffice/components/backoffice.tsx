@@ -670,14 +670,18 @@ export function OrdersTable({ orders }: { orders: Order[] }) {
 export function OrderDetailActions({
   orderId,
   rawStatus,
-  shopOwnerCancelConfirmedAt
+  shopOwnerCancelConfirmedAt,
+  externalOrderId,
+  currentAmountMop
 }: {
   orderId: string;
   rawStatus: string;
   shopOwnerCancelConfirmedAt?: string | null;
+  externalOrderId: string;
+  currentAmountMop: number;
 }) {
   const router = useRouter();
-  const [busyAction, setBusyAction] = useState<"shop-confirm" | "cancel" | "shop-owner-cancel-confirm" | null>(null);
+  const [busyAction, setBusyAction] = useState<"shop-confirm" | "cancel" | "shop-owner-cancel-confirm" | "raise-price" | null>(null);
 
   async function runOrderAction(action: "shop-confirm" | "cancel" | "shop-owner-cancel-confirm") {
     const actionLabel =
@@ -712,8 +716,51 @@ export function OrderDetailActions({
     }
   }
 
+  async function raisePrice() {
+    const nextFeeText = window.prompt("請輸入新的配送費（MOP）", String(currentAmountMop));
+    if (nextFeeText == null) return;
+    const nextFee = Number(nextFeeText);
+    if (Number.isNaN(nextFee)) {
+      window.alert("配送費格式不正確。");
+      return;
+    }
+    const reason = window.prompt("請輸入加價原因", "shop_owner_raise_price") ?? "shop_owner_raise_price";
+
+    setBusyAction("raise-price");
+    try {
+      const response = await fetch("/api/orders/raise-price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          externalOrderId,
+          newDeliveryFeeMop: nextFee,
+          reason
+        })
+      });
+      const payload = (await response.json()) as { message?: string };
+      if (!response.ok) {
+        throw new Error(payload.message ?? "加價失敗。");
+      }
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "加價失敗。");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   return (
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+      {!["delivered", "canceled", "failed"].includes(rawStatus) ? (
+        <button
+          className="btn btn-secondary"
+          disabled={busyAction !== null}
+          onClick={raisePrice}
+          type="button"
+        >
+          {busyAction === "raise-price" ? "加價中..." : "提高配送費"}
+        </button>
+      ) : null}
       {canShopConfirm(rawStatus) ? (
         <button
           className="btn btn-secondary"

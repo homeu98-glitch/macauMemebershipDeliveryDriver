@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createServiceRoleSupabaseClient } from "../../../../../../lib/supabase";
 import { dispatchOrderCallback } from "../../../../../../lib/siteb-callbacks";
 import { ENV_PLACEHOLDERS } from "../../../../../../lib/data";
+import { sendPushToOnlineDrivers } from "../../../../../../lib/push-notifications";
 
 type DriverEventType =
   | "accepted"
@@ -81,7 +82,7 @@ export async function POST(
 
   const { data: order, error: orderError } = await supabase
     .from("orders")
-    .select("id,status")
+    .select("id,external_order_id,status,assigned_fee_mop,source_payload")
     .eq("id", params.orderId)
     .maybeSingle();
 
@@ -117,7 +118,13 @@ export async function POST(
 
   try {
     if (body.eventType === "accepted") {
-      // Idempotent: if already accepted/picked_up/delivered, still attempt callback re-dispatch
+      if (order.status !== "new") {
+        return NextResponse.json(
+          { message: order.status === "canceled" ? "訂單已取消，不能再接單。" : "訂單已不再可接。" },
+          { status: 409 }
+        );
+      }
+
       if (order.status === "new") {
         await supabase.from("order_assignments").insert({
           order_id: params.orderId,
@@ -187,33 +194,79 @@ export async function POST(
     }
 
     if (body.eventType === "canceled") {
-      await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
+      const cancelPayload = {
+        cancel_reason: body.cancelReason ?? "driver_cancelled",
+        cancel_other_reason: body.cancelOtherReason ?? "",
+        cancel_handling: body.cancelHandling ?? "return_to_shop",
+        note: "騎手取消配送"
+      };
+
+      if (order.status === "picked_up" || order.status === "arrived_customer") {
+        await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
+      } else {
+        const { data: latestAssignment } = await supabase
+          .from("order_assignments")
+          .select("id")
+          .eq("order_id", params.orderId)
+          .eq("driver_id", verified.driverId)
+          .is("canceled_at", null)
+          .order("assigned_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestAssignment?.id) {
+          await supabase
+            .from("order_assignments")
+            .update({ canceled_at: now })
+            .eq("id", latestAssignment.id);
+        }
+
+        await supabase.from("orders").update({ status: "new", updated_at: now }).eq("id", params.orderId);
+
+        const isUrgent =
+          order.source_payload &&
+          typeof order.source_payload === "object" &&
+          (order.source_payload as Record<string, unknown>).urgent === true;
+
+        await sendPushToOnlineDrivers({
+          title: isUrgent ? "有急單呀, 快D睇下" : "有新訂單可接",
+          body: `訂單已重新釋出，配送費 MOP ${order.assigned_fee_mop ?? 0}。`,
+          soundKey: isUrgent ? "urgent_order" : "new_order",
+          data: {
+            type: "new_order",
+            externalOrderId: order.external_order_id,
+            urgent: String(isUrgent),
+            deliveryFeeMop: String(order.assigned_fee_mop ?? 0)
+          }
+        }).catch(() => undefined);
+      }
+
       await supabase.from("order_events").insert({
         order_id: params.orderId,
         event_type: "issue_reported",
         actor_type: "driver",
         actor_driver_id: verified.driverId,
-        payload: {
-          cancel_reason: body.cancelReason ?? "driver_cancelled",
-          cancel_other_reason: body.cancelOtherReason ?? "",
-          cancel_handling: body.cancelHandling ?? "return_to_shop",
-          note: "騎手取消配送"
-        }
+        payload: cancelPayload
       });
     }
 
-    const callbackResult = await dispatchOrderCallback({
-      orderId: params.orderId,
-      eventType:
-        body.eventType === "canceled"
-          ? "canceled"
-          : body.eventType,
-      note:
-        body.eventType === "canceled"
-          ? body.cancelReason ?? body.note
-          : body.note,
-      action: body.action
-    } as any);
+    const shouldDispatchCancelCallback =
+      body.eventType !== "canceled" || order.status === "picked_up" || order.status === "arrived_customer";
+
+    const callbackResult = shouldDispatchCancelCallback
+      ? await dispatchOrderCallback({
+          orderId: params.orderId,
+          eventType:
+            body.eventType === "canceled"
+              ? "canceled"
+              : body.eventType,
+          note:
+            body.eventType === "canceled"
+              ? body.cancelReason ?? body.note
+              : body.note,
+          action: body.action
+        } as any)
+      : { success: true, skipped: true };
 
     return NextResponse.json(
       {
@@ -231,4 +284,3 @@ export async function POST(
     );
   }
 }
-

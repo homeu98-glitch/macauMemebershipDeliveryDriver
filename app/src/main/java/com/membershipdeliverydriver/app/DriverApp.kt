@@ -856,7 +856,7 @@ private fun OrdersScreen(
             onProofSelected(orderId, uri)
         }
     }
-    val activeOrders = orders.filter { it.status != OrderStatus.DELIVERED && it.status != OrderStatus.CANCELED }
+    val activeOrders = orders.filterNot { it.status == OrderStatus.DELIVERED || (it.status == OrderStatus.CANCELED && !it.deliveredAt.isNullOrBlank()) }
 
     Box(
         modifier = Modifier
@@ -1060,6 +1060,14 @@ private fun AvailableOrderCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    if (order.isUrgent) {
+                        Text(
+                            "URGENT",
+                            color = Color(0xFFB3261E),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                     Text(
                         order.shop.label,
                         fontWeight = FontWeight.Bold,
@@ -1075,12 +1083,12 @@ private fun AvailableOrderCard(
                 }
                 Surface(
                     shape = RoundedCornerShape(18.dp),
-                    color = Color(0xFFFFF2CB)
+                    color = if (order.isUrgent) Color(0xFFFFE5E5) else Color(0xFFFFF2CB)
                 ) {
                     Text(
                         text = "MOP ${order.totalAmountMop}",
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        color = Color(0xFF8A5A00),
+                        color = if (order.isUrgent) Color(0xFFB3261E) else Color(0xFF8A5A00),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1178,6 +1186,14 @@ private fun ActiveOrderCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    if (order.isUrgent) {
+                        Text(
+                            "URGENT",
+                            color = Color(0xFFB3261E),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                     Text(displayLabel, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                     Text(
                         order.shop.label,
@@ -1192,6 +1208,12 @@ private fun ActiveOrderCard(
                 }
                 Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     StatusBadge(label = orderStatusLabel(order.status), highlight = order.status != OrderStatus.ISSUE_REPORTED)
+                    Text(
+                        "MOP ${order.totalAmountMop}",
+                        color = if (order.isUrgent) Color(0xFFB3261E) else Color(0xFF8A5A00),
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                     if (!order.pickedUpAt.isNullOrBlank()) {
                         PickupElapsedChip(startedAt = order.pickedUpAt)
                     }
@@ -1238,6 +1260,11 @@ private fun ActiveOrderCard(
                     },
                     color = if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFB3261E) else Color(0xFF8A5A00),
                     style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    "訂單會在商戶確認取消後自動結束並移到已完成紀錄。",
+                    color = Color(0xFF607286),
+                    style = MaterialTheme.typography.bodySmall,
                 )
                 Button(
                     onClick = {

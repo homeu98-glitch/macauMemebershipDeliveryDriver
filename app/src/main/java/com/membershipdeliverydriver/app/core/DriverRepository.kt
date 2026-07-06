@@ -390,7 +390,7 @@ class SupabaseDriverRepository : DriverRepository {
 
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&status=eq.new&order=created_at.asc",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload&status=eq.new&order=created_at.asc",
             token = token,
         )
 
@@ -421,12 +421,12 @@ class SupabaseDriverRepository : DriverRepository {
         val orderFilter = orderIds.joinToString(",") { "\"$it\"" }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
             token = token,
         )
 
         val mappedOrders = mapOrders(token, ordersArray, latestDriverLocation)
-        val activeOrders = mappedOrders.filter { it.status != OrderStatus.CANCELED }
+        val activeOrders = mappedOrders.filterNot { it.status == OrderStatus.CANCELED && !it.deliveredAt.isNullOrBlank() }
         cachedOrders = activeOrders
         activeOrders
     }
@@ -506,7 +506,7 @@ class SupabaseDriverRepository : DriverRepository {
         val completionAtByOrder = pagedCompletions.associate { it.key to it.value }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
             token = token,
         )
 
@@ -1202,6 +1202,7 @@ class SupabaseDriverRepository : DriverRepository {
                         id = json.getString("id"),
                         externalOrderId = json.optString("external_order_id", json.getString("id")),
                         status = mappedStatus,
+                        isUrgent = json.optJSONObject("source_payload")?.optBoolean("urgent", false) == true,
                         shop = LocationPoint(
                             label = shop.optString("name", "店舖"),
                             address = shop.optString("address", ""),

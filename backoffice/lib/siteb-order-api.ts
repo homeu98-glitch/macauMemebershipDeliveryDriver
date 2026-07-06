@@ -347,6 +347,16 @@ export async function cancelOrderByExternalId(
     }).catch(() => undefined);
   }
 
+  void sendPushToOnlineDrivers({
+    title: "訂單已取消",
+    body: "唔好意思呀, 老闆取消左訂單。",
+    soundKey: "order_cancelled",
+    data: {
+      type: "order_canceled",
+      externalOrderId
+    }
+  }).catch(() => undefined);
+
   return { found: true as const, canceled: true as const, status: "canceled" };
 }
 
@@ -460,6 +470,16 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
       }
     }).catch(() => undefined);
   }
+
+  void sendPushToOnlineDrivers({
+    title: "訂單已取消",
+    body: "唔好意思呀, 老闆取消左訂單。",
+    soundKey: "order_cancelled",
+    data: {
+      type: "order_canceled",
+      externalOrderId: order.external_order_id
+    }
+  }).catch(() => undefined);
 
   await dispatchOrderCallback({
     orderId: order.id as string,
@@ -577,6 +597,34 @@ export async function raiseOrderPriceByExternalId(
     reason,
     updatedAt: updatedAt ?? nowIso()
   });
+
+  const { data: assignment } = await supabase
+    .from("order_assignments")
+    .select("driver_id")
+    .eq("order_id", order.id)
+    .is("canceled_at", null)
+    .order("assigned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const urgentPayload = {
+    title: "有急單呀, 快D睇下",
+    body: `配送費已調升至 MOP ${normalizeMoney(newDeliveryFeeMop)}。`,
+    soundKey: "urgent_order" as const,
+    data: {
+      type: "urgent_order",
+      externalOrderId,
+      urgent: "true",
+      deliveryFeeMop: String(normalizeMoney(newDeliveryFeeMop)),
+      raiseReason: reason
+    }
+  };
+
+  if (assignment?.driver_id) {
+    await sendPushToDriver(assignment.driver_id, urgentPayload).catch(() => undefined);
+  } else {
+    await sendPushToOnlineDrivers(urgentPayload).catch(() => undefined);
+  }
 
   return {
     found: true as const,

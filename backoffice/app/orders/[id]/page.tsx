@@ -38,6 +38,8 @@ export default async function OrderDetailPage({
             orderId={order.id}
             rawStatus={order.rawStatus}
             shopOwnerCancelConfirmedAt={order.shopOwnerCancelConfirmedAt}
+            externalOrderId={order.code}
+            currentAmountMop={order.amountMop}
           />
         </div>
 

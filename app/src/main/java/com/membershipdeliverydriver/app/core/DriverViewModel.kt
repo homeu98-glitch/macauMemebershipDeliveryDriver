@@ -273,8 +273,18 @@ class DriverViewModel(
                 is ApiResult.Success -> {
                     _uiState.update {
                         it.copy(
-                            orders = it.orders.replaceOrder(result.value),
-                            errorMessage = "已取消訂單。",
+                            orders =
+                                if (result.value.status == OrderStatus.CANCELED && result.value.pickedUpAt.isNullOrBlank()) {
+                                    it.orders.filterNot { order -> order.id == orderId }
+                                } else {
+                                    it.orders.replaceOrder(result.value)
+                                },
+                            errorMessage =
+                                if (result.value.status == OrderStatus.CANCELED && result.value.pickedUpAt.isNullOrBlank()) {
+                                    "已取消接單，訂單已重新釋出。"
+                                } else {
+                                    "已取消訂單。"
+                                },
                         )
                     }
                     result.warning?.let { warning ->
@@ -282,7 +292,17 @@ class DriverViewModel(
                     }
                     refreshDashboard()
                 }
-                is ApiResult.Failure -> _uiState.update { it.copy(errorMessage = result.message) }
+                is ApiResult.Failure -> {
+                    _uiState.update { it.copy(errorMessage = result.message) }
+                    if (
+                        result.message.contains("not available", ignoreCase = true) ||
+                        result.message.contains("no longer", ignoreCase = true) ||
+                        result.message.contains("已取消", ignoreCase = true) ||
+                        result.message.contains("已被其他騎手接走", ignoreCase = true)
+                    ) {
+                        refreshDashboard()
+                    }
+                }
             }
         }
     }

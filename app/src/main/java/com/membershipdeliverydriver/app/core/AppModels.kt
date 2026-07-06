@@ -75,6 +75,7 @@ data class Order(
     val id: String,
     val externalOrderId: String,
     val status: OrderStatus,
+    val isUrgent: Boolean = false,
     val shop: LocationPoint,
     val customer: LocationPoint,
     val customerNote: String,
