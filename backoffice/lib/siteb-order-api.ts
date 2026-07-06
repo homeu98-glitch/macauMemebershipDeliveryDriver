@@ -30,7 +30,7 @@ export type CreateOrderInput = {
   externalOrderId: string;
   pickupMode: "now" | "scheduled";
   pickupTime?: string | null;
-  deliveryMode: "now" | "scheduled";
+  deliveryMode: "now" | "scheduled" | "asap";
   deliveryDeadline?: string | null;
   deliveryFeeMop: number;
   urgent?: boolean;
@@ -41,6 +41,7 @@ export type CreateOrderInput = {
   notes?: Record<string, unknown>;
   callback?: {
     url: string;
+    secret?: string;
     headers?: Record<string, string>;
   };
 };
@@ -51,6 +52,10 @@ function nowIso() {
 
 function normalizeMoney(value: number) {
   return Number.isFinite(value) ? Number(value) : 0;
+}
+
+function normalizeDeliveryMode(mode: CreateOrderInput["deliveryMode"]) {
+  return mode === "asap" ? "now" : mode;
 }
 
 function validateRequiredString(value: string | undefined | null, field: string) {
@@ -66,6 +71,15 @@ export function validateCreateOrderInput(input: CreateOrderInput) {
   validateRequiredString(input.customer?.address, "customer.address");
   if (!input.callback?.url?.trim()) {
     throw new Error("callback.url is required");
+  }
+  if (normalizeDeliveryMode(input.deliveryMode) === "scheduled" && !input.deliveryDeadline?.trim()) {
+    throw new Error("deliveryDeadline is required when deliveryMode is scheduled");
+  }
+  if (normalizeDeliveryMode(input.deliveryMode) !== "scheduled") {
+    return;
+  }
+  if (Number.isNaN(Date.parse(input.deliveryDeadline!))) {
+    throw new Error("deliveryDeadline must be a valid ISO-8601 datetime");
   }
 }
 
@@ -181,14 +195,14 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
     shop_id: shopId,
     customer_id: customerId,
     status: "new",
-    promised_at: input.deliveryMode === "scheduled" ? input.deliveryDeadline ?? null : null,
+    promised_at: normalizeDeliveryMode(input.deliveryMode) === "scheduled" ? input.deliveryDeadline ?? null : null,
     assigned_fee_mop: normalizeMoney(input.deliveryFeeMop),
     offline_payment_note: typeof input.notes?.shopNote === "string" ? input.notes.shopNote : null,
     callback_status: "pending",
     source_payload: {
       pickupMode: input.pickupMode,
       pickupTime: input.pickupTime ?? null,
-      deliveryMode: input.deliveryMode,
+      deliveryMode: normalizeDeliveryMode(input.deliveryMode),
       deliveryDeadline: input.deliveryDeadline ?? null,
       urgent: input.urgent ?? false,
       currency: input.currency ?? "MOP",
@@ -445,7 +459,12 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
     createdAt: order.created_at,
     shop,
     customer,
-    driver,
+    driver: driver
+      ? {
+          fullName: driver.full_name,
+          phone: driver.phone
+        }
+      : null,
     assignment,
     latestProof: proofs?.[0] ?? null
   };

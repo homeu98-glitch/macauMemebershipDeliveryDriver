@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createSiteBApiToken } from "../../../../../lib/siteb-api-auth";
+import { apiError, apiSuccess } from "../../../../../lib/siteb-http";
 
 export async function POST(request: Request) {
   try {
@@ -16,31 +17,25 @@ export async function POST(request: Request) {
     const sharedSecret = process.env.JWT_SHARED_SECRET?.trim() ?? "";
 
     if (!clientId || !clientSecret) {
-      return NextResponse.json(
-        { message: "clientId and clientSecret are required." },
-        { status: 400 }
-      );
+      return apiError(400, "bad_request", "clientId and clientSecret are required.");
     }
+
+    const previousSecret = process.env.JWT_SHARED_SECRET_PREVIOUS?.trim() ?? "";
 
     if (!sharedSecret) {
-      return NextResponse.json(
-        { message: "JWT_SHARED_SECRET is not configured." },
-        { status: 500 }
-      );
+      return apiError(500, "server_not_configured", "JWT_SHARED_SECRET is not configured.");
     }
 
-    if (clientSecret !== sharedSecret) {
-      return NextResponse.json(
-        { message: "Invalid client credentials." },
-        { status: 401 }
-      );
+    if (clientSecret !== sharedSecret && clientSecret !== previousSecret) {
+      return apiError(401, "invalid_client", "Invalid client credentials.");
     }
 
-    return NextResponse.json(createSiteBApiToken(clientId, audience));
+    return apiSuccess(createSiteBApiToken(clientId, audience));
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Token request failed." },
-      { status: 500 }
+    return apiError(
+      500,
+      "token_request_failed",
+      error instanceof Error ? error.message : "Token request failed."
     );
   }
 }

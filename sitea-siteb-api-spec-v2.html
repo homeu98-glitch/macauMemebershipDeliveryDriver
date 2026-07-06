@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SiteA ↔ SiteB 派送 API 規格 v2</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --card: #ffffff;
+      --line: #dbe4ef;
+      --text: #16324a;
+      --muted: #60768d;
+      --brand: #1663d6;
+      --ok: #16835d;
+      --warn: #a46300;
+      --danger: #be2f37;
+      --code: #eef4fb;
+      --max: 1120px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    .page { max-width: var(--max); margin: 0 auto; padding: 28px 18px 60px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 22px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 { margin: 0 0 10px; }
+    h1 { font-size: 2rem; }
+    h2 { font-size: 1.3rem; margin-top: 6px; }
+    h3 { font-size: 1.02rem; margin-top: 14px; }
+    p { margin: 10px 0; }
+    .muted { color: var(--muted); }
+    .badge {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 6px 11px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    .badge.brand { background: #e9f2ff; color: var(--brand); }
+    .badge.ok { background: #eaf8f1; color: var(--ok); }
+    .badge.warn { background: #fff6e6; color: var(--warn); }
+    .badge.danger { background: #fff0f1; color: var(--danger); }
+    .endpoint {
+      display: inline-block;
+      margin: 8px 0 12px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #eef5ff;
+      color: var(--brand);
+      font-weight: 700;
+    }
+    pre {
+      margin: 10px 0 0;
+      padding: 16px;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+    code { font-family: Consolas, "Courier New", monospace; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      padding: 10px 12px;
+      font-size: 0.94rem;
+    }
+    th { background: #f1f6fc; }
+    .note, .warn, .danger {
+      padding: 14px 16px;
+      border-radius: 14px;
+      margin-top: 12px;
+    }
+    .note { background: #eef7ff; border-left: 4px solid var(--brand); }
+    .warn { background: #fff8eb; border-left: 4px solid var(--warn); }
+    .danger { background: #fff1f2; border-left: 4px solid var(--danger); }
+    ul { margin: 10px 0 0 18px; }
+    li { margin: 6px 0; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="card">
+      <h1>SiteA ↔ SiteB 派送 API 規格 v2</h1>
+      <p class="muted">這份文檔以目前已實作、可在現行系統上工作的行為為準，包含建單、查單、取消、加價、催單、Webhook callback、安全驗簽與已知限制。</p>
+      <div>
+        <span class="badge brand">Production Base URL: https://macau-memebership-delivery-driver.vercel.app</span>
+        <span class="badge ok">外部訂單鍵值: externalOrderId</span>
+        <span class="badge ok">Idempotent: POST /api/v1/orders</span>
+        <span class="badge brand">Webhook HMAC: 已支援</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>環境與可用性</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>目前狀態</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Production</td>
+            <td><code>https://macau-memebership-delivery-driver.vercel.app</code></td>
+          </tr>
+          <tr>
+            <td>Staging / Sandbox</td>
+            <td>目前未提供獨立 staging/sandbox 環境與獨立測試憑證。</td>
+          </tr>
+          <tr>
+            <td>clientId / clientSecret</td>
+            <td>由雙方線下約定。Server 目前驗證共享 secret，並支援新舊 secret 並存。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warn">
+        網域字串目前正式使用 <code>macau-memebership-delivery-driver.vercel.app</code>。雖然拼字看起來像 typo，但請以實際部署網址為準。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>授權</h2>
+      <p>SiteA 先向 SiteB 換取 JWT，再使用 Bearer Token 呼叫其他 v1 API。</p>
+      <div class="endpoint">POST /api/v1/auth/token</div>
+      <pre><code>{
+  "clientId": "sitea-production",
+  "clientSecret": "YOUR_SHARED_SECRET",
+  "audience": "siteb-api"
+}</code></pre>
+      <pre><code>{
+  "success": true,
+  "accessToken": "&lt;jwt&gt;",
+  "tokenType": "Bearer",
+  "expiresIn": 3600
+}</code></pre>
+      <div class="note">
+        Token 過期或簽章錯誤時，其它 v1 API 會回傳 <code>401</code>。目前 server 支援
+        <code>JWT_SHARED_SECRET</code> 與 <code>JWT_SHARED_SECRET_PREVIOUS</code> 同時有效，方便做 secret 輪換寬限。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>共用 Header</h2>
+      <pre><code>Authorization: Bearer &lt;accessToken&gt;
+Content-Type: application/json</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>建單</h2>
+      <div class="endpoint">POST /api/v1/orders</div>
+      <p>這個 API 依 <code>externalOrderId</code> 做冪等處理。若同一個 <code>externalOrderId</code> 重送，系統不會重複建單，而是回傳原單資料並帶 <code>"created": false</code>。</p>
+      <pre><code>{
+  "externalOrderId": "SITEA-20260706-0001",
+  "pickupMode": "now",
+  "pickupTime": null,
+  "deliveryMode": "scheduled",
+  "deliveryDeadline": "2026-07-06T11:00:00+08:00",
+  "deliveryFeeMop": 38,
+  "urgent": false,
+  "currency": "MOP",
+  "shop": {
+    "externalShopId": "SHOP-001",
+    "name": "會員茶餐廳",
+    "address": "澳門半島 ...",
+    "latitude": 22.1987,
+    "longitude": 113.5439,
+    "contactName": "店主",
+    "contactPhone": "66668888"
+  },
+  "customer": {
+    "externalCustomerId": "CUS-001",
+    "name": "客人 A",
+    "phone": "69990000",
+    "address": "氹仔 ...",
+    "latitude": 22.1547,
+    "longitude": 113.5590,
+    "deliveryNote": "到達前請先致電"
+  },
+  "items": [
+    { "name": "奶茶", "quantity": 2 }
+  ],
+  "notes": {
+    "shopNote": "已線上付款"
+  },
+  "callback": {
+    "url": "https://sitea.example.com/api/siteb/callback",
+    "secret": "sitea-callback-hmac-secret",
+    "headers": {
+      "x-sitea-env": "production"
+    }
+  }
+}</code></pre>
+      <pre><code>{
+  "success": true,
+  "siteBOrderId": "4f2835d7-....",
+  "externalOrderId": "SITEA-20260706-0001",
+  "status": "new",
+  "created": true
+}</code></pre>
+      <div class="note">
+        <strong>時間語意：</strong>
+        <ul>
+          <li><code>deliveryDeadline</code> 接受帶 <code>+08:00</code> 的 ISO-8601 時間。</li>
+          <li><code>deliveryMode</code> 可用 <code>"scheduled"</code>、<code>"now"</code> 或 <code>"asap"</code>。</li>
+          <li>當 <code>deliveryMode</code> 為 <code>"scheduled"</code> 時，<code>deliveryDeadline</code> 必填。</li>
+          <li>當 <code>deliveryMode</code> 為 <code>"now"</code> 或 <code>"asap"</code> 時，<code>deliveryDeadline</code> 可省略。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>查詢訂單</h2>
+      <div class="endpoint">GET /api/v1/orders/{externalOrderId}</div>
+      <pre><code>{
+  "success": true,
+  "siteBOrderId": "4f2835d7-....",
+  "externalOrderId": "SITEA-20260706-0001",
+  "status": "picked_up",
+  "deliveryFeeMop": 38,
+  "urgent": false,
+  "promisedAt": "2026-07-06T11:00:00+08:00",
+  "createdAt": "2026-07-06T10:12:21.000Z",
+  "shop": {
+    "name": "會員茶餐廳",
+    "address": "澳門半島 ...",
+    "contact_phone": "66668888"
+  },
+  "customer": {
+    "name": "客人 A",
+    "address": "氹仔 ...",
+    "phone": "69990000"
+  },
+  "driver": {
+    "fullName": "Driver Chan",
+    "phone": "68887777"
+  },
+  "assignment": {
+    "driver_id": "....",
+    "assigned_at": "2026-07-06T10:14:00.000Z",
+    "accepted_at": "2026-07-06T10:14:10.000Z"
+  },
+  "latestProof": {
+    "storage_path": "auth-user-id/order-....-proof.jpg",
+    "created_at": "2026-07-06T11:18:22.000Z"
+  }
+}</code></pre>
+      <div class="note">
+        <code>latestProof.storage_path</code> 是穩定的伺服器端檔案路徑。若 SiteA 需要自行保存證明圖關聯，應保存這個 path，而不是保存短效 signed URL。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>取消訂單</h2>
+      <div class="endpoint">POST /api/v1/orders/{externalOrderId}/cancel</div>
+      <pre><code>{
+  "reason": "shop_owner_cancelled",
+  "requestedBy": "sitea-shop-admin",
+  "requestedAt": "2026-07-06T10:35:00+08:00"
+}</code></pre>
+      <p>若訂單已進入不可取消階段，回傳 <code>409</code>，不會把狀態改成取消。</p>
+    </section>
+
+    <section class="card">
+      <h2>加價</h2>
+      <div class="endpoint">POST /api/v1/orders/{externalOrderId}/raise-price</div>
+      <pre><code>{
+  "newDeliveryFeeMop": 58,
+  "reason": "nobody_accepting",
+  "updatedAt": "2026-07-06T10:40:00+08:00"
+}</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>催單</h2>
+      <div class="endpoint">POST /api/v1/orders/{externalOrderId}/hurry</div>
+      <pre><code>{
+  "message": "客人催單啦，請盡快送達。",
+  "requestedBy": "sitea-customer-app",
+  "requestedAt": "2026-07-06T11:20:00+08:00"
+}</code></pre>
+      <pre><code>{
+  "success": true,
+  "externalOrderId": "SITEA-20260706-0001",
+  "status": "picked_up",
+  "pushed": true
+}</code></pre>
+      <div class="note">
+        這個 API 只負責通知當前已指派車手，不會更改訂單狀態。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Webhook callback</h2>
+      <p>當 SiteB 端訂單狀態改變時，會 POST 到建單時提供的 <code>callback.url</code>。</p>
+      <h3>Header</h3>
+      <pre><code>Content-Type: application/json
+Authorization: Bearer &lt;siteb-callback-jwt&gt;
+X-SiteB-Timestamp: 2026-07-06T11:20:00.000Z
+X-SiteB-Signature: HMAC_SHA256_HEX(timestamp + "." + rawBody)</code></pre>
+      <p>只有在建單時提供 <code>callback.secret</code> 時，SiteB 才會送出 HMAC Header。</p>
+
+      <h3>驗簽算法</h3>
+      <pre><code>signature = hex(
+  HMAC_SHA256(callback.secret, X-SiteB-Timestamp + "." + rawRequestBody)
+)</code></pre>
+
+      <h3>Ack 規則</h3>
+      <ul>
+        <li>SiteA 回傳任何 <code>2xx</code>，即視為 callback 成功。</li>
+        <li>回傳 <code>HTTP 200</code> 搭配 <code>{ "ok": true }</code> 當然可以。</li>
+      </ul>
+
+      <h3>重試策略</h3>
+      <ul>
+        <li>目前系統<strong>沒有自動重試排程</strong>。</li>
+        <li>失敗 callback 會寫入 backoffice callback log，可由後台手動重送。</li>
+      </ul>
+
+      <div class="warn">
+        SiteA 若需要固定 1/5/15 分鐘這種自動重試策略，這屬於下一階段能力，現在的正式文檔不應假設它已存在。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Callback JSON 範例</h2>
+
+      <h3>order.accepted</h3>
+      <pre><code>{
+  "eventType": "order.accepted",
+  "externalOrderId": "SITEA-20260706-0001",
+  "status": "accepted",
+  "eventTime": "2026-07-06T10:14:10.000Z",
+  "driver": {
+    "fullName": "Driver Chan",
+    "phone": "68887777",
+    "distanceToShopKm": 1.2,
+    "etaMinutes": 0
+  },
+  "pickupTime": "2026-07-06T10:14:10.000Z"
+}</code></pre>
+
+      <h3>order.picked_up</h3>
+      <pre><code>{
+  "eventType": "order.picked_up",
+  "externalOrderId": "SITEA-20260706-0001",
+  "status": "picked_up",
+  "eventTime": "2026-07-06T10:32:00.000Z",
+  "driver": {
+    "fullName": "Driver Chan",
+    "phone": "68887777"
+  }
+}</code></pre>
+
+      <h3>order.arrived_customer</h3>
+      <pre><code>{
+  "eventType": "order.arrived_customer",
+  "externalOrderId": "SITEA-20260706-0001",
+  "status": "arrived_customer",
+  "eventTime": "2026-07-06T10:55:00.000Z"
+}</code></pre>
+
+      <h3>order.delivered</h3>
+      <pre><code>{
+  "eventType": "order.delivered",
+  "externalOrderId": "SITEA-20260706-0001",
+  "status": "delivered",
+  "eventTime": "2026-07-06T11:03:00.000Z",
+  "proof": {
+    "imageUrl": "https://....signed-url....",
+    "storagePath": "auth-user-id/order-....-proof.jpg",
+    "uploadedAt": "2026-07-06T11:02:45.000Z"
+  }
+}</code></pre>
+
+      <h3>order.exception_reported</h3>
+      <pre><code>{
+  "eventType": "order.exception_reported",
+  "externalOrderId": "SITEA-20260706-0001",
+  "status": "exception_reported",
+  "eventTime": "2026-07-06T10:58:00.000Z",
+  "exception": {
+    "reason": "driver_reported_issue",
+    "action": "pending_review",
+    "note": "Driver reported an issue."
+  }
+}</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>例外 reason / action</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>欄位</th>
+            <th>目前會出現的值</th>
+            <th>說明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>exception.reason</code></td>
+            <td><code>driver_reported_issue</code> 或車手輸入文字</td>
+            <td>目前沒有完整固定 enum；若車手輸入自訂內容，會直接帶出。</td>
+          </tr>
+          <tr>
+            <td><code>exception.action</code></td>
+            <td><code>pending_review</code></td>
+            <td>目前預設為等待人工處理。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warn">
+        若 SiteA 需要完整 enum 契約，建議下一輪將 exception reason/action 固定為受控代碼表。目前版本屬於可用，但不是最終嚴格枚舉版。
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>重新派單說明</h2>
+      <p>目前沒有提供「原單直接 re-dispatch」的獨立 API。若 SiteA 要重新建立新的派送流程，建議使用新的 <code>externalOrderId</code> 重新建單。</p>
+    </section>
+
+    <section class="card">
+      <h2>錯誤格式</h2>
+      <p>v1 API 已統一使用以下錯誤格式：</p>
+      <pre><code>{
+  "success": false,
+  "error": {
+    "code": "order_not_found",
+    "message": "Order not found."
+  }
+}</code></pre>
+      <table>
+        <thead>
+          <tr>
+            <th>HTTP</th>
+            <th>code</th>
+            <th>典型情境</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>400</td><td><code>bad_request</code> / <code>create_order_failed</code></td><td>缺參數、時間格式不合法、欄位校驗失敗</td></tr>
+          <tr><td>401</td><td><code>unauthorized</code> / <code>invalid_client</code></td><td>JWT 無效、token 過期、clientSecret 不正確</td></tr>
+          <tr><td>404</td><td><code>order_not_found</code></td><td>查無 externalOrderId</td></tr>
+          <tr><td>409</td><td><code>order_conflict</code></td><td>訂單已不可取消</td></tr>
+          <tr><td>500</td><td><code>*_failed</code></td><td>服務端例外</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>命名統一</h2>
+      <ul>
+        <li>取消狀態統一使用美式拼法 <code>canceled</code>。</li>
+        <li>抵達客戶狀態統一使用 <code>arrived_customer</code>；callback eventType 為 <code>order.arrived_customer</code>。</li>
+        <li>driver 欄位統一為 <code>driver.fullName</code> + <code>driver.phone</code>。</li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2>Rate limit</h2>
+      <p>目前未在 API 層另外宣告固定 QPS 限制；請以合理頻率呼叫。若未來要正式對接高流量情境，建議下一輪補上 tenant 級限流與配額。</p>
+    </section>
+
+    <section class="card">
+      <h2>Webhook URL 模式</h2>
+      <p>目前系統是每張訂單透過 <code>callback.url</code> 帶入 callback 位置。Tenant-level 固定 Webhook URL 目前尚未提供。</p>
+      <div class="warn">
+        如果 SiteA 要改成租戶級固定 webhook，建議下一輪新增 merchant / tenant 設定表，讓 callback.url 與 callback.secret 從租戶配置中繼承，而不是每單傳入。
+      </div>
+    </section>
+  </div>
+</body>
+</html>

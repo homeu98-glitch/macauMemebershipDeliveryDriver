@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 
 import { getSessionUser } from "../../../../../lib/auth";
 import { createSiteBApiToken } from "../../../../../lib/siteb-api-auth";
@@ -24,7 +25,7 @@ export async function POST(
   const supabase = createServiceRoleSupabaseClient();
   const { data: logRow, error } = await supabase
     .from("callback_logs")
-    .select("id,endpoint,request_body")
+    .select("id,order_id,endpoint,request_body")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -36,14 +37,43 @@ export async function POST(
     ? logRow.endpoint
     : `${apiBaseUrl.replace(/\/$/, "")}/${logRow.endpoint.replace(/^\//, "")}`;
 
+  let callbackSecret = "";
+  if (logRow.order_id) {
+    const { data: orderRow } = await supabase
+      .from("orders")
+      .select("source_payload")
+      .eq("id", logRow.order_id)
+      .maybeSingle();
+    const callbackMeta =
+      orderRow?.source_payload && typeof orderRow.source_payload === "object"
+        ? (orderRow.source_payload as Record<string, any>).callback
+        : null;
+    callbackSecret =
+      callbackMeta && typeof callbackMeta === "object" && typeof callbackMeta.secret === "string"
+        ? callbackMeta.secret.trim()
+        : "";
+  }
+
   try {
+    const rawBody = JSON.stringify(logRow.request_body ?? {});
+    const timestamp = new Date().toISOString();
+    const signature = callbackSecret
+      ? crypto.createHmac("sha256", callbackSecret).update(`${timestamp}.${rawBody}`).digest("hex")
+      : "";
+
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${createSiteBApiToken("backoffice-callback-retry", "siteb-api").accessToken}`
+        Authorization: `Bearer ${createSiteBApiToken("backoffice-callback-retry", "siteb-api").accessToken}`,
+        ...(signature
+          ? {
+              "X-SiteB-Timestamp": timestamp,
+              "X-SiteB-Signature": signature
+            }
+          : {})
       },
-      body: JSON.stringify(logRow.request_body ?? {})
+      body: rawBody
     });
 
     let responseBody: unknown = null;

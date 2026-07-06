@@ -1068,12 +1068,6 @@ private fun AvailableOrderCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        order.shop.label,
-                        color = Color(0xFF2E4765),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
                         "送達時間 ${order.deliveryDeadlineText}",
                         color = Color(0xFF6C7F93),
                         style = MaterialTheme.typography.bodySmall,

@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 import { createSiteBApiToken } from "./siteb-api-auth";
 import { createServiceRoleSupabaseClient } from "./supabase";
 
@@ -61,7 +63,7 @@ async function loadOrderCallbackContext(orderId: string) {
 
   const callback =
     callbackMeta && typeof callbackMeta === "object"
-      ? (callbackMeta as { url?: string; headers?: Record<string, string> })
+      ? (callbackMeta as { url?: string; secret?: string; headers?: Record<string, string> })
       : null;
 
   if (!callback?.url?.trim()) {
@@ -148,7 +150,7 @@ function createCallbackPayload(
         status: "accepted",
         eventTime,
         driver: {
-          name: context.driver?.full_name ?? "未命名騎手",
+          fullName: context.driver?.full_name ?? "未命名騎手",
           phone: context.driver?.phone ?? "",
           distanceToShopKm,
           etaMinutes: 0
@@ -162,15 +164,15 @@ function createCallbackPayload(
         status: "picked_up",
         eventTime,
         driver: {
-          name: context.driver?.full_name ?? "未命名騎手",
+          fullName: context.driver?.full_name ?? "未命名騎手",
           phone: context.driver?.phone ?? ""
         }
       };
     case "arrived":
       return {
-        eventType: "order.arrived",
+        eventType: "order.arrived_customer",
         externalOrderId: context.order.external_order_id,
-        status: "arrived",
+        status: "arrived_customer",
         eventTime
       };
     case "delivered":
@@ -181,6 +183,7 @@ function createCallbackPayload(
         eventTime,
         proof: {
           imageUrl: proofUrl,
+          storagePath: context.latestProof?.storage_path ?? null,
           uploadedAt: context.latestProof?.created_at ?? eventTime
         }
       };
@@ -209,23 +212,38 @@ export async function dispatchOrderCallback(input: DispatchCallbackInput) {
 
   const payload = createCallbackPayload(context, input, proofUrl);
   const endpoint = normalizeEndpoint(context.callback.url!);
+  const rawPayload = JSON.stringify(payload);
+  const timestamp = new Date().toISOString();
+  const signature =
+    context.callback.secret?.trim()
+      ? crypto
+          .createHmac("sha256", context.callback.secret.trim())
+          .update(`${timestamp}.${rawPayload}`)
+          .digest("hex")
+      : null;
 
   let responseStatus = 500;
   let responseBody: unknown = { message: "Callback not sent." };
 
   try {
-    const response = await fetch(endpoint, {
+    const callbackResponse: Response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${createSiteBApiToken("siteb-driver-callback", "siteb-api").accessToken}`,
+        ...(signature
+          ? {
+              "X-SiteB-Timestamp": timestamp,
+              "X-SiteB-Signature": signature
+            }
+          : {}),
         ...(context.callback.headers ?? {})
       },
-      body: JSON.stringify(payload)
+      body: rawPayload
     });
 
-    responseStatus = response.status;
-    const rawBody = await response.text();
+    responseStatus = callbackResponse.status;
+    const rawBody = await callbackResponse.text();
     try {
       responseBody = rawBody ? JSON.parse(rawBody) : {};
     } catch {

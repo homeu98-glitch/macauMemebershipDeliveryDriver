@@ -21,6 +21,11 @@ export type RiderApplication = {
   zone: string;
   submittedAt: string;
   documentsComplete: boolean;
+  documents: Array<{
+    type: "selfie" | "macau_id" | "driving_licence";
+    label: string;
+    url: string | null;
+  }>;
   vehicleType: string;
   status: "pending" | "approved" | "rejected";
 };

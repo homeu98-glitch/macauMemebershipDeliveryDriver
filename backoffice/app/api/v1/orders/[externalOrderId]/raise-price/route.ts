@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { raiseOrderPriceByExternalId } from "../../../../../../lib/siteb-order-api";
 import { requireSiteBApiAuth } from "../../../../../../lib/siteb-api-auth";
+import { apiError, apiSuccess } from "../../../../../../lib/siteb-http";
 
 export async function POST(
   request: Request,
@@ -9,7 +10,7 @@ export async function POST(
 ) {
   const claims = requireSiteBApiAuth(request);
   if (!claims) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+    return apiError(401, "unauthorized", "Unauthorized.");
   }
 
   try {
@@ -20,10 +21,7 @@ export async function POST(
     };
 
     if (typeof body.newDeliveryFeeMop !== "number") {
-      return NextResponse.json(
-        { message: "newDeliveryFeeMop is required." },
-        { status: 400 }
-      );
+      return apiError(400, "bad_request", "newDeliveryFeeMop is required.");
     }
 
     const result = await raiseOrderPriceByExternalId(
@@ -34,18 +32,14 @@ export async function POST(
     );
 
     if (!result.found) {
-      return NextResponse.json({ message: "Order not found." }, { status: 404 });
+      return apiError(404, "order_not_found", "Order not found.");
     }
 
-    return NextResponse.json({
-      success: true,
+    return apiSuccess({
       requestedBy: claims.sub,
       ...result
     });
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Raise price failed." },
-      { status: 500 }
-    );
+    return apiError(500, "raise_price_failed", error instanceof Error ? error.message : "Raise price failed.");
   }
 }

@@ -379,6 +379,30 @@ export function RiderApplicationsBoard({
                       <span className={getBadgeClass(application.documentsComplete ? "positive" : "warning")}>
                         {application.documentsComplete ? "齊全" : "待補"}
                       </span>
+                      <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {application.documents.map((doc) =>
+                          doc.url ? (
+                            <a
+                              key={`${application.id}-${doc.type}`}
+                              className="btn btn-secondary"
+                              href={doc.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ padding: "6px 10px", fontSize: 12 }}
+                            >
+                              查看{doc.label}
+                            </a>
+                          ) : (
+                            <span
+                              key={`${application.id}-${doc.type}`}
+                              className="badge badge-warning"
+                              style={{ fontSize: 12 }}
+                            >
+                              缺少{doc.label}
+                            </span>
+                          )
+                        )}
+                      </div>
                     </td>
                     <td>{application.submittedAt}</td>
                     <td>

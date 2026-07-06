@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getOrderStatusByExternalId } from "../../../../../lib/siteb-order-api";
 import { requireSiteBApiAuth } from "../../../../../lib/siteb-api-auth";
+import { apiError, apiSuccess } from "../../../../../lib/siteb-http";
 
 export async function GET(
   request: Request,
@@ -9,19 +10,16 @@ export async function GET(
 ) {
   const claims = requireSiteBApiAuth(request);
   if (!claims) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+    return apiError(401, "unauthorized", "Unauthorized.");
   }
 
   try {
     const order = await getOrderStatusByExternalId(params.externalOrderId);
     if (!order) {
-      return NextResponse.json({ message: "Order not found." }, { status: 404 });
+      return apiError(404, "order_not_found", "Order not found.");
     }
-    return NextResponse.json(order);
+    return apiSuccess(order);
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Get order failed." },
-      { status: 500 }
-    );
+    return apiError(500, "get_order_failed", error instanceof Error ? error.message : "Get order failed.");
   }
 }

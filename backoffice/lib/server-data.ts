@@ -10,6 +10,23 @@ type DriverProfileRow = {
   availability: "online" | "offline";
 };
 
+type DriverDocumentRow = {
+  driver_id: string;
+  document_type: "selfie" | "macau_id" | "driving_licence";
+  storage_path: string | null;
+};
+
+async function buildSignedStorageUrl(
+  bucket: "driver-documents" | "delivery-proofs",
+  storagePath: string | null | undefined
+) {
+  if (!storagePath) return null;
+  const supabase = createServiceRoleSupabaseClient();
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(storagePath, 60 * 60 * 24);
+  if (error) return null;
+  return data.signedUrl;
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "未提供";
   return new Intl.DateTimeFormat("zh-Hant-MO", {
@@ -65,23 +82,40 @@ export async function listRiderApplications(): Promise<RiderApplication[]> {
   const { data: documents } = driverIds.length
     ? await supabase
         .from("driver_documents")
-        .select("driver_id,document_type")
+        .select("driver_id,document_type,storage_path")
         .in("driver_id", driverIds)
     : { data: [] };
 
   const driverMap = new Map((drivers ?? []).map((item) => [item.id, item]));
-  const documentMap = new Map<string, Set<string>>();
-  for (const doc of documents ?? []) {
-    const current = documentMap.get(doc.driver_id) ?? new Set<string>();
-    current.add(doc.document_type);
+  const documentMap = new Map<string, DriverDocumentRow[]>();
+  for (const doc of (documents ?? []) as DriverDocumentRow[]) {
+    const current = documentMap.get(doc.driver_id) ?? [];
+    current.push(doc);
     documentMap.set(doc.driver_id, current);
   }
 
-  return (applications ?? []).map((item) => {
+  return Promise.all((applications ?? []).map(async (item) => {
     const driver = driverMap.get(item.driver_id);
-    const docs = documentMap.get(item.driver_id) ?? new Set<string>();
+    const docs = documentMap.get(item.driver_id) ?? [];
+    const docTypes = new Set(docs.map((doc) => doc.document_type));
     const isComplete =
-      docs.has("selfie") && docs.has("macau_id") && docs.has("driving_licence");
+      docTypes.has("selfie") && docTypes.has("macau_id") && docTypes.has("driving_licence");
+
+    const normalizedDocs = await Promise.all(
+      (["selfie", "macau_id", "driving_licence"] as const).map(async (type) => {
+        const row = docs.find((doc) => doc.document_type === type);
+        return {
+          type,
+          label:
+            type === "selfie"
+              ? "自拍照"
+              : type === "macau_id"
+                ? "澳門身份證"
+                : "駕駛執照",
+          url: await buildSignedStorageUrl("driver-documents", row?.storage_path)
+        };
+      })
+    );
 
     return {
       id: item.id,
@@ -90,6 +124,7 @@ export async function listRiderApplications(): Promise<RiderApplication[]> {
       zone: "澳門",
       submittedAt: formatDate(item.submitted_at),
       documentsComplete: isComplete,
+      documents: normalizedDocs,
       vehicleType: driver?.vehicle_type ?? "未提供",
       status:
         item.review_status === "approved"
@@ -98,7 +133,7 @@ export async function listRiderApplications(): Promise<RiderApplication[]> {
             ? "rejected"
             : "pending"
     };
-  });
+  }));
 }
 
 export async function listRiders(): Promise<Rider[]> {

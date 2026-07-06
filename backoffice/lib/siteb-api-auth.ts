@@ -23,6 +23,13 @@ function getSharedSecret() {
   return secret;
 }
 
+function getAllowedSecrets() {
+  return [
+    process.env.JWT_SHARED_SECRET?.trim() ?? "",
+    process.env.JWT_SHARED_SECRET_PREVIOUS?.trim() ?? ""
+  ].filter(Boolean);
+}
+
 export function createSiteBApiToken(clientId: string, audience = DEFAULT_AUDIENCE) {
   const secret = getSharedSecret();
   const header = base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
@@ -55,18 +62,20 @@ export function readBearerToken(request: Request) {
 }
 
 export function verifySiteBApiToken(token: string, audience = DEFAULT_AUDIENCE) {
-  const secret = getSharedSecret();
   const [header, payload, signature] = token.split(".");
   if (!header || !payload || !signature) {
     return null;
   }
 
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(`${header}.${payload}`)
-    .digest("base64url");
+  const matchedSecret = getAllowedSecrets().find((secret) => {
+    const expected = crypto
+      .createHmac("sha256", secret)
+      .update(`${header}.${payload}`)
+      .digest("base64url");
+    return expected === signature;
+  });
 
-  if (expected !== signature) {
+  if (!matchedSecret) {
     return null;
   }
 

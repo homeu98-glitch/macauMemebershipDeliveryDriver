@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { cancelOrderByExternalId } from "../../../../../../lib/siteb-order-api";
 import { requireSiteBApiAuth } from "../../../../../../lib/siteb-api-auth";
+import { apiError, apiSuccess } from "../../../../../../lib/siteb-http";
 
 export async function POST(
   request: Request,
@@ -9,7 +10,7 @@ export async function POST(
 ) {
   const claims = requireSiteBApiAuth(request);
   if (!claims) {
-    return NextResponse.json({ message: "Unauthorized." }, { status: 401 });
+    return apiError(401, "unauthorized", "Unauthorized.");
   }
 
   try {
@@ -27,28 +28,23 @@ export async function POST(
     );
 
     if (!result.found) {
-      return NextResponse.json({ message: "Order not found." }, { status: 404 });
+      return apiError(404, "order_not_found", "Order not found.");
     }
 
     if (!result.canceled) {
-      return NextResponse.json(
-        {
-          message: "Order can no longer be canceled after pickup.",
-          status: result.status
-        },
-        { status: 409 }
+      return apiError(
+        409,
+        "order_conflict",
+        "Order can no longer be canceled after pickup.",
+        { status: result.status }
       );
     }
 
-    return NextResponse.json({
-      success: true,
+    return apiSuccess({
       externalOrderId: params.externalOrderId,
       status: result.status
     });
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Cancel order failed." },
-      { status: 500 }
-    );
+    return apiError(500, "cancel_order_failed", error instanceof Error ? error.message : "Cancel order failed.");
   }
 }
