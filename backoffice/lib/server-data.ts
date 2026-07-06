@@ -1,5 +1,5 @@
 import { createServiceRoleSupabaseClient } from "./supabase";
-import type { CallbackLog, Metric, Order, PushTokenRegistration, Rider, RiderApplication } from "./data";
+import type { CallbackLog, IncomingCallbackReceipt, Metric, Order, PushTokenRegistration, Rider, RiderApplication } from "./data";
 
 type DriverProfileRow = {
   id: string;
@@ -335,6 +335,37 @@ export async function listPushTokenRegistrations(): Promise<PushTokenRegistratio
       lastSeenAt: formatDate(item.last_seen_at),
     };
   });
+}
+
+export async function listIncomingCallbackReceipts(): Promise<IncomingCallbackReceipt[]> {
+  const supabase = createServiceRoleSupabaseClient();
+  const { data, error } = await supabase
+    .from("sync_logs")
+    .select("id,external_id,status,message,payload,processed_at")
+    .eq("source", "siteb_callback_receiver")
+    .order("processed_at", { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+
+  return (data ?? []).map((item: any) => ({
+    id: item.id,
+    event: typeof item.payload?.eventType === "string" ? item.payload.eventType : "unknown",
+    externalOrderId:
+      typeof item.external_id === "string" && item.external_id
+        ? item.external_id
+        : typeof item.payload?.externalOrderId === "string"
+          ? item.payload.externalOrderId
+          : "未提供",
+    status: item.status === "rejected" ? "rejected" : "received",
+    receivedAt: formatDate(item.processed_at),
+    summary:
+      typeof item.message === "string" && item.message
+        ? item.message
+        : item.status === "rejected"
+          ? "Webhook 驗證失敗"
+          : "已收到並回覆 200"
+  }));
 }
 
 export async function getMetrics(): Promise<Metric[]> {

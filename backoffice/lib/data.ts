@@ -84,6 +84,15 @@ export type PushTokenRegistration = {
   lastSeenAt: string;
 };
 
+export type IncomingCallbackReceipt = {
+  id: string;
+  event: string;
+  externalOrderId: string;
+  status: "received" | "rejected";
+  receivedAt: string;
+  summary: string;
+};
+
 function isConfiguredValue(value: string | undefined, placeholder: string) {
   return Boolean(value && value.trim() && value !== placeholder);
 }

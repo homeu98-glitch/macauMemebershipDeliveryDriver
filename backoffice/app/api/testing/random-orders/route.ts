@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "../../../../lib/auth";
+import { ENV_PLACEHOLDERS } from "../../../../lib/data";
 import { createOrSyncOrder, type CreateOrderInput } from "../../../../lib/siteb-order-api";
 
 const shopSamples = [
@@ -83,6 +84,10 @@ function buildRandomOrder(index: number): CreateOrderInput {
   const customer = sample(customerSamples, Date.now() + index * 3);
   const items = sample(itemSets, Date.now() + index * 5);
   const suffix = `${Date.now()}-${index + 1}`;
+  const apiBaseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL && process.env.NEXT_PUBLIC_API_BASE_URL !== ENV_PLACEHOLDERS.NEXT_PUBLIC_API_BASE_URL
+      ? process.env.NEXT_PUBLIC_API_BASE_URL.trim().replace(/\/$/, "")
+      : "https://macau-delivery.vercel.app";
 
   return {
     externalOrderId: `TEST-${suffix}`,
@@ -106,7 +111,7 @@ function buildRandomOrder(index: number): CreateOrderInput {
       driverNote: "請優先檢查資料流與通知。"
     },
     callback: {
-      url: "https://sitea.example.com/api/integration/delivery/siteb/callback",
+      url: `${apiBaseUrl}/api/integration/delivery/siteb/callback`,
       headers: {
         "X-SiteA-Key": "sitea-demo-key"
       }

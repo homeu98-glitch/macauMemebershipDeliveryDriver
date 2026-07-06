@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import type { CallbackLog, Metric, Order, PushTokenRegistration, Rider, RiderApplication, SettingRow } from "../lib/data";
+import type { CallbackLog, IncomingCallbackReceipt, Metric, Order, PushTokenRegistration, Rider, RiderApplication, SettingRow } from "../lib/data";
 import type { SessionUser } from "../lib/auth";
 
 const navItems = [
@@ -845,7 +845,7 @@ export function DashboardCreateOrderPanel() {
   );
 }
 
-export function BackofficeTestingPanel() {
+export function BackofficeTestingPanel({ receipts = [] }: { receipts?: IncomingCallbackReceipt[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState<number | null>(null);
   const [message, setMessage] = useState("");
@@ -955,7 +955,8 @@ export function BackofficeTestingPanel() {
         </div>
 
         <div className="muted" style={{ marginTop: 14 }}>
-          這些工單會帶入隨機商戶、客戶、金額、送達時間與 callback 設定，刷新後可在訂單管理與 rider app 中看到。
+          這些工單會帶入隨機商戶、客戶、金額、送達時間，並把 callback 指向目前後台的
+          <code style={{ marginLeft: 6 }}>/api/integration/delivery/siteb/callback</code>，刷新後可在訂單管理、rider app 與下方接收紀錄中看到。
         </div>
 
         {message ? (
@@ -971,6 +972,51 @@ export function BackofficeTestingPanel() {
             {message}
           </div>
         ) : null}
+      </section>
+
+      <section className="card">
+        <div className="card-header">
+          <div>
+            <h2 className="card-title">最近收到的 SiteB 回調</h2>
+            <p className="muted">這個後台現在可以模擬 SiteA 接收 webhook，收到後會立即回覆 200 並記錄在這裡。</p>
+          </div>
+        </div>
+
+        {!receipts.length ? (
+          <EmptyState text="暫時未收到任何 callback。" />
+        ) : (
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>事件</th>
+                  <th>外部訂單號</th>
+                  <th>狀態</th>
+                  <th>時間</th>
+                  <th>摘要</th>
+                </tr>
+              </thead>
+              <tbody>
+                {receipts.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.event}</strong>
+                      <div className="muted">{item.id}</div>
+                    </td>
+                    <td>{item.externalOrderId}</td>
+                    <td>
+                      <span className={getBadgeClass(item.status === "received" ? "positive" : "danger")}>
+                        {item.status === "received" ? "已收到" : "已拒絕"}
+                      </span>
+                    </td>
+                    <td>{item.receivedAt}</td>
+                    <td>{item.summary}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="card">
