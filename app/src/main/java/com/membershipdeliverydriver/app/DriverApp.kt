@@ -856,7 +856,7 @@ private fun OrdersScreen(
             onProofSelected(orderId, uri)
         }
     }
-    val activeOrders = orders.filter { it.status != OrderStatus.DELIVERED }
+    val activeOrders = orders.filter { it.status != OrderStatus.DELIVERED && it.status != OrderStatus.CANCELED }
 
     Box(
         modifier = Modifier
@@ -1728,22 +1728,42 @@ private fun CompletedOrdersScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFFFF2CB)) {
-                            Text(
-                                "MOP ${order.totalAmountMop}",
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = Color(0xFF8A5A00),
-                                fontWeight = FontWeight.Bold,
-                            )
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (order.status == OrderStatus.CANCELED) Color(0xFFFFE5E5) else Color(0xFFFFF2CB)
+                            ) {
+                                Text(
+                                    if (order.status == OrderStatus.CANCELED) "已取消" else "MOP ${order.totalAmountMop}",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = if (order.status == OrderStatus.CANCELED) Color(0xFFB3261E) else Color(0xFF8A5A00),
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            if (order.status == OrderStatus.CANCELED) {
+                                Text(
+                                    "MOP 0",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFFB3261E),
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
                         }
                     }
                     Text("客戶地址：${order.customer.address}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        if (!order.proofOfDeliveryPath.isNullOrBlank()) "送達照片：已上傳" else "送達照片：未同步",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (!order.proofOfDeliveryPath.isNullOrBlank()) {
+                    if (order.status == OrderStatus.CANCELED) {
+                        Text(
+                            "取消原因：${order.cancelReason ?: "未提供"}${order.cancelOtherReason?.takeIf { it.isNotBlank() }?.let { " / $it" } ?: ""}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        Text(
+                            if (!order.proofOfDeliveryPath.isNullOrBlank()) "送達照片：已上傳" else "送達照片：未同步",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (order.status != OrderStatus.CANCELED && !order.proofOfDeliveryPath.isNullOrBlank()) {
                         OutlinedButton(
                             onClick = { onViewProof(order.id) },
                             shape = RoundedCornerShape(16.dp),

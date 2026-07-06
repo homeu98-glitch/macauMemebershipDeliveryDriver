@@ -474,7 +474,7 @@ export async function confirmDriverCanceledOrderByShopOwner(orderId: string, con
   const supabase = createServiceRoleSupabaseClient();
   const { data: order, error } = await supabase
     .from("orders")
-    .select("id,status,source_payload")
+    .select("id,external_order_id,status,source_payload")
     .eq("id", orderId)
     .maybeSingle();
 
@@ -515,6 +515,26 @@ export async function confirmDriverCanceledOrderByShopOwner(orderId: string, con
       eventType: "shop_owner_confirmed_driver_cancel",
       note: "商戶已確認騎手取消訂單。"
     }).catch(() => undefined);
+
+    const { data: assignment } = await supabase
+      .from("order_assignments")
+      .select("driver_id")
+      .eq("order_id", orderId)
+      .order("assigned_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (assignment?.driver_id) {
+      void sendPushToDriver(assignment.driver_id, {
+        title: "商戶已確認取消",
+        body: "此訂單已結束，已移至已完成紀錄。",
+        soundKey: "order_cancelled",
+        data: {
+          type: "order_canceled_confirmed",
+          externalOrderId: order.external_order_id
+        }
+      }).catch(() => undefined);
+    }
   }
 
   return { found: true as const, confirmed: true as const, status: order.status as string };

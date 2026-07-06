@@ -426,8 +426,9 @@ class SupabaseDriverRepository : DriverRepository {
         )
 
         val mappedOrders = mapOrders(token, ordersArray, latestDriverLocation)
-        cachedOrders = mappedOrders
-        mappedOrders
+        val activeOrders = mappedOrders.filter { it.status != OrderStatus.CANCELED }
+        cachedOrders = activeOrders
+        activeOrders
     }
 
     override suspend fun loadCompletedOrders(
@@ -446,31 +447,86 @@ class SupabaseDriverRepository : DriverRepository {
                 append("&event_type=eq.delivered")
                 append(historyRangeQuery(filter, "created_at"))
                 append("&order=created_at.desc")
-                append("&limit=$pageSize")
-                append("&offset=$offset")
             },
             token = token,
         )
 
-        if (deliveredEvents.length() == 0) {
+        val assignmentRows = requestArray(
+            path = "/rest/v1/order_assignments?select=order_id&driver_id=eq.${urlEncode(driverId)}",
+            token = token,
+        )
+        val assignedOrderIds = buildSet {
+            for (index in 0 until assignmentRows.length()) {
+                add(assignmentRows.getJSONObject(index).getString("order_id"))
+            }
+        }
+        val cancelConfirmedEvents =
+            if (assignedOrderIds.isNotEmpty()) {
+                requestArray(
+                    path = buildString {
+                        append("/rest/v1/order_events?select=order_id,created_at")
+                        append("&event_type=eq.website.shop_owner_confirmed_driver_cancel")
+                        append("&order_id=in.(${assignedOrderIds.joinToString(",") { "\"$it\"" }})")
+                        append(historyRangeQuery(filter, "created_at"))
+                        append("&order=created_at.desc")
+                    },
+                    token = token,
+                )
+            } else {
+                JSONArray()
+            }
+
+        val completionEvents = mutableListOf<Pair<String, String>>()
+        for (index in 0 until deliveredEvents.length()) {
+            val event = deliveredEvents.getJSONObject(index)
+            completionEvents.add(event.getString("order_id") to event.getString("created_at"))
+        }
+        for (index in 0 until cancelConfirmedEvents.length()) {
+            val event = cancelConfirmedEvents.getJSONObject(index)
+            completionEvents.add(event.getString("order_id") to event.getString("created_at"))
+        }
+        val latestCompletionByOrder = linkedMapOf<String, String>()
+        completionEvents
+            .sortedByDescending { it.second }
+            .forEach { (orderId, createdAt) ->
+                if (orderId !in latestCompletionByOrder) {
+                    latestCompletionByOrder[orderId] = createdAt
+                }
+            }
+
+        if (latestCompletionByOrder.isEmpty()) {
             return@withContext PagedOrdersResult(emptyList(), page, false)
         }
 
-        val orderIds = buildList {
-            for (index in 0 until deliveredEvents.length()) {
-                add(deliveredEvents.getJSONObject(index).getString("order_id"))
-            }
+        val pagedCompletions = latestCompletionByOrder.entries.drop(offset).take(pageSize)
+        val orderIds = pagedCompletions.map { it.key }
+        if (orderIds.isEmpty()) {
+            return@withContext PagedOrdersResult(emptyList(), page, false)
         }
+        val completionAtByOrder = pagedCompletions.associate { it.key to it.value }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
             path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
             token = token,
         )
 
+        val completedItems = mapOrders(token, ordersArray, latestDriverLocation)
+            .map { order ->
+                if (order.status == OrderStatus.CANCELED) {
+                    order.copy(
+                        totalAmountMop = 0.0,
+                        deliveredAt = completionAtByOrder[order.id] ?: order.deliveredAt,
+                    )
+                } else {
+                    order
+                }
+            }
+            .sortedByDescending { completionAtByOrder[it.id] ?: it.deliveredAt ?: "" }
+
         PagedOrdersResult(
-            items = mapOrders(token, ordersArray, latestDriverLocation).sortedByDescending { it.deliveredAt ?: "" },
+            items = completedItems,
             page = page,
-            hasMore = deliveredEvents.length() == pageSize,
+            hasMore = latestCompletionByOrder.size > offset + pageSize,
         )
     }
 
@@ -1094,6 +1150,9 @@ class SupabaseDriverRepository : DriverRepository {
                 pickedUpAtByOrder[orderId] = event.optString("created_at")
             }
             if (orderId !in deliveredAtByOrder && eventType == "delivered") {
+                deliveredAtByOrder[orderId] = event.optString("created_at")
+            }
+            if (orderId !in deliveredAtByOrder && eventType == "website.shop_owner_confirmed_driver_cancel") {
                 deliveredAtByOrder[orderId] = event.optString("created_at")
             }
             val payload = event.optJSONObject("payload")
