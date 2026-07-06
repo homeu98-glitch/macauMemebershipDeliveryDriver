@@ -803,8 +803,10 @@ private fun HomeScreen(
                     }
                 }
             }
-            items(uiState.availableOrders, key = { it.id }) { order ->
+            items(uiState.availableOrders.size, key = { index -> uiState.availableOrders[index].id }) { index ->
+                val order = uiState.availableOrders[index]
                 AvailableOrderCard(
+                    displayLabel = "訂單 ${index + 1}",
                     order = order,
                     isOnline = driver?.availability == DriverAvailability.ONLINE,
                     onNavigateToShop = {
@@ -918,8 +920,10 @@ private fun OrdersScreen(
                     }
                 }
             }
-            items(activeOrders, key = { it.id }) { order ->
+            items(activeOrders.size, key = { index -> activeOrders[index].id }) { index ->
+                val order = activeOrders[index]
                 ActiveOrderCard(
+                    displayLabel = "訂單 ${index + 1}",
                     order = order,
                     onNavigateToShop = {
                         openNavigation(context, order.shop.latitude, order.shop.longitude, order.shop.label)
@@ -1035,6 +1039,7 @@ private fun OrdersScreen(
 
 @Composable
 private fun AvailableOrderCard(
+    displayLabel: String,
     order: Order,
     isOnline: Boolean,
     onNavigateToShop: () -> Unit,
@@ -1067,7 +1072,7 @@ private fun AvailableOrderCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        "訂單編號 ${order.externalOrderId}",
+                        displayLabel,
                         color = Color(0xFF2E4765),
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -1151,6 +1156,7 @@ private fun AvailableOrderCard(
 
 @Composable
 private fun ActiveOrderCard(
+    displayLabel: String,
     order: Order,
     onNavigateToShop: () -> Unit,
     onCallShop: () -> Unit,
@@ -1183,7 +1189,7 @@ private fun ActiveOrderCard(
                 ) {
                     Text(order.shop.label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
                     Text(
-                        "訂單編號 ${order.externalOrderId}",
+                        displayLabel,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF2E4765),
                     )
@@ -1703,7 +1709,8 @@ private fun CompletedOrdersScreen(
                 }
             }
         }
-        items(uiState.completedOrders, key = { it.id }) { order ->
+        items(uiState.completedOrders.size, key = { index -> uiState.completedOrders[index].id }) { index ->
+            val order = uiState.completedOrders[index]
             Card(
                 shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -1718,7 +1725,7 @@ private fun CompletedOrdersScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("${order.shop.label} → ${order.customer.label}", fontWeight = FontWeight.SemiBold)
                             Text(
-                                "訂單編號 ${order.externalOrderId}",
+                                "訂單 ${index + 1}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF2E4765),
                             )
