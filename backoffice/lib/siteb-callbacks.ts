@@ -5,7 +5,13 @@ import { createServiceRoleSupabaseClient } from "./supabase";
 
 type DispatchCallbackInput = {
   orderId: string;
-  eventType: "accepted" | "picked_up" | "arrived" | "delivered" | "exception_reported";
+  eventType:
+    | "accepted"
+    | "picked_up"
+    | "arrived"
+    | "delivered"
+    | "exception_reported"
+    | "canceled";
   note?: string | null;
   action?: string | null;
 };
@@ -199,6 +205,17 @@ function createCallbackPayload(
           note: input.note ?? "Driver reported an issue."
         }
       };
+    case "canceled":
+      return {
+        eventType: "order.canceled",
+        externalOrderId: context.order.external_order_id,
+        status: "canceled",
+        eventTime,
+        cancel: {
+          reason: input.note ?? "unknown",
+          note: input.note ?? ""
+        }
+      };
   }
 }
 
@@ -224,51 +241,73 @@ export async function dispatchOrderCallback(input: DispatchCallbackInput) {
 
   let responseStatus = 500;
   let responseBody: unknown = { message: "Callback not sent." };
+  let attempts = 0;
 
-  try {
-    const callbackResponse: Response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${createSiteBApiToken("siteb-driver-callback", "siteb-api").accessToken}`,
-        ...(signature
-          ? {
-              "X-SiteB-Timestamp": timestamp,
-              "X-SiteB-Signature": signature
-            }
-          : {}),
-        ...(context.callback.headers ?? {})
-      },
-      body: rawPayload
-    });
-
-    responseStatus = callbackResponse.status;
-    const rawBody = await callbackResponse.text();
-    try {
-      responseBody = rawBody ? JSON.parse(rawBody) : {};
-    } catch {
-      responseBody = { message: rawBody };
+  const delaysMs = [0, 1000, 5000];
+  for (let i = 0; i < delaysMs.length; i += 1) {
+    attempts = i + 1;
+    if (delaysMs[i] > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delaysMs[i]));
     }
-  } catch (error) {
-    responseStatus = 500;
-    responseBody = {
-      message: error instanceof Error ? error.message : "Callback dispatch failed."
-    };
+
+    try {
+      const callbackResponse: Response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${createSiteBApiToken("siteb-driver-callback", "siteb-api").accessToken}`,
+          ...(signature
+            ? {
+                "X-SiteB-Timestamp": timestamp,
+                "X-SiteB-Signature": signature
+              }
+            : {}),
+          ...(context.callback.headers ?? {})
+        },
+        body: rawPayload
+      });
+
+      responseStatus = callbackResponse.status;
+      const rawBody = await callbackResponse.text();
+      try {
+        responseBody = rawBody ? JSON.parse(rawBody) : {};
+      } catch {
+        responseBody = { message: rawBody };
+      }
+
+      if (responseStatus >= 200 && responseStatus < 300) {
+        break;
+      }
+    } catch (error) {
+      responseStatus = 500;
+      responseBody = {
+        message: error instanceof Error ? error.message : "Callback dispatch failed."
+      };
+    }
   }
 
-  await supabase.from("callback_logs").insert({
+  const { data: logRow } = await supabase
+    .from("callback_logs")
+    .insert({
     order_id: context.order.id,
     event_type: payload.eventType,
     endpoint,
     http_status: responseStatus,
     request_body: payload,
-    response_body: responseBody,
+      response_body: {
+        ...(typeof responseBody === "object" && responseBody ? (responseBody as any) : { message: String(responseBody) }),
+        attempts
+      },
     sent_at: new Date().toISOString()
-  });
+    })
+    .select("id")
+    .single();
 
   return {
     success: responseStatus >= 200 && responseStatus < 300,
     status: responseStatus,
+    logId: logRow?.id ?? null,
+    attempts,
     payload,
     responseBody
   };

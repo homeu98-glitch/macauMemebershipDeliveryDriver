@@ -181,39 +181,20 @@ class SupabaseDriverRepository : DriverRepository {
         val driverId = currentDriver?.id ?: return@withContext ApiResult.Failure("找不到騎手資料。")
 
         try {
-            requestArray(
-                path = "/rest/v1/order_events",
-                method = "POST",
-                token = token,
-                body = JSONObject()
-                    .put("order_id", orderId)
-                    .put("event_type", "issue_reported")
-                    .put("actor_type", "driver")
-                    .put("actor_driver_id", driverId)
+            val warning = postOrderStatusAndCallback(
+                orderId = orderId,
+                accessToken = token,
+                payload = JSONObject()
+                    .put("eventType", "canceled")
+                    .put("cancelReason", reason)
+                    .put("cancelOtherReason", otherReason ?: "")
                     .put(
-                        "payload",
-                        JSONObject()
-                            .put("cancel_reason", reason)
-                            .put("cancel_other_reason", otherReason ?: "")
-                            .put(
-                                "cancel_handling",
-                                when (handling) {
-                                    CancelHandling.RETURN_TO_SHOP -> "return_to_shop"
-                                    CancelHandling.NOT_RETURNING -> "not_returning"
-                                }
-                            )
-                            .put("note", "騎手取消配送")
-                    )
-                    .toString(),
-                prefer = "return=representation",
-            )
-
-            requestArray(
-                path = "/rest/v1/orders?id=eq.${urlEncode(orderId)}",
-                method = "PATCH",
-                token = token,
-                body = JSONObject().put("status", "canceled").toString(),
-                prefer = "return=representation",
+                        "cancelHandling",
+                        when (handling) {
+                            CancelHandling.RETURN_TO_SHOP -> "return_to_shop"
+                            CancelHandling.NOT_RETURNING -> "not_returning"
+                        }
+                    ),
             )
 
             val updatedOrder = (cachedOrders.firstOrNull { it.id == orderId } ?: loadActiveOrderById(token, orderId))
@@ -226,7 +207,7 @@ class SupabaseDriverRepository : DriverRepository {
 
             if (updatedOrder != null) {
                 cachedOrders = cachedOrders.map { if (it.id == orderId) updatedOrder else it }
-                ApiResult.Success(updatedOrder)
+                ApiResult.Success(updatedOrder, warning)
             } else {
                 ApiResult.Failure("找不到訂單。")
             }
@@ -455,48 +436,11 @@ class SupabaseDriverRepository : DriverRepository {
         val driverId = currentDriver?.id ?: return@withContext ApiResult.Failure("找不到騎手資料。")
 
         try {
-            val now = OffsetDateTime.now().toString()
-            requestArray(
-                path = "/rest/v1/order_assignments",
-                method = "POST",
-                token = token,
-                body = JSONObject()
-                    .put("order_id", orderId)
-                    .put("driver_id", driverId)
-                    .put("accepted_at", now)
-                    .toString(),
-                prefer = "return=representation",
+            val warning = postOrderStatusAndCallback(
+                orderId = orderId,
+                accessToken = token,
+                payload = JSONObject().put("eventType", "accepted"),
             )
-
-            requestArray(
-                path = "/rest/v1/orders?id=eq.${urlEncode(orderId)}",
-                method = "PATCH",
-                token = token,
-                body = JSONObject().put("status", "accepted").toString(),
-                prefer = "return=representation",
-            )
-
-            requestArray(
-                path = "/rest/v1/order_events",
-                method = "POST",
-                token = token,
-                body = JSONObject()
-                    .put("order_id", orderId)
-                    .put("event_type", "accepted")
-                    .put("actor_type", "driver")
-                    .put("actor_driver_id", driverId)
-                    .put("payload", JSONObject().put("note", "騎手已接單"))
-                    .toString(),
-                prefer = "return=representation",
-            )
-
-            runCatching {
-                triggerCallbackDispatch(
-                    orderId = orderId,
-                    eventType = "accepted",
-                    accessToken = token,
-                )
-            }
 
             val acceptedOrder = (cachedAvailableOrders.firstOrNull { it.id == orderId } ?: cachedOrders.firstOrNull { it.id == orderId })
                 ?.copy(status = OrderStatus.HEADING_TO_SHOP)
@@ -505,7 +449,7 @@ class SupabaseDriverRepository : DriverRepository {
                 cachedAvailableOrders = cachedAvailableOrders.filterNot { it.id == orderId }
                 cachedOrders = (cachedOrders.filterNot { it.id == orderId } + acceptedOrder)
                     .sortedBy { it.etaMinutes }
-                ApiResult.Success(acceptedOrder)
+                ApiResult.Success(acceptedOrder, warning)
             } else {
                 ApiResult.Failure("已接單，但暫時無法更新畫面，請重新整理。")
             }
@@ -536,36 +480,11 @@ class SupabaseDriverRepository : DriverRepository {
 
         try {
             val now = OffsetDateTime.now().toString()
-
-            requestArray(
-                path = "/rest/v1/order_events",
-                method = "POST",
-                token = token,
-                body = JSONObject()
-                    .put("order_id", orderId)
-                    .put("event_type", "picked_up")
-                    .put("actor_type", "driver")
-                    .put("actor_driver_id", driverId)
-                    .put("payload", JSONObject().put("note", "騎手已取貨"))
-                    .toString(),
-                prefer = "return=representation",
+            val warning = postOrderStatusAndCallback(
+                orderId = orderId,
+                accessToken = token,
+                payload = JSONObject().put("eventType", "picked_up"),
             )
-
-            requestArray(
-                path = "/rest/v1/orders?id=eq.${urlEncode(orderId)}",
-                method = "PATCH",
-                token = token,
-                body = JSONObject().put("status", "picked_up").toString(),
-                prefer = "return=representation",
-            )
-
-            runCatching {
-                triggerCallbackDispatch(
-                    orderId = orderId,
-                    eventType = "picked_up",
-                    accessToken = token,
-                )
-            }
 
             val updatedOrder = cachedOrders.firstOrNull { it.id == orderId }?.copy(
                 status = OrderStatus.PICKED_UP,
@@ -574,7 +493,7 @@ class SupabaseDriverRepository : DriverRepository {
 
             if (updatedOrder != null) {
                 cachedOrders = cachedOrders.map { if (it.id == orderId) updatedOrder else it }
-                ApiResult.Success(updatedOrder)
+                ApiResult.Success(updatedOrder, warning)
             } else {
                 ApiResult.Failure("找不到訂單。")
             }
@@ -590,36 +509,6 @@ class SupabaseDriverRepository : DriverRepository {
 
         try {
             val deliveredAt = OffsetDateTime.now().toString()
-            requestArray(
-                path = "/rest/v1/order_events",
-                method = "POST",
-                token = token,
-                body = JSONObject()
-                    .put("order_id", orderId)
-                    .put("event_type", "delivered")
-                    .put("actor_type", "driver")
-                    .put("actor_driver_id", driverId)
-                    .put("payload", JSONObject().put("note", "騎手已完成訂單，照片背景上傳中"))
-                    .toString(),
-                prefer = "return=representation",
-            )
-
-            requestArray(
-                path = "/rest/v1/orders?id=eq.${urlEncode(orderId)}",
-                method = "PATCH",
-                token = token,
-                body = JSONObject().put("status", "delivered").toString(),
-                prefer = "return=representation",
-            )
-
-            runCatching {
-                triggerCallbackDispatch(
-                    orderId = orderId,
-                    eventType = "delivered",
-                    accessToken = token,
-                )
-            }
-
             val existingOrder = cachedOrders.firstOrNull { it.id == orderId } ?: loadActiveOrderById(token, orderId)
             var updatedOrder = existingOrder?.copy(
                 status = OrderStatus.DELIVERED,
@@ -650,6 +539,12 @@ class SupabaseDriverRepository : DriverRepository {
 
             uploadProofViaApi(orderId, uri, token)
 
+            val warning = postOrderStatusAndCallback(
+                orderId = orderId,
+                accessToken = token,
+                payload = JSONObject().put("eventType", "delivered"),
+            )
+
             updatedOrder = updatedOrder?.copy(
                 proofOfDeliveryUrl = "${BuildConfig.API_BASE_URL.trimEnd('/')}/api/mobile/orders/$orderId/proof",
             )
@@ -657,7 +552,7 @@ class SupabaseDriverRepository : DriverRepository {
             val finalOrder = updatedOrder
                 ?: throw IllegalStateException("找不到已完成的訂單資料。")
 
-            ApiResult.Success(finalOrder)
+            ApiResult.Success(finalOrder, warning)
         } catch (error: Exception) {
             ApiResult.Failure(error.message ?: "上傳送達證明失敗。")
         }
@@ -729,29 +624,14 @@ class SupabaseDriverRepository : DriverRepository {
         val driverId = currentDriver?.id ?: return@withContext ApiResult.Failure("找不到騎手資料。")
 
         try {
-            requestArray(
-                path = "/rest/v1/order_events",
-                method = "POST",
-                token = token,
-                body = JSONObject()
-                    .put("order_id", orderId)
-                    .put("event_type", "issue_reported")
-                    .put("actor_type", "driver")
-                    .put("actor_driver_id", driverId)
-                    .put("payload", JSONObject().put("note", note))
-                    .toString(),
-                prefer = "return=representation",
+            val warning = postOrderStatusAndCallback(
+                orderId = orderId,
+                accessToken = token,
+                payload = JSONObject()
+                    .put("eventType", "exception_reported")
+                    .put("note", note)
+                    .put("action", "pending_review"),
             )
-
-            runCatching {
-                triggerCallbackDispatch(
-                    orderId = orderId,
-                    eventType = "exception_reported",
-                    accessToken = token,
-                    note = note,
-                    action = "pending_review",
-                )
-            }
 
             val updatedOrder = cachedOrders.firstOrNull { it.id == orderId }?.copy(
                 status = OrderStatus.ISSUE_REPORTED,
@@ -760,7 +640,7 @@ class SupabaseDriverRepository : DriverRepository {
 
             if (updatedOrder != null) {
                 cachedOrders = cachedOrders.map { if (it.id == orderId) updatedOrder else it }
-                ApiResult.Success(updatedOrder)
+                ApiResult.Success(updatedOrder, warning)
             } else {
                 ApiResult.Failure("找不到訂單。")
             }
@@ -913,6 +793,42 @@ class SupabaseDriverRepository : DriverRepository {
             .build()
 
         client.newCall(request).execute().use { /* best-effort callback dispatch */ }
+    }
+
+    private fun postOrderStatusAndCallback(
+        orderId: String,
+        accessToken: String,
+        payload: JSONObject,
+    ): String? {
+        if (!isSiteBApiConfigured()) return null
+
+        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+        val request = Request.Builder()
+            .url("$baseUrl/api/mobile/orders/$orderId/status")
+            .post(payload.toString().toRequestBody("application/json".toMediaType()))
+            .addHeader("Content-Type", "application/json")
+            .addHeader("x-supabase-access-token", accessToken)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            val rawBody = response.body?.string().orEmpty()
+            if (response.isSuccessful) return null
+
+            if (response.code == 502) {
+                return runCatching {
+                    val json = JSONObject(rawBody)
+                    val callback = json.optJSONObject("callback")
+                    val status = callback?.optInt("status", 0) ?: 0
+                    val logId = callback?.optString("logId", "") ?: ""
+                    val attempts = callback?.optInt("attempts", 1) ?: 1
+                    "已更新狀態，但回調失敗（HTTP $status，重試 $attempts 次）。請到後台「回調紀錄」重送。${if (logId.isNotBlank()) "logId=$logId" else ""}"
+                }.getOrElse {
+                    "已更新狀態，但回調失敗。請到後台「回調紀錄」重送。"
+                }
+            }
+
+            throw IllegalStateException(extractErrorMessage(rawBody))
+        }
     }
 
     private fun normalizePhone(phone: String): String {

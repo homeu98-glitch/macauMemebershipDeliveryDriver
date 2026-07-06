@@ -1,7 +1,7 @@
 package com.membershipdeliverydriver.app.core
 
 sealed interface ApiResult<out T> {
-    data class Success<T>(val value: T) : ApiResult<T>
+    data class Success<T>(val value: T, val warning: String? = null) : ApiResult<T>
     data class Failure(val message: String, val cause: Throwable? = null) : ApiResult<Nothing>
 }
 

@@ -23,6 +23,9 @@ class DriverViewModel(
             when (val restored = repository.restoreSession()) {
                 is ApiResult.Success -> {
                     _uiState.update { it.copy(currentDriver = restored.value) }
+                    restored.warning?.let { warning ->
+                        _uiState.update { it.copy(errorMessage = warning) }
+                    }
                     refreshDashboard()
                 }
                 is ApiResult.Failure -> {
@@ -100,6 +103,9 @@ class DriverViewModel(
                             isLoading = false,
                             errorMessage = null,
                         )
+                    }
+                    result.warning?.let { warning ->
+                        _uiState.update { it.copy(errorMessage = warning) }
                     }
                     refreshDashboard()
                 }
@@ -208,6 +214,9 @@ class DriverViewModel(
                                 .sortedBy { order -> order.etaMinutes },
                         )
                     }
+                    result.warning?.let { warning ->
+                        _uiState.update { it.copy(errorMessage = warning) }
+                    }
                 }
                 is ApiResult.Failure -> _uiState.update { it.copy(errorMessage = result.message) }
             }
@@ -240,6 +249,9 @@ class DriverViewModel(
             when (val result = repository.attachProofOfDelivery(orderId, uri)) {
                 is ApiResult.Success -> {
                     DriverSoundEffects.playOrderCompleted(AppContextHolder.requireContext())
+                    result.warning?.let { warning ->
+                        _uiState.update { it.copy(errorMessage = warning) }
+                    }
                     refreshDashboard()
                     refreshCompletedOrders(reset = true)
                 }
@@ -264,6 +276,9 @@ class DriverViewModel(
                             orders = it.orders.replaceOrder(result.value),
                             errorMessage = "已取消訂單。",
                         )
+                    }
+                    result.warning?.let { warning ->
+                        _uiState.update { it.copy(errorMessage = warning) }
                     }
                     refreshDashboard()
                 }
@@ -298,6 +313,9 @@ class DriverViewModel(
             when (val result = repository.markOrderPickedUp(orderId)) {
                 is ApiResult.Success -> {
                     _uiState.update { it.copy(orders = it.orders.replaceOrder(result.value)) }
+                    result.warning?.let { warning ->
+                        _uiState.update { it.copy(errorMessage = warning) }
+                    }
                 }
                 is ApiResult.Failure -> _uiState.update { it.copy(errorMessage = result.message) }
             }
@@ -313,6 +331,9 @@ class DriverViewModel(
             when (val result = repository.reportIssue(orderId, note)) {
                 is ApiResult.Success -> {
                     _uiState.update { it.copy(orders = it.orders.replaceOrder(result.value)) }
+                    result.warning?.let { warning ->
+                        _uiState.update { it.copy(errorMessage = warning) }
+                    }
                 }
                 is ApiResult.Failure -> _uiState.update { it.copy(errorMessage = result.message) }
             }

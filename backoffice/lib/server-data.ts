@@ -293,7 +293,7 @@ export async function listCallbackLogs(): Promise<CallbackLog[]> {
     endpoint: item.endpoint,
     status: callbackStatusFromCode(item.http_status),
     responseCode: item.http_status ?? 0,
-    attempts: 1,
+    attempts: typeof item.response_body?.attempts === "number" ? item.response_body.attempts : 1,
     lastAttemptAt: formatDate(item.sent_at),
     summary:
       typeof item.response_body?.message === "string"
