@@ -704,6 +704,7 @@ class SupabaseDriverRepository : DriverRepository {
 
     private fun historyRangeQuery(filter: HistoryRange, column: String): String {
         val today = LocalDate.now()
+        val offset = OffsetDateTime.now().offset
         val start = when (filter) {
             HistoryRange.TODAY -> today.atStartOfDay()
             HistoryRange.YESTERDAY -> today.minusDays(1).atStartOfDay()
@@ -713,14 +714,16 @@ class SupabaseDriverRepository : DriverRepository {
         } ?: return ""
 
         val end = when (filter) {
-            HistoryRange.TODAY -> today.atTime(LocalTime.MAX)
-            HistoryRange.YESTERDAY -> today.minusDays(1).atTime(LocalTime.MAX)
-            HistoryRange.THIS_WEEK -> today.atTime(LocalTime.MAX)
-            HistoryRange.THIS_MONTH -> today.atTime(LocalTime.MAX)
+            HistoryRange.TODAY -> today.atTime(23, 59, 59)
+            HistoryRange.YESTERDAY -> today.minusDays(1).atTime(23, 59, 59)
+            HistoryRange.THIS_WEEK -> today.atTime(23, 59, 59)
+            HistoryRange.THIS_MONTH -> today.atTime(23, 59, 59)
             HistoryRange.ALL -> null
         } ?: return ""
 
-        return "&$column=gte.${start.atOffset(OffsetDateTime.now().offset)}&$column=lte.${end.atOffset(OffsetDateTime.now().offset)}"
+        val startValue = urlEncode(start.atOffset(offset).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        val endValue = urlEncode(end.atOffset(offset).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        return "&$column=gte.$startValue&$column=lte.$endValue"
     }
 
     private fun mapOrders(

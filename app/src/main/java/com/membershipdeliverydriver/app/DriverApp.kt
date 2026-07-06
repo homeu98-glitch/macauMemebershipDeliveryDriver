@@ -1838,11 +1838,11 @@ private fun openExternalUrl(context: android.content.Context, url: String) {
 
 private fun historyRangeLabel(range: com.membershipdeliverydriver.app.core.HistoryRange): String {
     return when (range) {
-        com.membershipdeliverydriver.app.core.HistoryRange.TODAY -> "Today"
-        com.membershipdeliverydriver.app.core.HistoryRange.YESTERDAY -> "Yesterday"
-        com.membershipdeliverydriver.app.core.HistoryRange.THIS_WEEK -> "This week"
-        com.membershipdeliverydriver.app.core.HistoryRange.THIS_MONTH -> "This month"
-        com.membershipdeliverydriver.app.core.HistoryRange.ALL -> "ALL"
+        com.membershipdeliverydriver.app.core.HistoryRange.TODAY -> "今日"
+        com.membershipdeliverydriver.app.core.HistoryRange.YESTERDAY -> "昨天"
+        com.membershipdeliverydriver.app.core.HistoryRange.THIS_WEEK -> "本週"
+        com.membershipdeliverydriver.app.core.HistoryRange.THIS_MONTH -> "本月"
+        com.membershipdeliverydriver.app.core.HistoryRange.ALL -> "全部"
     }
 }
 
