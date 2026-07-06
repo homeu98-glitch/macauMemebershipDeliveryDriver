@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SiteA to SiteB API Guide</title>
+  <style>
+    :root {
+      --bg: #f5f8fc;
+      --card: #ffffff;
+      --line: #d7e1ee;
+      --text: #17324f;
+      --muted: #5f7895;
+      --accent: #1f7ae0;
+      --good: #1d9d74;
+      --warn: #d97706;
+      --danger: #c53030;
+      --code: #eef4fb;
+      --max: 1100px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    .page {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 28px 18px 60px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 22px;
+      margin-bottom: 18px;
+    }
+    h1, h2, h3 { margin: 0 0 10px; }
+    h1 { font-size: 2rem; }
+    h2 { font-size: 1.35rem; margin-top: 8px; }
+    h3 { font-size: 1.02rem; margin-top: 16px; }
+    p { margin: 10px 0; }
+    .muted { color: var(--muted); }
+    .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .chip {
+      background: #eaf3ff;
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+    .endpoint {
+      display: inline-block;
+      margin: 8px 0 12px;
+      border-radius: 999px;
+      padding: 5px 11px;
+      background: #eef6ff;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+    pre {
+      margin: 10px 0 0;
+      padding: 16px;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+    code { font-family: Consolas, "Courier New", monospace; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      padding: 10px 12px;
+      font-size: 0.94rem;
+    }
+    th { background: #f0f6fd; }
+    .note, .warn {
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    .note {
+      background: #eefaf5;
+      border-left: 4px solid var(--good);
+    }
+    .warn {
+      background: #fff7eb;
+      border-left: 4px solid var(--warn);
+    }
+    .danger {
+      background: #fff1f2;
+      border-left: 4px solid var(--danger);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-top: 12px;
+    }
+    ul { margin: 10px 0 0 18px; }
+    li { margin: 6px 0; }
+    @media (max-width: 820px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="card">
+      <h1>SiteA to SiteB API Guide</h1>
+      <p class="muted">
+        This guide documents the current SiteA integration surface for the driver system, including
+        order creation, status queries, cancel, raise-price, customer hurry-up, and SiteB callbacks.
+      </p>
+      <div class="chips">
+        <span class="chip">SiteA = Main customer/shop system</span>
+        <span class="chip">SiteB = Driver app + backoffice</span>
+        <span class="chip">Auth = JWT bearer token</span>
+        <span class="chip">Transport = JSON over HTTPS</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Base values</h2>
+      <div class="grid">
+        <div>
+          <h3>Production SiteB base URL</h3>
+          <pre><code>https://macau-memebership-delivery-driver.vercel.app</code></pre>
+        </div>
+        <div>
+          <h3>Shared secret</h3>
+          <pre><code>JWT_SHARED_SECRET (same value configured on SiteB)</code></pre>
+        </div>
+      </div>
+      <div class="warn">
+        All examples below use <code>{SITEB_BASE_URL}</code>. Replace it with the real deployed
+        SiteB backoffice domain.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Authentication</h2>
+      <p>SiteA first requests a short-lived JWT from SiteB, then sends it in the <code>Authorization</code> header.</p>
+      <div class="endpoint">POST /api/v1/auth/token</div>
+      <pre><code>{
+  "clientId": "sitea-production",
+  "clientSecret": "YOUR_JWT_SHARED_SECRET",
+  "audience": "siteb-api"
+}</code></pre>
+      <pre><code>{
+  "accessToken": "&lt;jwt&gt;",
+  "tokenType": "Bearer",
+  "expiresIn": 3600
+}</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>Headers</h2>
+      <pre><code>Authorization: Bearer &lt;accessToken&gt;
+Content-Type: application/json</code></pre>
+    </section>
+
+    <section class="card">
+      <h2>SiteA to SiteB endpoints</h2>
+
+      <h3>Create or sync order</h3>
+      <div class="endpoint">POST /api/v1/orders</div>
+      <pre><code>{
+  "externalOrderId": "SITEA-ORDER-20260706-001",
+  "pickupMode": "now",
+  "deliveryMode": "scheduled",
+  "deliveryDeadline": "2026-07-06T11:00:00+08:00",
+  "deliveryFeeMop": 38,
+  "urgent": false,
+  "currency": "MOP",
+  "shop": {
+    "externalShopId": "SHOP-001",
+    "name": "SiteA Shop",
+    "address": "Macau Peninsula ...",
+    "latitude": 22.1987,
+    "longitude": 113.5439,
+    "contactName": "Shop Owner",
+    "contactPhone": "66668888"
+  },
+  "customer": {
+    "externalCustomerId": "CUS-001",
+    "name": "Customer A",
+    "phone": "69990000",
+    "address": "Taipa ...",
+    "latitude": 22.1547,
+    "longitude": 113.5590,
+    "deliveryNote": "Call before arrival"
+  },
+  "items": [
+    { "name": "Milk Tea", "quantity": 2 }
+  ],
+  "notes": {
+    "shopNote": "Paid online"
+  },
+  "callback": {
+    "url": "https://sitea.example.com/api/siteb/callback",
+    "headers": {
+      "x-sitea-env": "production"
+    }
+  }
+}</code></pre>
+      <pre><code>{
+  "success": true,
+  "siteBOrderId": "0c63c8ab-....",
+  "externalOrderId": "SITEA-ORDER-20260706-001",
+  "status": "new",
+  "created": true
+}</code></pre>
+
+      <h3>Get order status</h3>
+      <div class="endpoint">GET /api/v1/orders/{externalOrderId}</div>
+      <pre><code>{
+  "siteBOrderId": "0c63c8ab-....",
+  "externalOrderId": "SITEA-ORDER-20260706-001",
+  "status": "picked_up",
+  "deliveryFeeMop": 38,
+  "urgent": false,
+  "promisedAt": "2026-07-06T11:00:00+08:00",
+  "driver": {
+    "full_name": "Driver Name",
+    "phone": "68887777"
+  },
+  "latestProof": {
+    "storage_path": "auth-user-id/order-....-proof.jpg",
+    "created_at": "2026-07-06T11:18:22.000Z"
+  }
+}</code></pre>
+      <div class="note">
+        <strong>Important:</strong> <code>latestProof.storage_path</code> is the stable server-side path stored in
+        SiteB. Your main app can keep that path for later review or internal linking.
+      </div>
+
+      <h3>Cancel order</h3>
+      <div class="endpoint">POST /api/v1/orders/{externalOrderId}/cancel</div>
+      <pre><code>{
+  "reason": "shop_owner_cancelled",
+  "requestedBy": "sitea-shop-admin",
+  "requestedAt": "2026-07-06T10:35:00+08:00"
+}</code></pre>
+      <p>If the order has already been picked up or delivered, SiteB returns <code>409</code>.</p>
+
+      <h3>Raise delivery fee</h3>
+      <div class="endpoint">POST /api/v1/orders/{externalOrderId}/raise-price</div>
+      <pre><code>{
+  "newDeliveryFeeMop": 58,
+  "reason": "nobody_accepting",
+  "updatedAt": "2026-07-06T10:40:00+08:00"
+}</code></pre>
+
+      <h3>Customer hurry-up</h3>
+      <div class="endpoint">POST /api/v1/orders/{externalOrderId}/hurry</div>
+      <pre><code>{
+  "message": "客人催單啦，請盡快送達。",
+  "requestedBy": "sitea-customer-app",
+  "requestedAt": "2026-07-06T11:20:00+08:00"
+}</code></pre>
+      <pre><code>{
+  "success": true,
+  "externalOrderId": "SITEA-ORDER-20260706-001",
+  "status": "picked_up",
+  "pushed": true
+}</code></pre>
+      <div class="note">
+        This endpoint sends a push notification to the currently assigned driver with the dedicated
+        <code>customer_hurry</code> sound.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>SiteB to SiteA callbacks</h2>
+      <p>SiteB sends callbacks to the URL provided in <code>callback.url</code> when driver-side status changes happen.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Driver action</th>
+            <th>Callback eventType</th>
+            <th>Main fields</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Driver accepted</td>
+            <td><code>order.accepted</code></td>
+            <td><code>externalOrderId</code>, <code>status</code>, <code>driver.name</code>, <code>driver.phone</code>, <code>driver.distanceToShopKm</code></td>
+          </tr>
+          <tr>
+            <td>Driver picked up</td>
+            <td><code>order.picked_up</code></td>
+            <td><code>externalOrderId</code>, <code>status</code>, <code>driver</code></td>
+          </tr>
+          <tr>
+            <td>Driver arrived</td>
+            <td><code>order.arrived</code></td>
+            <td><code>externalOrderId</code>, <code>status</code></td>
+          </tr>
+          <tr>
+            <td>Driver delivered</td>
+            <td><code>order.delivered</code></td>
+            <td><code>externalOrderId</code>, <code>status</code>, <code>proof.imageUrl</code>, <code>proof.uploadedAt</code></td>
+          </tr>
+          <tr>
+            <td>Driver reported exception</td>
+            <td><code>order.exception_reported</code></td>
+            <td><code>externalOrderId</code>, <code>status</code>, <code>exception.reason</code>, <code>exception.action</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Recommended status handling</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>SiteB order status</th>
+            <th>Meaning on SiteA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>new</code></td><td>Created, waiting for driver acceptance</td></tr>
+          <tr><td><code>accepted</code></td><td>Driver assigned and heading to shop</td></tr>
+          <tr><td><code>picked_up</code></td><td>Driver has picked up the order</td></tr>
+          <tr><td><code>arrived_customer</code></td><td>Driver is at / near customer</td></tr>
+          <tr><td><code>delivered</code></td><td>Order completed</td></tr>
+          <tr><td><code>canceled</code></td><td>Order canceled</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h2>Integration notes</h2>
+      <ul>
+        <li>Use <code>externalOrderId</code> as the permanent cross-system key.</li>
+        <li><code>siteBOrderId</code> is the SiteB internal UUID and is useful for debugging.</li>
+        <li>Proof photos are uploaded to the <code>delivery-proofs</code> bucket and the file path is stored in <code>delivery_proofs.storage_path</code>.</li>
+        <li>Proof viewing URLs are signed and temporary. If SiteA needs a stable internal reference, store the path, not the signed URL.</li>
+        <li>The new customer hurry-up endpoint is for notifying the currently assigned driver. It does not change the order status by itself.</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

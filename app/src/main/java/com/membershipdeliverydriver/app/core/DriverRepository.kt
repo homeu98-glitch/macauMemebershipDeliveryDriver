@@ -610,12 +610,14 @@ class SupabaseDriverRepository : DriverRepository {
             if (updatedOrder == null) {
                 updatedOrder = Order(
                     id = orderId,
+                    externalOrderId = orderId,
                     status = OrderStatus.DELIVERED,
                     shop = LocationPoint("", "", 0.0, 0.0, "", ""),
                     customer = LocationPoint("", "", 0.0, 0.0, "", ""),
                     customerNote = "",
                     etaMinutes = 0,
                     deliveryDeadlineText = "",
+                    promisedAt = null,
                     distanceKm = 0.0,
                     totalAmountMop = 0.0,
                     items = emptyList(),
@@ -1024,6 +1026,7 @@ class SupabaseDriverRepository : DriverRepository {
                 add(
                     Order(
                         id = json.getString("id"),
+                        externalOrderId = json.optString("external_order_id", json.getString("id")),
                         status = mappedStatus,
                         shop = LocationPoint(
                             label = shop.optString("name", "店舖"),
@@ -1044,6 +1047,7 @@ class SupabaseDriverRepository : DriverRepository {
                         customerNote = customer.optString("delivery_note", "請先聯絡客戶。"),
                         etaMinutes = calculateEtaMinutes(json.optString("promised_at", "")),
                         deliveryDeadlineText = formatDeadline(json.optString("promised_at", "")),
+                        promisedAt = json.optString("promised_at").ifBlank { null },
                         distanceKm = activeDistance,
                         totalAmountMop = json.optDouble("assigned_fee_mop", 0.0),
                         items = itemsByOrder[json.getString("id")] ?: emptyList(),

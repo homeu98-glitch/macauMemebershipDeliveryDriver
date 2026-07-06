@@ -20,12 +20,16 @@ object DriverNotifications {
     const val DISPATCH_CHANNEL_ID = "driver_dispatch_status"
     const val ORDER_ALERT_CHANNEL_ID = "driver_order_alerts"
     const val URGENT_ORDER_ALERT_CHANNEL_ID = "driver_urgent_order_alerts"
+    const val CUSTOMER_HURRY_ALERT_CHANNEL_ID = "driver_customer_hurry_alerts"
     const val ORDER_COMPLETED_CHANNEL_ID = "driver_order_completed_alerts"
     const val ORDER_CANCELLED_CHANNEL_ID = "driver_order_cancelled_alerts"
+    const val ORDER_OVERDUE_ALERT_CHANNEL_ID = "driver_order_overdue_alerts"
     const val SOUND_NEW_ORDER = "new_order"
     const val SOUND_URGENT_ORDER = "urgent_order"
+    const val SOUND_CUSTOMER_HURRY = "customer_hurry"
     const val SOUND_ORDER_COMPLETED = "order_completed"
     const val SOUND_ORDER_CANCELLED = "order_cancelled"
+    const val SOUND_ORDER_OVERDUE = "order_overdue"
     private const val DISPATCH_NOTIFICATION_ID = 1010
     private const val ORDER_ALERT_BASE_ID = 2020
 
@@ -62,6 +66,16 @@ object DriverNotifications {
                 soundResId = R.raw.sound_urgent_order,
             )
 
+            val customerHurryChannel = NotificationChannel(
+                CUSTOMER_HURRY_ALERT_CHANNEL_ID,
+                "客人催單提醒",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).applyConfiguredSound(
+                context = context,
+                descriptionText = "客人催單時發出提醒。",
+                soundResId = R.raw.sound_customer_hurry,
+            )
+
             val orderCompletedChannel = NotificationChannel(
                 ORDER_COMPLETED_CHANNEL_ID,
                 "完成訂單提醒",
@@ -82,11 +96,23 @@ object DriverNotifications {
                 soundResId = R.raw.sound_order_cancelled,
             )
 
+            val orderOverdueChannel = NotificationChannel(
+                ORDER_OVERDUE_ALERT_CHANNEL_ID,
+                "逾時訂單提醒",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).applyConfiguredSound(
+                context = context,
+                descriptionText = "訂單超過承諾時間 30 分鐘仍未完成時發出提醒。",
+                soundResId = R.raw.sound_order_overdue,
+            )
+
             notificationManager.createNotificationChannel(dispatchChannel)
             notificationManager.createNotificationChannel(orderAlertChannel)
             notificationManager.createNotificationChannel(urgentOrderChannel)
+            notificationManager.createNotificationChannel(customerHurryChannel)
             notificationManager.createNotificationChannel(orderCompletedChannel)
             notificationManager.createNotificationChannel(orderCancelledChannel)
+            notificationManager.createNotificationChannel(orderOverdueChannel)
         }
     }
 
@@ -172,8 +198,10 @@ object DriverNotifications {
     fun channelIdFor(soundKey: String?): String {
         return when (soundKey) {
             SOUND_URGENT_ORDER -> URGENT_ORDER_ALERT_CHANNEL_ID
+            SOUND_CUSTOMER_HURRY -> CUSTOMER_HURRY_ALERT_CHANNEL_ID
             SOUND_ORDER_COMPLETED -> ORDER_COMPLETED_CHANNEL_ID
             SOUND_ORDER_CANCELLED -> ORDER_CANCELLED_CHANNEL_ID
+            SOUND_ORDER_OVERDUE -> ORDER_OVERDUE_ALERT_CHANNEL_ID
             else -> ORDER_ALERT_CHANNEL_ID
         }
     }
@@ -181,8 +209,10 @@ object DriverNotifications {
     fun soundNameFor(soundKey: String?): String {
         return when (soundKey) {
             SOUND_URGENT_ORDER -> "sound_urgent_order"
+            SOUND_CUSTOMER_HURRY -> "sound_customer_hurry"
             SOUND_ORDER_COMPLETED -> "sound_order_completed"
             SOUND_ORDER_CANCELLED -> "sound_order_cancelled"
+            SOUND_ORDER_OVERDUE -> "sound_order_overdue"
             else -> "sound_new_order"
         }
     }

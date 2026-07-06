@@ -8,10 +8,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.OffsetDateTime
 
 class DriverViewModel(
     private val repository: DriverRepository = SupabaseDriverRepository(),
 ) : ViewModel() {
+    private val overdueAlertedOrderIds = mutableSetOf<String>()
 
     private val _uiState = MutableStateFlow(DriverAppState())
     val uiState: StateFlow<DriverAppState> = _uiState.asStateFlow()
@@ -326,6 +328,7 @@ class DriverViewModel(
                         isRefreshing = false,
                     )
                 }
+                overdueAlertedOrderIds.retainAll(orders.map { it.id }.toSet())
 
                 val completedPage = repository.loadCompletedOrders(
                     filter = currentCompletedFilter,
@@ -348,6 +351,14 @@ class DriverViewModel(
                         count = newOrders.size,
                         firstShopName = newOrders.firstOrNull()?.shop?.label
                     )
+                }
+                val newlyOverdueOrders = orders.filter(::isOverdueOrder).filterNot { overdueAlertedOrderIds.contains(it.id) }
+                if (newlyOverdueOrders.isNotEmpty()) {
+                    overdueAlertedOrderIds.addAll(newlyOverdueOrders.map { it.id })
+                    DriverSoundEffects.playOrderOverdue(AppContextHolder.requireContext())
+                    _uiState.update {
+                        it.copy(errorMessage = "有訂單已超過承諾時間 30 分鐘，請盡快送達。")
+                    }
                 }
             } catch (error: Exception) {
                 _uiState.update {
@@ -410,6 +421,16 @@ class DriverViewModel(
 
 private fun List<Order>.replaceOrder(order: Order): List<Order> {
     return map { current -> if (current.id == order.id) order else current }
+}
+
+private fun isOverdueOrder(order: Order): Boolean {
+    if (order.status != OrderStatus.PICKED_UP && order.status != OrderStatus.HEADING_TO_CUSTOMER) {
+        return false
+    }
+
+    val promisedAt = order.promisedAt ?: return false
+    val promisedTime = runCatching { OffsetDateTime.parse(promisedAt) }.getOrNull() ?: return false
+    return OffsetDateTime.now().isAfter(promisedTime.plusMinutes(30))
 }
 
 private fun isValidPin(value: String): Boolean {

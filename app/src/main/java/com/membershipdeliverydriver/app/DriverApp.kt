@@ -1067,6 +1067,11 @@ private fun AvailableOrderCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
+                        "訂單編號 ${order.externalOrderId}",
+                        color = Color(0xFF2E4765),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
                         "送達時間 ${order.deliveryDeadlineText}",
                         color = Color(0xFF6C7F93),
                         style = MaterialTheme.typography.bodySmall,
@@ -1177,6 +1182,11 @@ private fun ActiveOrderCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(order.shop.label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        "訂單編號 ${order.externalOrderId}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF2E4765),
+                    )
                     Text(
                         "送達時間 ${order.deliveryDeadlineText}",
                         style = MaterialTheme.typography.bodySmall,
@@ -1707,6 +1717,11 @@ private fun CompletedOrdersScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("${order.shop.label} → ${order.customer.label}", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "訂單編號 ${order.externalOrderId}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF2E4765),
+                            )
                             Text(
                                 order.deliveredAt?.let { formatter.format(OffsetDateTime.parse(it)) } ?: "完成時間待同步",
                                 style = MaterialTheme.typography.bodySmall,

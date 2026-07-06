@@ -73,12 +73,14 @@ data class OrderItem(
 
 data class Order(
     val id: String,
+    val externalOrderId: String,
     val status: OrderStatus,
     val shop: LocationPoint,
     val customer: LocationPoint,
     val customerNote: String,
     val etaMinutes: Int,
     val deliveryDeadlineText: String,
+    val promisedAt: String? = null,
     val distanceKm: Double,
     val totalAmountMop: Double,
     val items: List<OrderItem>,

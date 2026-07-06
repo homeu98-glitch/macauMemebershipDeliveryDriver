@@ -21,7 +21,7 @@ const firebaseAdminMessaging = require("firebase-admin/messaging") as {
 type SendPushOptions = {
   title: string;
   body: string;
-  soundKey?: "new_order" | "urgent_order" | "order_completed" | "order_cancelled";
+  soundKey?: "new_order" | "urgent_order" | "customer_hurry" | "order_completed" | "order_cancelled";
   data?: Record<string, string>;
 };
 
@@ -62,6 +62,8 @@ export async function sendPushToDriver(driverId: string, payload: SendPushOption
   const channelId =
     soundKey === "urgent_order"
       ? "driver_urgent_order_alerts"
+      : soundKey === "customer_hurry"
+        ? "driver_customer_hurry_alerts"
       : soundKey === "order_completed"
         ? "driver_order_completed_alerts"
         : soundKey === "order_cancelled"
@@ -70,6 +72,8 @@ export async function sendPushToDriver(driverId: string, payload: SendPushOption
   const soundName =
     soundKey === "urgent_order"
       ? "sound_urgent_order"
+      : soundKey === "customer_hurry"
+        ? "sound_customer_hurry"
       : soundKey === "order_completed"
         ? "sound_order_completed"
         : soundKey === "order_cancelled"

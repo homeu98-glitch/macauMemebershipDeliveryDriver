@@ -344,6 +344,58 @@ export async function raiseOrderPriceByExternalId(
   };
 }
 
+export async function hurryOrderByExternalId(
+  externalOrderId: string,
+  message: string,
+  requestedBy: string,
+  requestedAt?: string | null
+) {
+  const supabase = createServiceRoleSupabaseClient();
+  const { data: order, error } = await supabase
+    .from("orders")
+    .select("id,status")
+    .eq("external_order_id", externalOrderId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!order) return { found: false as const };
+
+  if (["delivered", "canceled"].includes(order.status)) {
+    return { found: true as const, pushed: false as const, status: order.status as string };
+  }
+
+  const { data: assignment } = await supabase
+    .from("order_assignments")
+    .select("driver_id")
+    .eq("order_id", order.id)
+    .is("canceled_at", null)
+    .order("assigned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  await appendEvent(order.id as string, "website.customer_hurry", {
+    message,
+    requestedBy,
+    requestedAt: requestedAt ?? nowIso()
+  });
+
+  if (!assignment?.driver_id) {
+    return { found: true as const, pushed: false as const, status: order.status as string };
+  }
+
+  await sendPushToDriver(assignment.driver_id, {
+    title: "客人催單提醒",
+    body: message,
+    soundKey: "customer_hurry",
+    data: {
+      type: "customer_hurry",
+      externalOrderId
+    }
+  });
+
+  return { found: true as const, pushed: true as const, status: order.status as string };
+}
+
 export async function getOrderStatusByExternalId(externalOrderId: string) {
   const supabase = createServiceRoleSupabaseClient();
   const { data: order, error } = await supabase
