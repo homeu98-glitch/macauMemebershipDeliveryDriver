@@ -211,7 +211,7 @@ Content-Type: application/json</code></pre>
     "shopNote": "Paid online"
   },
   "callback": {
-    "url": "https://sitea.example.com/api/siteb/callbacks/order-status",
+    "url": "https://sitea.example.com/api/integration/delivery/siteb/callback",
     "secret": "SITEB_DELIVERY_WEBHOOK_SECRET",
     "headers": {
       "x-sitea-env": "production"
@@ -287,7 +287,7 @@ Content-Type: application/json</code></pre>
 
     <section class="card">
       <h2>SiteB to SiteA callbacks</h2>
-      <p>SiteB sends callbacks to the URL provided in <code>callback.url</code> when driver-side status changes happen. Recommended SiteA path: <code>/api/siteb/callbacks/order-status</code>.</p>
+      <p>SiteB sends callbacks to the URL provided in <code>callback.url</code> when driver-side status changes happen. The current agreed SiteA path is <code>/api/integration/delivery/siteb/callback</code>.</p>
       <table>
         <thead>
           <tr>

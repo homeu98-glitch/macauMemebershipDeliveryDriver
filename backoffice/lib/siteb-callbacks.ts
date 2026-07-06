@@ -37,7 +37,7 @@ function haversineKm(
 }
 
 function normalizeEndpoint(url: string) {
-  return url.trim();
+  return url.trim().replace(/^['"`\s]+|['"`\s]+$/g, "");
 }
 
 async function buildSignedProofUrl(storagePath: string) {

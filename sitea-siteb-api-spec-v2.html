@@ -204,7 +204,7 @@ Content-Type: application/json</code></pre>
     "shopNote": "已線上付款"
   },
   "callback": {
-    "url": "https://sitea.example.com/api/siteb/callbacks/order-status",
+    "url": "https://sitea.example.com/api/integration/delivery/siteb/callback",
     "secret": "sitea-callback-hmac-secret",
     "headers": {
       "x-sitea-env": "production"
@@ -315,7 +315,7 @@ Content-Type: application/json</code></pre>
 
     <section class="card">
       <h2>Webhook callback</h2>
-      <p>當 SiteB 端訂單狀態改變時，會 POST 到建單時提供的 <code>callback.url</code>。建議 SiteA 使用固定路徑 <code>/api/siteb/callbacks/order-status</code>。</p>
+      <p>當 SiteB 端訂單狀態改變時，會 POST 到建單時提供的 <code>callback.url</code>。目前約定的 SiteA 固定路徑是 <code>/api/integration/delivery/siteb/callback</code>。</p>
       <h3>Header</h3>
       <pre><code>Content-Type: application/json
 Authorization: Bearer &lt;siteb-callback-jwt&gt;

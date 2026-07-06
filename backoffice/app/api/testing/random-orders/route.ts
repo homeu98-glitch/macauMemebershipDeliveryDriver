@@ -106,7 +106,7 @@ function buildRandomOrder(index: number): CreateOrderInput {
       driverNote: "請優先檢查資料流與通知。"
     },
     callback: {
-      url: "https://sitea.example.com/api/siteb/callbacks/order-status",
+      url: "https://sitea.example.com/api/integration/delivery/siteb/callback",
       headers: {
         "X-SiteA-Key": "sitea-demo-key"
       }

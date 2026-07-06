@@ -26,6 +26,8 @@ type ItemInput = {
   quantity: number;
 };
 
+type CallbackInput = NonNullable<CreateOrderInput["callback"]>;
+
 export type CreateOrderInput = {
   externalOrderId: string;
   pickupMode: "now" | "scheduled";
@@ -58,6 +60,16 @@ function normalizeDeliveryMode(mode: CreateOrderInput["deliveryMode"]) {
   return mode === "asap" ? "now" : mode;
 }
 
+function normalizeCallback(input: CreateOrderInput["callback"]): CallbackInput | undefined {
+  if (!input) return undefined;
+  const cleanedUrl = input.url.trim().replace(/^['"`\s]+|['"`\s]+$/g, "");
+  return {
+    url: cleanedUrl,
+    secret: input.secret?.trim() || undefined,
+    headers: input.headers ?? {}
+  };
+}
+
 function validateRequiredString(value: string | undefined | null, field: string) {
   if (!value?.trim()) {
     throw new Error(`${field} is required`);
@@ -65,11 +77,12 @@ function validateRequiredString(value: string | undefined | null, field: string)
 }
 
 export function validateCreateOrderInput(input: CreateOrderInput) {
+  const callback = normalizeCallback(input.callback);
   validateRequiredString(input.externalOrderId, "externalOrderId");
   validateRequiredString(input.shop?.name, "shop.name");
   validateRequiredString(input.shop?.address, "shop.address");
   validateRequiredString(input.customer?.address, "customer.address");
-  if (!input.callback?.url?.trim()) {
+  if (!callback?.url?.trim()) {
     throw new Error("callback.url is required");
   }
   if (normalizeDeliveryMode(input.deliveryMode) === "scheduled" && !input.deliveryDeadline?.trim()) {
@@ -169,14 +182,39 @@ async function appendEvent(orderId: string, eventType: string, payload: Record<s
 export async function createOrSyncOrder(input: CreateOrderInput) {
   validateCreateOrderInput(input);
   const supabase = createServiceRoleSupabaseClient();
+  const normalizedCallback = normalizeCallback(input.callback);
   const existing = await supabase
     .from("orders")
-    .select("id,status")
+    .select("id,status,source_payload")
     .eq("external_order_id", input.externalOrderId)
     .maybeSingle();
 
   if (existing.error) throw existing.error;
   if (existing.data) {
+    const previousPayload =
+      existing.data.source_payload && typeof existing.data.source_payload === "object"
+        ? (existing.data.source_payload as Record<string, unknown>)
+        : {};
+    const previousCallback =
+      previousPayload.callback && typeof previousPayload.callback === "object"
+        ? JSON.stringify(previousPayload.callback)
+        : "";
+    const nextCallback = normalizedCallback ? JSON.stringify(normalizedCallback) : "";
+
+    if (nextCallback && previousCallback !== nextCallback) {
+      const { error: callbackUpdateError } = await supabase
+        .from("orders")
+        .update({
+          updated_at: nowIso(),
+          source_payload: {
+            ...previousPayload,
+            callback: normalizedCallback
+          }
+        })
+        .eq("id", existing.data.id);
+      if (callbackUpdateError) throw callbackUpdateError;
+    }
+
     return {
       siteBOrderId: existing.data.id as string,
       externalOrderId: input.externalOrderId,
@@ -207,7 +245,7 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       urgent: input.urgent ?? false,
       currency: input.currency ?? "MOP",
       notes: input.notes ?? {},
-      callback: input.callback
+      callback: normalizedCallback
     }
   };
 
