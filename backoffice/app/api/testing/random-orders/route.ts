@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { getSessionUser } from "../../../../lib/auth";
-import { ENV_PLACEHOLDERS } from "../../../../lib/data";
 import { createOrSyncOrder, type CreateOrderInput } from "../../../../lib/siteb-order-api";
 
 const shopSamples = [
@@ -77,17 +76,13 @@ function sample<T>(items: T[], index: number) {
   return items[index % items.length];
 }
 
-function buildRandomOrder(index: number): CreateOrderInput {
+function buildRandomOrder(index: number, callbackBaseUrl: string): CreateOrderInput {
   const now = new Date();
   const deliveryDeadline = new Date(now.getTime() + (25 + index * 7) * 60 * 1000).toISOString();
   const shop = sample(shopSamples, Date.now() + index);
   const customer = sample(customerSamples, Date.now() + index * 3);
   const items = sample(itemSets, Date.now() + index * 5);
   const suffix = `${Date.now()}-${index + 1}`;
-  const apiBaseUrl =
-    process.env.NEXT_PUBLIC_API_BASE_URL && process.env.NEXT_PUBLIC_API_BASE_URL !== ENV_PLACEHOLDERS.NEXT_PUBLIC_API_BASE_URL
-      ? process.env.NEXT_PUBLIC_API_BASE_URL.trim().replace(/\/$/, "")
-      : "https://macau-delivery.vercel.app";
 
   return {
     externalOrderId: `TEST-${suffix}`,
@@ -111,7 +106,7 @@ function buildRandomOrder(index: number): CreateOrderInput {
       driverNote: "請優先檢查資料流與通知。"
     },
     callback: {
-      url: `${apiBaseUrl}/api/integration/delivery/siteb/callback`,
+      url: `${callbackBaseUrl}/api/integration/delivery/siteb/callback`,
       headers: {
         "X-SiteA-Key": "sitea-demo-key"
       }
@@ -128,15 +123,17 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { count?: number };
     const count = Math.max(1, Math.min(10, Number(body.count ?? 1)));
+    const callbackBaseUrl = new URL(request.url).origin;
 
     const created = [];
     for (let index = 0; index < count; index += 1) {
-      const result = await createOrSyncOrder(buildRandomOrder(index));
+      const result = await createOrSyncOrder(buildRandomOrder(index, callbackBaseUrl));
       created.push(result);
     }
 
     return NextResponse.json({
       success: true,
+      callbackBaseUrl,
       created
     });
   } catch (error) {
