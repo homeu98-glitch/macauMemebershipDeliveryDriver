@@ -132,7 +132,7 @@ export async function POST(
   try {
     if (body.eventType === "cancel_confirmed") {
       if (assignment?.id) {
-        await supabase.from("order_assignments").update({ canceled_at: now }).eq("id", assignment.id);
+        await supabase.from("order_assignments").delete().eq("id", assignment.id);
       }
       await supabase.from("order_events").insert({
         order_id: params.orderId,
@@ -150,6 +150,12 @@ export async function POST(
           { status: 409 }
         );
       }
+
+      await supabase
+        .from("order_assignments")
+        .delete()
+        .eq("order_id", params.orderId)
+        .eq("driver_id", verified.driverId);
 
       await supabase
         .from("order_assignments")
@@ -253,7 +259,7 @@ export async function POST(
         }
 
         if (assignment?.id) {
-          await supabase.from("order_assignments").update({ canceled_at: now }).eq("id", assignment.id);
+          await supabase.from("order_assignments").delete().eq("id", assignment.id);
         }
         await supabase.from("orders").update({ status: "new", updated_at: now }).eq("id", params.orderId);
         await sendPushToOnlineDrivers({
@@ -286,7 +292,7 @@ export async function POST(
         });
       } else {
         if (assignment?.id) {
-          await supabase.from("order_assignments").update({ canceled_at: now }).eq("id", assignment.id);
+          await supabase.from("order_assignments").delete().eq("id", assignment.id);
         }
         await supabase.from("orders").update({ status: "new", updated_at: now }).eq("id", params.orderId);
         await sendPushToOnlineDrivers({
