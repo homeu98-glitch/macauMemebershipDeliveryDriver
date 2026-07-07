@@ -675,6 +675,7 @@ private fun PendingApprovalScreen(
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun DebugMessageCard(message: String) {
+    val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = Color(0xFFEEF4FF),
@@ -686,6 +687,25 @@ private fun DebugMessageCard(message: String) {
         ) {
             Text("Debug", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFF234A84))
             Text(message, style = MaterialTheme.typography.bodySmall, color = Color(0xFF234A84))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { com.membershipdeliverydriver.app.core.DriverSoundEffects.playUrgentOrder(context) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("播放急單聲")
+                }
+                OutlinedButton(
+                    onClick = { com.membershipdeliverydriver.app.core.DriverSoundEffects.playOrderCancelled(context) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("播放取消聲")
+                }
+            }
         }
     }
 }
@@ -2161,8 +2181,6 @@ private fun orderStatusLabel(status: OrderStatus): String {
         OrderStatus.CANCELED -> "已取消"
         OrderStatus.CANCELED_BY_DRIVER -> "騎手取消"
         OrderStatus.CANCELED_BY_SHOP_OWNER -> "商戶取消"
-        OrderStatus.NEW -> "新單"
-        OrderStatus.NEW_URGENT -> "急單"
         OrderStatus.ISSUE_REPORTED -> "異常回報"
     }
 }
