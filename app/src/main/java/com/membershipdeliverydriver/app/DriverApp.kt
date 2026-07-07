@@ -210,7 +210,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
         } else {
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(context: android.content.Context?, intent: Intent?) {
-                    if (intent?.action == com.membershipdeliverydriver.app.core.DriverFirebaseMessagingService.ACTION_ORDER_UPDATED) {
+                    if (intent?.action == com.membershipdeliverydriver.app.core.DriverMqttManager.ACTION_ORDER_UPDATED) {
                         viewModel.onPushOrderUpdate()
                     }
                 }
@@ -218,7 +218,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
             ContextCompat.registerReceiver(
                 context,
                 receiver,
-                IntentFilter(com.membershipdeliverydriver.app.core.DriverFirebaseMessagingService.ACTION_ORDER_UPDATED),
+                IntentFilter(com.membershipdeliverydriver.app.core.DriverMqttManager.ACTION_ORDER_UPDATED),
                 ContextCompat.RECEIVER_NOT_EXPORTED,
             )
             onDispose {
@@ -674,44 +674,6 @@ private fun PendingApprovalScreen(
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
-private fun DebugMessageCard(message: String) {
-    val context = LocalContext.current
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = Color(0xFFEEF4FF),
-        border = BorderStroke(1.dp, Color(0xFFB7CAE8))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text("Debug", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFF234A84))
-            Text(message, style = MaterialTheme.typography.bodySmall, color = Color(0xFF234A84))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { com.membershipdeliverydriver.app.core.DriverSoundEffects.playUrgentOrder(context) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text("播放急單聲")
-                }
-                OutlinedButton(
-                    onClick = { com.membershipdeliverydriver.app.core.DriverSoundEffects.playOrderCancelled(context) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text("播放取消聲")
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterialApi::class)
-@Composable
 private fun HomeScreen(
     uiState: com.membershipdeliverydriver.app.core.DriverAppState,
     onToggleAvailability: () -> Unit,
@@ -786,9 +748,6 @@ private fun HomeScreen(
                         )
                     }
                 }
-            }
-            uiState.debugMessage?.let { debugMessage ->
-                item { DebugMessageCard(debugMessage) }
             }
             item {
                 Row(
@@ -920,9 +879,6 @@ private fun OrdersScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            uiState.debugMessage?.let { debugMessage ->
-                item { DebugMessageCard(debugMessage) }
-            }
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

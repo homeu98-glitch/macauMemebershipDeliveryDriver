@@ -17,13 +17,14 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
 
 object DriverMqttManager {
+    const val ACTION_ORDER_UPDATED = "com.membershipdeliverydriver.app.ORDER_UPDATED"
     private var client: MqttAsyncClient? = null
     private var activeDriverId: String? = null
 
     fun connect(context: Context, driverId: String) {
         val appContext = context.applicationContext
         if (!BuildConfig.MQTT_ENABLED || BuildConfig.MQTT_HOST.isBlank() || BuildConfig.MQTT_USERNAME.isBlank() || BuildConfig.MQTT_PASSWORD.isBlank()) {
-            DriverSessionStore.saveLastPushDebug(appContext, "MQTT disabled: missing config")
+            android.util.Log.w("DriverMqttManager", "MQTT disabled: missing config")
             return
         }
         if (client?.isConnected == true && activeDriverId == driverId) return
@@ -38,12 +39,12 @@ object DriverMqttManager {
 
         mqttClient.setCallback(object : MqttCallbackExtended {
             override fun connectComplete(reconnect: Boolean, serverURI: String?) {
-                DriverSessionStore.saveLastPushDebug(appContext, "MQTT connected: driver=$driverId, reconnect=$reconnect")
+                android.util.Log.i("DriverMqttManager", "MQTT connected: driver=$driverId, reconnect=$reconnect")
                 subscribe(appContext, mqttClient, driverId)
             }
 
             override fun connectionLost(cause: Throwable?) {
-                DriverSessionStore.saveLastPushDebug(appContext, "MQTT lost: ${cause?.message ?: "unknown"}")
+                android.util.Log.w("DriverMqttManager", "MQTT lost: ${cause?.message ?: "unknown"}")
             }
 
             override fun messageArrived(topic: String?, message: MqttMessage?) {
@@ -65,11 +66,11 @@ object DriverMqttManager {
 
         mqttClient.connect(options, null, object : IMqttActionListener {
             override fun onSuccess(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?) {
-                DriverSessionStore.saveLastPushDebug(appContext, "MQTT connect requested: driver=$driverId")
+                android.util.Log.i("DriverMqttManager", "MQTT connect requested: driver=$driverId")
             }
 
             override fun onFailure(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?, exception: Throwable?) {
-                DriverSessionStore.saveLastPushDebug(appContext, "MQTT connect failed: ${exception?.message ?: "unknown"}")
+                android.util.Log.e("DriverMqttManager", "MQTT connect failed: ${exception?.message ?: "unknown"}")
             }
         })
     }
@@ -82,7 +83,7 @@ object DriverMqttManager {
             }
         }
         runCatching { mqttClient.close() }
-        DriverSessionStore.saveLastPushDebug(context.applicationContext, "MQTT disconnected")
+        android.util.Log.i("DriverMqttManager", "MQTT disconnected")
         client = null
         activeDriverId = null
     }
@@ -92,11 +93,11 @@ object DriverMqttManager {
         val qos = intArrayOf(1, 1)
         mqttClient.subscribe(topics, qos, null, object : IMqttActionListener {
             override fun onSuccess(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?) {
-                DriverSessionStore.saveLastPushDebug(context, "MQTT subscribed: ${topics.joinToString()}")
+                android.util.Log.i("DriverMqttManager", "MQTT subscribed: ${topics.joinToString()}")
             }
 
             override fun onFailure(asyncActionToken: org.eclipse.paho.client.mqttv3.IMqttToken?, exception: Throwable?) {
-                DriverSessionStore.saveLastPushDebug(context, "MQTT subscribe failed: ${exception?.message ?: "unknown"}")
+                android.util.Log.e("DriverMqttManager", "MQTT subscribe failed: ${exception?.message ?: "unknown"}")
             }
         })
     }
@@ -115,10 +116,7 @@ object DriverMqttManager {
             soundKey == DriverNotifications.SOUND_ORDER_CANCELLED ||
             soundKey == DriverNotifications.SOUND_CUSTOMER_HURRY
 
-        DriverSessionStore.saveLastPushDebug(
-            context,
-            "MQTT topic=$topic, type=$type, soundKey=${soundKey ?: "null"}, playSound=$shouldPlaySound"
-        )
+        android.util.Log.i("DriverMqttManager", "MQTT topic=$topic, type=$type, soundKey=${soundKey ?: "null"}, playSound=$shouldPlaySound")
 
         if (type != "order_invalidated") {
             DriverNotifications.showDispatchAlert(context, title, body, soundKey)
@@ -127,6 +125,6 @@ object DriverMqttManager {
             }
         }
 
-        context.sendBroadcast(Intent(DriverFirebaseMessagingService.ACTION_ORDER_UPDATED))
+        context.sendBroadcast(Intent(ACTION_ORDER_UPDATED))
     }
 }

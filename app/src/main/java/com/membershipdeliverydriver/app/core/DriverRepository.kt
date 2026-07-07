@@ -110,9 +110,6 @@ class SupabaseDriverRepository : DriverRepository {
                 ApprovalStatus.PENDING_APPROVAL -> ApiResult.Failure("帳號仍在審核中，請等待後台批准。")
                 ApprovalStatus.REJECTED -> ApiResult.Failure("帳號已被拒絕，請聯絡後台重新提交資料。")
                 ApprovalStatus.APPROVED -> {
-                    runCatching {
-                        FcmRegistrationManager.syncCurrentToken(accessToken)
-                    }
                     ApiResult.Success(profile)
                 }
             }
@@ -161,9 +158,6 @@ class SupabaseDriverRepository : DriverRepository {
             currentDriver = profile
             return@withContext when (profile.approvalStatus) {
                 ApprovalStatus.APPROVED -> {
-                    runCatching {
-                        FcmRegistrationManager.syncCurrentToken(accessToken)
-                    }
                     ApiResult.Success(profile)
                 }
                 ApprovalStatus.PENDING_APPROVAL -> ApiResult.Failure("帳號仍在審核中，請等待後台批准。")
@@ -210,9 +204,6 @@ class SupabaseDriverRepository : DriverRepository {
             expiresInSeconds = expiresIn,
         )
         DriverSessionStore.saveSession(context, accessToken, nextRefreshToken)
-        runCatching {
-            FcmRegistrationManager.syncCurrentToken(accessToken)
-        }
         return accessToken
     }
 

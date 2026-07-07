@@ -44,16 +44,9 @@ class DriverViewModel(
     }
 
     fun onPushOrderUpdate() {
-        val pushDebug = DriverSessionStore.getLastPushDebug(AppContextHolder.requireContext())
-        setDebugMessage(pushDebug ?: "收到推播更新，開始刷新訂單。")
         refreshDashboard(playArrivalSound = false)
     }
 
-
-    private fun setDebugMessage(message: String) {
-        val timestamp = OffsetDateTime.now().toLocalTime().toString().take(8)
-        _uiState.update { it.copy(debugMessage = "[$timestamp] $message") }
-    }
 
 
     fun updateLoginPhone(value: String) {
@@ -196,7 +189,6 @@ class DriverViewModel(
                     it.copy(currentDriver = currentDriver.copy(availability = updatedAvailability))
                 }
             } catch (error: Exception) {
-                setDebugMessage("刷新失敗: ${error.message ?: "unknown"}")
                 _uiState.update {
                     it.copy(
                         errorMessage = error.message ?: "無法切換接單狀態，請稍後再試。"
@@ -223,7 +215,6 @@ class DriverViewModel(
     }
 
     fun acceptOrder(orderId: String) {
-        setDebugMessage("接單開始: $orderId")
         viewModelScope.launch {
             when (val result = repository.acceptOrder(orderId)) {
                 is ApiResult.Success -> {
@@ -234,13 +225,11 @@ class DriverViewModel(
                                 .sortedBy { order -> order.etaMinutes },
                         )
                     }
-                    setDebugMessage("接單成功: $orderId，狀態=${result.value.status}，目前進行中=${_uiState.value.orders.map { it.id }}")
                     result.warning?.let { warning ->
                         _uiState.update { it.copy(errorMessage = warning) }
                     }
                 }
                 is ApiResult.Failure -> {
-                    setDebugMessage("接單失敗: $orderId，訊息=${result.message}")
                     _uiState.update { it.copy(errorMessage = result.message) }
                 }
             }
@@ -326,7 +315,6 @@ class DriverViewModel(
     }
 
     fun cancelPickedUpWithinGrace(orderId: String) {
-        setDebugMessage("Grace 取消開始: $orderId")
         viewModelScope.launch {
             when (val result = repository.cancelPickedUpWithinGrace(orderId)) {
                 is ApiResult.Success -> {
@@ -336,11 +324,9 @@ class DriverViewModel(
                             errorMessage = "已取消並釋出訂單，其他騎手可重新接單。",
                         )
                     }
-                    setDebugMessage("Grace 取消成功: $orderId")
                     refreshDashboard()
                 }
                 is ApiResult.Failure -> {
-                    setDebugMessage("Grace 取消失敗: $orderId，訊息=${result.message}")
                     _uiState.update { it.copy(errorMessage = result.message) }
                     refreshDashboard()
                 }
@@ -350,7 +336,6 @@ class DriverViewModel(
 
 
     fun confirmOrderCanceled(orderId: String) {
-        setDebugMessage("確認取消開始: $orderId")
         viewModelScope.launch {
             when (val result = repository.confirmOrderCanceled(orderId)) {
                 is ApiResult.Success -> {
@@ -360,7 +345,6 @@ class DriverViewModel(
                             errorMessage = "已確認取消。",
                         )
                     }
-                    setDebugMessage("確認取消成功: $orderId")
                     refreshDashboard()
                 }
                 is ApiResult.Failure -> {
@@ -402,7 +386,6 @@ class DriverViewModel(
                     }
                 }
                 is ApiResult.Failure -> {
-                    setDebugMessage("已取貨失敗: $orderId，訊息=${result.message}，目前進行中=${_uiState.value.orders.map { it.id }}")
                     _uiState.update { it.copy(errorMessage = result.message) }
                     if (result.message.contains("not assigned", ignoreCase = true) || result.message.contains("已分派", ignoreCase = true)) {
                         refreshDashboard()
@@ -460,7 +443,6 @@ class DriverViewModel(
                         isRefreshing = false,
                     )
                 }
-                setDebugMessage("刷新完成: 可接=${availableOrders.map { it.id }}，進行中=${orders.map { "${it.id}:${it.status}" }}")
                 overdueAlertedOrderIds.retainAll(orders.map { it.id }.toSet())
 
                 val completedPage = repository.loadCompletedOrders(
@@ -500,7 +482,6 @@ class DriverViewModel(
                     }
                 }
             } catch (error: Exception) {
-                setDebugMessage("刷新失敗: ${error.message ?: "unknown"}")
                 _uiState.update {
                     it.copy(
                         availableOrders = emptyList(),
@@ -533,7 +514,6 @@ class DriverViewModel(
                     )
                 }
             } catch (error: Exception) {
-                setDebugMessage("刷新失敗: ${error.message ?: "unknown"}")
                 _uiState.update {
                     it.copy(
                         isLoadingCompletedOrders = false,

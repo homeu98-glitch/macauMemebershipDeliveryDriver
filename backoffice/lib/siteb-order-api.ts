@@ -380,19 +380,19 @@ export async function cancelOrderByExternalId(
         requireCancelConfirm: "true"
       }
     }).catch(() => undefined);
+  } else {
+    await sendPushToOnlineDrivers({
+      title: shouldPlayCancelSound ? "訂單已取消" : "",
+      body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+      soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
+      data: {
+        type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
+        externalOrderId,
+        ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
+          requireCancelConfirm: "true"
+      }
+    }).catch(() => undefined);
   }
-
-  await sendPushToOnlineDrivers({
-    title: shouldPlayCancelSound ? "訂單已取消" : "",
-    body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
-    soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
-    data: {
-      type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
-      externalOrderId,
-      ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
-        requireCancelConfirm: "true"
-    }
-  }).catch(() => undefined);
 
   return { found: true as const, canceled: true as const, status: "canceled" };
 }
@@ -516,19 +516,19 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
         requireCancelConfirm: "true"
       }
     }).catch(() => undefined);
+  } else {
+    await sendPushToOnlineDrivers({
+      title: shouldPlayCancelSound ? "訂單已取消" : "",
+      body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+      soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
+      data: {
+        type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
+        externalOrderId: order.external_order_id,
+        ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
+          requireCancelConfirm: "true"
+      }
+    }).catch(() => undefined);
   }
-
-  await sendPushToOnlineDrivers({
-    title: shouldPlayCancelSound ? "訂單已取消" : "",
-    body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
-    soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
-    data: {
-      type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
-      externalOrderId: order.external_order_id,
-      ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
-        requireCancelConfirm: "true"
-    }
-  }).catch(() => undefined);
 
   await dispatchOrderCallback({
     orderId: order.id as string,

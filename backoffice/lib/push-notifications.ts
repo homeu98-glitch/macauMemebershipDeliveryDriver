@@ -1,27 +1,4 @@
-import { getFirebaseAdminApp } from "./firebase-admin";
 import { publishBroadcastDispatchEvent, publishDriverDispatchEvent } from "./mqtt-dispatch";
-import { createServiceRoleSupabaseClient } from "./supabase";
-
-const firebaseAdminMessaging = require("firebase-admin/messaging") as {
-  getMessaging: () => {
-    sendEachForMulticast: (payload: {
-      tokens: string[];
-      data?: Record<string, string>;
-      android?: {
-        priority?: string;
-        ttl?: number;
-      };
-    }) => Promise<{
-      successCount: number;
-      failureCount: number;
-      responses: Array<{
-        success: boolean;
-        messageId?: string;
-        error?: { code?: string; message?: string };
-      }>;
-    }>;
-  };
-};
 
 type SendPushOptions = {
   title: string;
@@ -30,147 +7,42 @@ type SendPushOptions = {
   data?: Record<string, string>;
 };
 
-type DriverPushTokenRow = {
-  driver_id: string;
-  fcm_token: string;
-};
-
-
-function maskToken(token: string) {
-  if (token.length <= 12) return token;
-  return `${token.slice(0, 8)}...${token.slice(-4)}`;
-}
-
 function logPush(event: string, payload: Record<string, unknown>) {
   console.info(`[push] ${event} ${JSON.stringify(payload)}`);
 }
 
-async function loadDriverTokens(driverId?: string) {
-  const supabase = createServiceRoleSupabaseClient();
-  let query = supabase
-    .from("driver_push_tokens")
-    .select("driver_id,fcm_token")
-    .order("last_seen_at", { ascending: false });
-
-  if (driverId) {
-    query = query.eq("driver_id", driverId);
-  }
-
-  const { data, error } = await query;
-  if (error) {
-    throw error;
-  }
-
-  return (data ?? []) as DriverPushTokenRow[];
-}
-
 export async function sendPushToDriver(driverId: string, payload: SendPushOptions) {
-  const rows = await loadDriverTokens(driverId);
-  const tokens = [...new Set(rows.map((row) => row.fcm_token).filter(Boolean))];
-  const mqttResult = await publishDriverDispatchEvent(driverId, payload).catch((error) => {
-    logPush("mqtt_driver_error", {
-      driverId,
-      message: error instanceof Error ? error.message : String(error),
-      soundKey: payload.soundKey ?? "new_order",
-      data: payload.data ?? null,
-    });
-    return { published: false, topic: `drivers/${driverId}/events`, reason: error instanceof Error ? error.message : String(error) };
-  });
-
-  if (!tokens.length) {
-    logPush("no_tokens", {
-      driverId,
-      title: payload.title,
-      soundKey: payload.soundKey ?? "new_order",
-      data: payload.data ?? null,
-      mqttResult,
-    });
-    return { successCount: 0, failureCount: 0, message: "No registered push tokens found.", tokenCount: 0, tokenDebug: [], mqttResult };
-  }
-
-  getFirebaseAdminApp();
-  const messaging = firebaseAdminMessaging.getMessaging();
-  const soundKey = payload.soundKey ?? "new_order";
-  const tokenDebug = tokens.map(maskToken);
-  const dataPayload = {
-    ...(payload.data ?? {}),
-    soundKey,
-    title: payload.title,
-    body: payload.body,
-  };
-
-  logPush("send_start", {
+  logPush("mqtt_driver_start", {
     driverId,
-    tokenCount: tokens.length,
-    tokenDebug,
+    soundKey: payload.soundKey ?? "new_order",
+    data: payload.data ?? null,
     title: payload.title,
-    soundKey,
-    data: dataPayload,
   });
-
-  const result = await messaging.sendEachForMulticast({
-    tokens,
-    data: dataPayload,
-    android: {
-      priority: "high",
-      ttl: 24 * 60 * 60 * 1000,
-    },
-  });
-
-  const responseDebug = result.responses.map((response, index) => ({
-    token: tokenDebug[index],
-    success: response.success,
-    messageId: response.messageId,
-    errorCode: response.error?.code,
-    errorMessage: response.error?.message,
-  }));
-
-  logPush("send_result", {
+  const mqttResult = await publishDriverDispatchEvent(driverId, payload);
+  logPush("mqtt_driver_result", {
     driverId,
-    tokenCount: tokens.length,
-    successCount: result.successCount,
-    failureCount: result.failureCount,
-    responseDebug,
+    mqttResult,
   });
-
   return {
-    successCount: result.successCount,
-    failureCount: result.failureCount,
-    tokenCount: tokens.length,
-    tokenDebug,
-    responseDebug,
+    successCount: mqttResult.published ? 1 : 0,
+    failureCount: mqttResult.published ? 0 : 1,
     mqttResult,
   };
 }
 
 export async function sendPushToOnlineDrivers(payload: SendPushOptions) {
-  const mqttResult = await publishBroadcastDispatchEvent(payload).catch((error) => {
-    logPush("mqtt_broadcast_error", {
-      message: error instanceof Error ? error.message : String(error),
-      soundKey: payload.soundKey ?? "new_order",
-      data: payload.data ?? null,
-    });
-    return { published: false, topic: "drivers/broadcast/events", reason: error instanceof Error ? error.message : String(error) };
+  logPush("mqtt_broadcast_start", {
+    soundKey: payload.soundKey ?? "new_order",
+    data: payload.data ?? null,
+    title: payload.title,
   });
-
-  const supabase = createServiceRoleSupabaseClient();
-  const { data: drivers, error } = await supabase
-    .from("driver_profiles")
-    .select("id")
-    .eq("approval_status", "approved")
-    .eq("availability", "online");
-
-  if (error) {
-    throw error;
-  }
-
-  let successCount = 0;
-  let failureCount = 0;
-  for (const driver of drivers ?? []) {
-    const result = await sendPushToDriver(driver.id, payload);
-    successCount += result.successCount;
-    failureCount += result.failureCount;
-  }
-
-  return { successCount, failureCount, mqttResult };
+  const mqttResult = await publishBroadcastDispatchEvent(payload);
+  logPush("mqtt_broadcast_result", {
+    mqttResult,
+  });
+  return {
+    successCount: mqttResult.published ? 1 : 0,
+    failureCount: mqttResult.published ? 0 : 1,
+    mqttResult,
+  };
 }

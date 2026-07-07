@@ -160,7 +160,6 @@ data class DriverAppState(
     val proofViewerLoading: Boolean = false,
     val earningsFilter: HistoryRange = HistoryRange.TODAY,
     val errorMessage: String? = null,
-    val debugMessage: String? = null,
 )
 
 data class PagedOrdersResult(
