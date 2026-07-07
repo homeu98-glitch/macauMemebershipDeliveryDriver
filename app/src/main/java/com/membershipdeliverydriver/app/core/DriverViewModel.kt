@@ -378,7 +378,12 @@ class DriverViewModel(
                         _uiState.update { it.copy(errorMessage = warning) }
                     }
                 }
-                is ApiResult.Failure -> _uiState.update { it.copy(errorMessage = result.message) }
+                is ApiResult.Failure -> {
+                    _uiState.update { it.copy(errorMessage = result.message) }
+                    if (result.message.contains("not assigned", ignoreCase = true) || result.message.contains("已分派", ignoreCase = true)) {
+                        refreshDashboard()
+                    }
+                }
             }
         }
     }

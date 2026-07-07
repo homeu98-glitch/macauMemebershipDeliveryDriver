@@ -443,15 +443,16 @@ class SupabaseDriverRepository : DriverRepository {
             token = token,
         )
 
-        if (assignmentArray.length() == 0) {
-            cachedOrders = emptyList()
-            return@withContext emptyList()
-        }
-
-        val orderIds = buildList {
+        val orderIds = buildSet {
             for (index in 0 until assignmentArray.length()) {
                 add(assignmentArray.getJSONObject(index).getString("order_id"))
             }
+            addAll(loadPendingCanceledConfirmationOrderIds(token))
+        }.toList()
+
+        if (orderIds.isEmpty()) {
+            cachedOrders = emptyList()
+            return@withContext emptyList()
         }
         val orderFilter = orderIds.joinToString(",") { "\"$it\"" }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
@@ -1104,6 +1105,41 @@ class SupabaseDriverRepository : DriverRepository {
 
     private fun encodePathSegments(path: String): String {
         return path.split("/").joinToString("/") { urlEncode(it) }
+    }
+
+    private fun loadPendingCanceledConfirmationOrderIds(token: String): Set<String> {
+        val canceledEvents = requestArray(
+            path = "/rest/v1/order_events?select=order_id,created_at&event_type=eq.website.order_canceled&order=created_at.desc",
+            token = token,
+        )
+        val acknowledgedEvents = requestArray(
+            path = "/rest/v1/order_events?select=order_id,created_at&event_type=in.(driver_confirmed_cancel,website.shop_owner_confirmed_driver_cancel)&order=created_at.desc",
+            token = token,
+        )
+
+        val latestCanceledAtByOrder = mutableMapOf<String, String>()
+        for (index in 0 until canceledEvents.length()) {
+            val event = canceledEvents.getJSONObject(index)
+            val orderId = event.getString("order_id")
+            if (orderId !in latestCanceledAtByOrder) {
+                latestCanceledAtByOrder[orderId] = event.optString("created_at")
+            }
+        }
+
+        val latestAcknowledgedAtByOrder = mutableMapOf<String, String>()
+        for (index in 0 until acknowledgedEvents.length()) {
+            val event = acknowledgedEvents.getJSONObject(index)
+            val orderId = event.getString("order_id")
+            if (orderId !in latestAcknowledgedAtByOrder) {
+                latestAcknowledgedAtByOrder[orderId] = event.optString("created_at")
+            }
+        }
+
+        return latestCanceledAtByOrder.keys.filterTo(mutableSetOf()) { orderId ->
+            val canceledAt = latestCanceledAtByOrder[orderId].orEmpty()
+            val acknowledgedAt = latestAcknowledgedAtByOrder[orderId]
+            acknowledgedAt.isNullOrBlank() || acknowledgedAt < canceledAt
+        }
     }
 
     private fun historyRangeQuery(filter: HistoryRange, column: String): String {

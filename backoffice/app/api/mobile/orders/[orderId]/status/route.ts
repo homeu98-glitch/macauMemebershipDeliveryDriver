@@ -105,6 +105,8 @@ export async function POST(
       .from("order_assignments")
       .select("id,driver_id,canceled_at,accepted_at")
       .eq("order_id", params.orderId)
+      .eq("driver_id", verified.driverId)
+      .is("canceled_at", null)
       .order("assigned_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -310,7 +312,7 @@ export async function POST(
     }
 
     const shouldDispatchCancelCallback =
-      body.eventType !== "canceled" ||
+      (body.eventType !== "canceled" && body.eventType !== "cancel_confirmed") ||
       ((order.status === "picked_up" || order.status === "arrived_customer") && body.action !== "grace_release");
 
     const callbackResult = shouldDispatchCancelCallback
