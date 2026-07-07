@@ -369,7 +369,7 @@ export async function cancelOrderByExternalId(
   });
 
   if (assignment?.driver_id) {
-    void sendPushToDriver(assignment.driver_id, {
+    await sendPushToDriver(assignment.driver_id, {
       title: shouldPlayCancelSound ? "訂單已取消" : "",
       body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
       soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
@@ -382,7 +382,7 @@ export async function cancelOrderByExternalId(
     }).catch(() => undefined);
   }
 
-  void sendPushToOnlineDrivers({
+  await sendPushToOnlineDrivers({
     title: shouldPlayCancelSound ? "訂單已取消" : "",
     body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
     soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
@@ -505,7 +505,7 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
   }
 
   if (assignment?.driver_id) {
-    void sendPushToDriver(assignment.driver_id, {
+    await sendPushToDriver(assignment.driver_id, {
       title: shouldPlayCancelSound ? "訂單已取消" : "",
       body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
       soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
@@ -518,7 +518,7 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     }).catch(() => undefined);
   }
 
-  void sendPushToOnlineDrivers({
+  await sendPushToOnlineDrivers({
     title: shouldPlayCancelSound ? "訂單已取消" : "",
     body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
     soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
@@ -594,7 +594,7 @@ export async function confirmDriverCanceledOrderByShopOwner(orderId: string, con
       .maybeSingle();
 
     if (assignment?.driver_id) {
-      void sendPushToDriver(assignment.driver_id, {
+      await sendPushToDriver(assignment.driver_id, {
         title: "商戶已確認取消",
         body: "此訂單已結束，已移至已完成紀錄。",
         soundKey: "order_cancelled",
