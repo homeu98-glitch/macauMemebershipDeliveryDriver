@@ -1,4 +1,5 @@
 import { getFirebaseAdminApp } from "./firebase-admin";
+import { publishBroadcastDispatchEvent, publishDriverDispatchEvent } from "./mqtt-dispatch";
 import { createServiceRoleSupabaseClient } from "./supabase";
 
 const firebaseAdminMessaging = require("firebase-admin/messaging") as {
@@ -66,14 +67,25 @@ async function loadDriverTokens(driverId?: string) {
 export async function sendPushToDriver(driverId: string, payload: SendPushOptions) {
   const rows = await loadDriverTokens(driverId);
   const tokens = [...new Set(rows.map((row) => row.fcm_token).filter(Boolean))];
+  const mqttResult = await publishDriverDispatchEvent(driverId, payload).catch((error) => {
+    logPush("mqtt_driver_error", {
+      driverId,
+      message: error instanceof Error ? error.message : String(error),
+      soundKey: payload.soundKey ?? "new_order",
+      data: payload.data ?? null,
+    });
+    return { published: false, topic: `drivers/${driverId}/events`, reason: error instanceof Error ? error.message : String(error) };
+  });
+
   if (!tokens.length) {
     logPush("no_tokens", {
       driverId,
       title: payload.title,
       soundKey: payload.soundKey ?? "new_order",
       data: payload.data ?? null,
+      mqttResult,
     });
-    return { successCount: 0, failureCount: 0, message: "No registered push tokens found.", tokenCount: 0, tokenDebug: [] };
+    return { successCount: 0, failureCount: 0, message: "No registered push tokens found.", tokenCount: 0, tokenDebug: [], mqttResult };
   }
 
   getFirebaseAdminApp();
@@ -127,10 +139,20 @@ export async function sendPushToDriver(driverId: string, payload: SendPushOption
     tokenCount: tokens.length,
     tokenDebug,
     responseDebug,
+    mqttResult,
   };
 }
 
 export async function sendPushToOnlineDrivers(payload: SendPushOptions) {
+  const mqttResult = await publishBroadcastDispatchEvent(payload).catch((error) => {
+    logPush("mqtt_broadcast_error", {
+      message: error instanceof Error ? error.message : String(error),
+      soundKey: payload.soundKey ?? "new_order",
+      data: payload.data ?? null,
+    });
+    return { published: false, topic: "drivers/broadcast/events", reason: error instanceof Error ? error.message : String(error) };
+  });
+
   const supabase = createServiceRoleSupabaseClient();
   const { data: drivers, error } = await supabase
     .from("driver_profiles")
@@ -150,5 +172,5 @@ export async function sendPushToOnlineDrivers(payload: SendPushOptions) {
     failureCount += result.failureCount;
   }
 
-  return { successCount, failureCount };
+  return { successCount, failureCount, mqttResult };
 }

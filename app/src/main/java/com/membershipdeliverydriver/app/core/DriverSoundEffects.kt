@@ -9,6 +9,16 @@ import android.os.Build
 import com.membershipdeliverydriver.app.R
 
 object DriverSoundEffects {
+    fun playBySoundKey(context: Context, soundKey: String?) {
+        when (soundKey) {
+            DriverNotifications.SOUND_NEW_ORDER -> playNewOrder(context)
+            DriverNotifications.SOUND_URGENT_ORDER -> playUrgentOrder(context)
+            DriverNotifications.SOUND_CUSTOMER_HURRY -> playNewOrder(context)
+            DriverNotifications.SOUND_ORDER_COMPLETED -> playOrderCompleted(context)
+            DriverNotifications.SOUND_ORDER_CANCELLED -> playOrderCancelled(context)
+        }
+    }
+
     fun playNewOrder(context: Context) {
         play(context, R.raw.sound_new_order)
     }

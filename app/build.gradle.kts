@@ -1,9 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+
+val localProperties = Properties().apply {
+    val localFile = rootProject.file("local.properties")
+    if (localFile.exists()) {
+        localFile.inputStream().use { load(it) }
+    }
+}
+
+fun localConfig(name: String, defaultValue: String = ""): String =
+    (localProperties.getProperty(name) ?: System.getenv(name.replace('.', '_').uppercase()) ?: defaultValue)
 
 android {
     namespace = "com.membershipdeliverydriver.app"
@@ -22,6 +35,11 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"https://macau-delivery.vercel.app\"")
         buildConfigField("String", "JWT_ISSUER", "\"membership-driver\"")
         buildConfigField("String", "JWT_AUDIENCE", "\"membership-driver-api\"")
+        buildConfigField("boolean", "MQTT_ENABLED", localConfig("mqtt.enabled", "false"))
+        buildConfigField("String", "MQTT_HOST", "\"${localConfig("mqtt.host")}\"")
+        buildConfigField("int", "MQTT_PORT", localConfig("mqtt.port", "8883"))
+        buildConfigField("String", "MQTT_USERNAME", "\"${localConfig("mqtt.username")}\"")
+        buildConfigField("String", "MQTT_PASSWORD", "\"${localConfig("mqtt.password")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -76,6 +94,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation(platform("com.google.firebase:firebase-bom:33.10.0"))
     implementation("com.google.firebase:firebase-messaging-ktx")
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
 
     implementation("androidx.compose.ui:ui:1.7.6")
     implementation("androidx.compose.ui:ui-tooling-preview:1.7.6")

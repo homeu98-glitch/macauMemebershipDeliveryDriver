@@ -22,6 +22,13 @@ class DriverViewModel(
         viewModelScope.launch {
             when (val restored = repository.restoreSession()) {
                 is ApiResult.Success -> {
+                    if (restored.value.availability == DriverAvailability.ONLINE) {
+                        DriverNotifications.startDispatchService(
+                            AppContextHolder.requireContext(),
+                            restored.value.id,
+                            restored.value.fullName
+                        )
+                    }
                     _uiState.update { it.copy(currentDriver = restored.value) }
                     restored.warning?.let { warning ->
                         _uiState.update { it.copy(errorMessage = warning) }
@@ -39,7 +46,7 @@ class DriverViewModel(
     fun onPushOrderUpdate() {
         val pushDebug = DriverSessionStore.getLastPushDebug(AppContextHolder.requireContext())
         setDebugMessage(pushDebug ?: "收到推播更新，開始刷新訂單。")
-        refreshDashboard()
+        refreshDashboard(playArrivalSound = false)
     }
 
 
@@ -101,6 +108,7 @@ class DriverViewModel(
                     if (result.value.availability == DriverAvailability.ONLINE) {
                         DriverNotifications.startDispatchService(
                             AppContextHolder.requireContext(),
+                            result.value.id,
                             result.value.fullName
                         )
                     } else {
@@ -178,6 +186,7 @@ class DriverViewModel(
                 if (updatedAvailability == DriverAvailability.ONLINE) {
                     DriverNotifications.startDispatchService(
                         AppContextHolder.requireContext(),
+                        currentDriver.id,
                         currentDriver.fullName
                     )
                 } else {
@@ -421,7 +430,7 @@ class DriverViewModel(
         }
     }
 
-    fun refreshDashboard() {
+    fun refreshDashboard(playArrivalSound: Boolean = true) {
         if (_uiState.value.currentDriver == null) return
         viewModelScope.launch {
             val previousOrders = _uiState.value.availableOrders
@@ -468,7 +477,7 @@ class DriverViewModel(
 
                 val previousIds = previousOrders.map { it.id }.toSet()
                 val newOrders = availableOrders.filterNot { previousIds.contains(it.id) }
-                if (newOrders.isNotEmpty()) {
+                if (playArrivalSound && newOrders.isNotEmpty()) {
                     val hasUrgentNewOrders = newOrders.any { it.status.isUrgentNew() || it.isUrgent }
                     if (hasUrgentNewOrders) {
                         DriverSoundEffects.playUrgentOrder(AppContextHolder.requireContext())

@@ -8,16 +8,21 @@ class DriverDispatchService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                DriverMqttManager.disconnect(this)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
 
             else -> {
                 val driverName = intent?.getStringExtra(EXTRA_DRIVER_NAME) ?: "騎手"
+                val driverId = intent?.getStringExtra(EXTRA_DRIVER_ID).orEmpty()
                 startForeground(
                     DriverNotifications.foregroundNotificationId(),
                     DriverNotifications.createForegroundNotification(this, driverName)
                 )
+                if (driverId.isNotBlank()) {
+                    DriverMqttManager.connect(this, driverId)
+                }
             }
         }
 
@@ -30,5 +35,6 @@ class DriverDispatchService : Service() {
         const val ACTION_START = "com.membershipdeliverydriver.app.dispatch.START"
         const val ACTION_STOP = "com.membershipdeliverydriver.app.dispatch.STOP"
         const val EXTRA_DRIVER_NAME = "driver_name"
+        const val EXTRA_DRIVER_ID = "driver_id"
     }
 }

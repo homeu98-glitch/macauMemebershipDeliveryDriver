@@ -117,11 +117,12 @@ object DriverNotifications {
         }
     }
 
-    fun startDispatchService(context: Context, driverName: String) {
+    fun startDispatchService(context: Context, driverId: String, driverName: String) {
         initialize(context)
         val intent = Intent(context, DriverDispatchService::class.java).apply {
             action = DriverDispatchService.ACTION_START
             putExtra(DriverDispatchService.EXTRA_DRIVER_NAME, driverName)
+            putExtra(DriverDispatchService.EXTRA_DRIVER_ID, driverId)
         }
         ContextCompat.startForegroundService(context, intent)
     }
@@ -188,6 +189,36 @@ object DriverNotifications {
             .setAutoCancel(true)
             .setDefaults(Notification.DEFAULT_ALL)
             .setContentIntent(pendingIntent)
+            .build()
+
+        NotificationManagerCompat.from(context).notify(
+            ORDER_ALERT_BASE_ID + (System.currentTimeMillis() % 1000).toInt(),
+            notification
+        )
+    }
+
+
+    fun showDispatchAlert(context: Context, title: String, body: String, soundKey: String?) {
+        if (!canPostNotifications(context)) return
+        initialize(context)
+
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName) ?: Intent()
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            9090,
+            launchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(context, channelIdFor(soundKey))
+            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round))
+            .setContentTitle(title)
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
         NotificationManagerCompat.from(context).notify(
