@@ -6,14 +6,26 @@ import java.time.LocalDateTime
 enum class DriverAvailability { ONLINE, OFFLINE }
 
 enum class OrderStatus {
+    NEW,
+    NEW_URGENT,
     ASSIGNED,
     HEADING_TO_SHOP,
     PICKED_UP,
     HEADING_TO_CUSTOMER,
     DELIVERED,
     CANCELED,
+    CANCELED_BY_DRIVER,
+    CANCELED_BY_SHOP_OWNER,
     ISSUE_REPORTED,
 }
+
+fun OrderStatus.isCanceledLike(): Boolean =
+    this == OrderStatus.CANCELED || this == OrderStatus.CANCELED_BY_DRIVER || this == OrderStatus.CANCELED_BY_SHOP_OWNER
+
+fun OrderStatus.isDriverCanceled(): Boolean = this == OrderStatus.CANCELED_BY_DRIVER
+fun OrderStatus.isShopOwnerCanceled(): Boolean = this == OrderStatus.CANCELED_BY_SHOP_OWNER
+fun OrderStatus.isUrgentNew(): Boolean = this == OrderStatus.NEW_URGENT
+fun OrderStatus.isNewLike(): Boolean = this == OrderStatus.NEW || this == OrderStatus.NEW_URGENT
 
 enum class CancelHandling {
     RETURN_TO_SHOP,

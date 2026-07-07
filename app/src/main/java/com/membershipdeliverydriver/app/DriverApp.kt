@@ -113,6 +113,10 @@ import com.membershipdeliverydriver.app.core.DriverAvailability
 import com.membershipdeliverydriver.app.core.DriverViewModel
 import com.membershipdeliverydriver.app.core.Order
 import com.membershipdeliverydriver.app.core.OrderStatus
+import com.membershipdeliverydriver.app.core.isCanceledLike
+import com.membershipdeliverydriver.app.core.isDriverCanceled
+import com.membershipdeliverydriver.app.core.isShopOwnerCanceled
+import com.membershipdeliverydriver.app.core.isUrgentNew
 import java.time.format.DateTimeFormatter
 import java.time.Duration
 import java.time.OffsetDateTime
@@ -881,7 +885,7 @@ private fun OrdersScreen(
             onProofSelected(orderId, uri)
         }
     }
-    val activeOrders = orders.filterNot { it.status == OrderStatus.DELIVERED || (it.status == OrderStatus.CANCELED && !it.deliveredAt.isNullOrBlank()) }
+    val activeOrders = orders.filterNot { it.status == OrderStatus.DELIVERED || (it.status.isCanceledLike() && !it.deliveredAt.isNullOrBlank()) }
 
     Box(
         modifier = Modifier
@@ -1109,7 +1113,7 @@ private fun AvailableOrderCard(
                 ) {
                     if (order.isUrgent) {
                         Text(
-                            "URGENT",
+                            "NEW_URGENT",
                             color = Color(0xFFB3261E),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
@@ -1226,11 +1230,11 @@ private fun ActiveOrderCard(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (order.status == OrderStatus.CANCELED && order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFFFECEC) else Color.White
+            containerColor = if (order.status.isCanceledLike() && order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFFFECEC) else Color.White
         ),
         border = BorderStroke(
             1.dp,
-            if (order.status == OrderStatus.CANCELED && order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFE58A8A) else Color(0xFFF0DFC0)
+            if (order.status.isCanceledLike() && order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFE58A8A) else Color(0xFFF0DFC0)
         )
     ) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1245,7 +1249,7 @@ private fun ActiveOrderCard(
                 ) {
                     if (order.isUrgent) {
                         Text(
-                            "URGENT",
+                            "NEW_URGENT",
                             color = Color(0xFFB3261E),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
@@ -1311,32 +1315,25 @@ private fun ActiveOrderCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            if (order.status == OrderStatus.CANCELED) {
+            if (order.status.isCanceledLike()) {
                 Text(
-                    when (order.cancelHandling) {
-                        com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP -> "已取消配送，請把商品退回商戶。"
-                        com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING -> "已取消配送且不退回，需由商戶端處理。"
-                        null -> "訂單已被商戶取消。"
+                    when {
+                        order.status.isDriverCanceled() -> "已由騎手取消，等待商戶確認。"
+                        order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP -> "已由商戶取消配送。"
+                        order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING -> "已由商戶取消配送。"
+                        else -> "訂單已被商戶取消。"
                     },
                     color = if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFB3261E) else Color(0xFF8A5A00),
                     style = MaterialTheme.typography.bodyMedium,
                 )
 
-                Button(
-                    onClick = onConfirmCanceled,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                ) {
-                    Text("確認已取消")
-                }
-
-                if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) {
-                    OutlinedButton(
-                        onClick = onNavigateToShop,
+                if (order.status.isShopOwnerCanceled() || order.status == OrderStatus.CANCELED) {
+                    Button(
+                        onClick = onConfirmCanceled,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(18.dp),
                     ) {
-                        Text("導航退回商戶")
+                        Text("確認已取消")
                     }
                 }
             } else if (order.status == OrderStatus.HEADING_TO_SHOP || order.status == OrderStatus.ASSIGNED) {
@@ -1441,7 +1438,7 @@ private fun ContactLocationRow(
 
 @Composable
 private fun DeliveryStageStrip(status: OrderStatus) {
-    if (status == OrderStatus.CANCELED) {
+    if (status.isCanceledLike()) {
         Surface(
             shape = RoundedCornerShape(14.dp),
             color = Color(0xFFFFEFEF),
@@ -1841,17 +1838,17 @@ private fun CompletedOrdersScreen(
                         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
-                                color = if (order.status == OrderStatus.CANCELED) Color(0xFFFFE5E5) else Color(0xFFFFF2CB)
+                                color = if (order.status.isCanceledLike()) Color(0xFFFFE5E5) else Color(0xFFFFF2CB)
                             ) {
                                 Text(
-                                    if (order.status == OrderStatus.CANCELED) "已取消" else "MOP ${order.totalAmountMop}",
+                                    if (order.status.isCanceledLike()) "已取消" else "MOP ${order.totalAmountMop}",
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = if (order.status == OrderStatus.CANCELED) Color(0xFFB3261E) else Color(0xFF8A5A00),
+                                    color = if (order.status.isCanceledLike()) Color(0xFFB3261E) else Color(0xFF8A5A00),
                                     fontWeight = FontWeight.Bold,
                                 )
                             }
-                            if (order.status == OrderStatus.CANCELED) {
+                            if (order.status.isCanceledLike()) {
                                 Text(
                                     "MOP 0",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -1862,7 +1859,7 @@ private fun CompletedOrdersScreen(
                         }
                     }
                     Text("客戶地址：${order.customer.address}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (order.status == OrderStatus.CANCELED) {
+                    if (order.status.isCanceledLike()) {
                         Text(
                             "取消原因：${order.cancelReason ?: "未提供"}${order.cancelOtherReason?.takeIf { it.isNotBlank() }?.let { " / $it" } ?: ""}",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1873,7 +1870,7 @@ private fun CompletedOrdersScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    if (order.status != OrderStatus.CANCELED && !order.proofOfDeliveryPath.isNullOrBlank()) {
+                    if (!order.status.isCanceledLike() && !order.proofOfDeliveryPath.isNullOrBlank()) {
                         OutlinedButton(
                             onClick = { onViewProof(order.id) },
                             shape = RoundedCornerShape(16.dp),
@@ -2154,12 +2151,18 @@ private fun availabilityLabel(status: DriverAvailability): String {
 
 private fun orderStatusLabel(status: OrderStatus): String {
     return when (status) {
+        OrderStatus.NEW -> "新單"
+        OrderStatus.NEW_URGENT -> "加急新單"
         OrderStatus.ASSIGNED -> "已指派"
         OrderStatus.HEADING_TO_SHOP -> "前往商戶"
         OrderStatus.PICKED_UP -> "已取貨"
         OrderStatus.HEADING_TO_CUSTOMER -> "前往客戶"
         OrderStatus.DELIVERED -> "已送達"
         OrderStatus.CANCELED -> "已取消"
+        OrderStatus.CANCELED_BY_DRIVER -> "騎手取消"
+        OrderStatus.CANCELED_BY_SHOP_OWNER -> "商戶取消"
+        OrderStatus.NEW -> "新單"
+        OrderStatus.NEW_URGENT -> "加急新單"
         OrderStatus.ISSUE_REPORTED -> "異常回報"
     }
 }

@@ -244,7 +244,7 @@ class SupabaseDriverRepository : DriverRepository {
 
             val updatedOrder = (cachedOrders.firstOrNull { it.id == orderId } ?: loadActiveOrderById(token, orderId))
                 ?.copy(
-                    status = OrderStatus.CANCELED,
+                    status = OrderStatus.CANCELED_BY_DRIVER,
                     cancelReason = reason,
                     cancelOtherReason = otherReason,
                     cancelHandling = handling,
@@ -462,7 +462,7 @@ class SupabaseDriverRepository : DriverRepository {
         )
 
         val mappedOrders = mapOrders(token, ordersArray, latestDriverLocation)
-        val activeOrders = mappedOrders.filterNot { it.status == OrderStatus.CANCELED && !it.deliveredAt.isNullOrBlank() }
+        val activeOrders = mappedOrders.filterNot { it.status.isCanceledLike() && !it.deliveredAt.isNullOrBlank() }
         cachedOrders = activeOrders
         activeOrders
     }
@@ -548,7 +548,7 @@ class SupabaseDriverRepository : DriverRepository {
 
         val completedItems = mapOrders(token, ordersArray, latestDriverLocation)
             .map { order ->
-                if (order.status == OrderStatus.CANCELED) {
+                if (order.status.isCanceledLike()) {
                     order.copy(
                         totalAmountMop = 0.0,
                         deliveredAt = completionAtByOrder[order.id] ?: order.deliveredAt,
@@ -1233,6 +1233,8 @@ class SupabaseDriverRepository : DriverRepository {
         val cancelReasonByOrder = mutableMapOf<String, String>()
         val cancelOtherReasonByOrder = mutableMapOf<String, String>()
         val cancelHandlingByOrder = mutableMapOf<String, CancelHandling>()
+        val driverCanceledOrderIds = mutableSetOf<String>()
+        val shopOwnerCanceledOrderIds = mutableSetOf<String>()
         for (index in 0 until shopOrdersArray.length()) {
             val shopId = shopOrdersArray.getJSONObject(index).optString("shop_id")
             if (shopId.isNotBlank()) {
@@ -1263,8 +1265,12 @@ class SupabaseDriverRepository : DriverRepository {
             if (orderId !in deliveredAtByOrder && eventType == "website.shop_owner_confirmed_driver_cancel") {
                 deliveredAtByOrder[orderId] = event.optString("created_at")
             }
+            if (eventType == "website.order_canceled") {
+                shopOwnerCanceledOrderIds += orderId
+            }
             val payload = event.optJSONObject("payload")
             if (payload != null && payload.has("cancel_reason")) {
+                driverCanceledOrderIds += orderId
                 cancelReasonByOrder[orderId] = payload.optString("cancel_reason")
                 cancelOtherReasonByOrder[orderId] = payload.optString("cancel_other_reason")
                 cancelHandlingByOrder[orderId] = when (payload.optString("cancel_handling")) {
@@ -1287,7 +1293,14 @@ class SupabaseDriverRepository : DriverRepository {
                 val json = ordersArray.getJSONObject(index)
                 val shop = shops[json.getString("shop_id")] ?: continue
                 val customer = customers[json.getString("customer_id")] ?: continue
-                val mappedStatus = json.optString("status").toOrderStatus()
+                val isUrgentOrder = json.optJSONObject("source_payload")?.optString("priceRaisedAt")?.isNotBlank() == true
+                val canceledFrom = json.optJSONObject("source_payload")?.optString("canceledFrom", "")?.lowercase().orEmpty()
+                val mappedStatus = mapOrderStatus(
+                    rawStatus = json.optString("status"),
+                    isUrgent = isUrgentOrder,
+                    canceledByShopOwner = json.getString("id") in shopOwnerCanceledOrderIds || canceledFrom == "backoffice" || canceledFrom == "shop_owner",
+                    canceledByDriver = json.getString("id") in driverCanceledOrderIds,
+                )
                 val shopLat = shop.optDouble("latitude", 0.0)
                 val shopLng = shop.optDouble("longitude", 0.0)
                 val distanceToShop = latestDriverLocation?.let { (driverLat, driverLng) ->
@@ -1310,7 +1323,7 @@ class SupabaseDriverRepository : DriverRepository {
                         id = json.getString("id"),
                         externalOrderId = json.optString("external_order_id", json.getString("id")),
                         status = mappedStatus,
-                        isUrgent = json.optJSONObject("source_payload")?.optString("priceRaisedAt")?.isNotBlank() == true,
+                        isUrgent = isUrgentOrder,
                         shop = LocationPoint(
                             label = shop.optString("name", "店舖"),
                             address = shop.optString("address", ""),
@@ -1347,6 +1360,29 @@ class SupabaseDriverRepository : DriverRepository {
                     ),
                 )
             }
+        }
+    }
+
+    private fun mapOrderStatus(
+        rawStatus: String,
+        isUrgent: Boolean,
+        canceledByShopOwner: Boolean,
+        canceledByDriver: Boolean,
+    ): OrderStatus {
+        return when (rawStatus) {
+            "new" -> if (isUrgent) OrderStatus.NEW_URGENT else OrderStatus.NEW
+            "accepted" -> OrderStatus.HEADING_TO_SHOP
+            "assigned" -> OrderStatus.ASSIGNED
+            "arrived_shop" -> OrderStatus.HEADING_TO_SHOP
+            "picked_up" -> OrderStatus.PICKED_UP
+            "arrived_customer" -> OrderStatus.HEADING_TO_CUSTOMER
+            "delivered" -> OrderStatus.DELIVERED
+            "canceled" -> when {
+                canceledByShopOwner -> OrderStatus.CANCELED_BY_SHOP_OWNER
+                canceledByDriver -> OrderStatus.CANCELED_BY_DRIVER
+                else -> OrderStatus.CANCELED
+            }
+            else -> OrderStatus.ASSIGNED
         }
     }
 

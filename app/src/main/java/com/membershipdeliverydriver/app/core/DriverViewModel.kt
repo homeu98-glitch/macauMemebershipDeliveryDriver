@@ -288,10 +288,10 @@ class DriverViewModel(
                     _uiState.update {
                         it.copy(
                             orders = it.orders.replaceOrder(result.value),
-                            errorMessage = if (result.value.status == OrderStatus.CANCELED) {
-                                "已提交取消，等待商戶確認。"
-                            } else {
-                                "已取消訂單。"
+                            errorMessage = when {
+                                result.value.status.isDriverCanceled() -> "已提交取消，等待商戶確認。"
+                                result.value.status.isShopOwnerCanceled() -> "訂單已被商戶取消。"
+                                else -> "已取消訂單。"
                             },
                         )
                     }
@@ -468,11 +468,17 @@ class DriverViewModel(
                 val previousIds = previousOrders.map { it.id }.toSet()
                 val newOrders = availableOrders.filterNot { previousIds.contains(it.id) }
                 if (newOrders.isNotEmpty()) {
-                    DriverSoundEffects.playNewOrder(AppContextHolder.requireContext())
+                    val hasUrgentNewOrders = newOrders.any { it.status.isUrgentNew() || it.isUrgent }
+                    if (hasUrgentNewOrders) {
+                        DriverSoundEffects.playUrgentOrder(AppContextHolder.requireContext())
+                    } else {
+                        DriverSoundEffects.playNewOrder(AppContextHolder.requireContext())
+                    }
                     DriverNotifications.notifyNewOrders(
                         context = AppContextHolder.requireContext(),
                         count = newOrders.size,
-                        firstShopName = newOrders.firstOrNull()?.shop?.label
+                        firstShopName = newOrders.firstOrNull()?.shop?.label,
+                        urgent = hasUrgentNewOrders,
                     )
                 }
                 val newlyOverdueOrders = orders.filter(::isOverdueOrder).filterNot { overdueAlertedOrderIds.contains(it.id) }
