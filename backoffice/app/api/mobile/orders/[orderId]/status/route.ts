@@ -13,6 +13,13 @@ type DriverEventType =
   | "exception_reported"
   | "canceled";
 
+type AssignmentRow = {
+  id: string;
+  driver_id: string;
+  canceled_at: string | null;
+  accepted_at: string | null;
+};
+
 function createDriverUserClient(accessToken: string) {
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? ENV_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_URL;
@@ -90,14 +97,7 @@ export async function POST(
     return NextResponse.json({ message: "Order not found." }, { status: 404 });
   }
 
-  let assignment:
-    | {
-        id: string;
-        driver_id: string;
-        canceled_at: string | null;
-        accepted_at: string | null;
-      }
-    | null = null;
+  let assignment: AssignmentRow | null = null;
 
   if (body.eventType !== "accepted") {
     const { data } = await supabase
@@ -108,7 +108,7 @@ export async function POST(
       .limit(1)
       .maybeSingle();
 
-    assignment = data as typeof assignment;
+    assignment = data as AssignmentRow | null;
 
     if (!assignment || assignment.canceled_at) {
       return NextResponse.json(
