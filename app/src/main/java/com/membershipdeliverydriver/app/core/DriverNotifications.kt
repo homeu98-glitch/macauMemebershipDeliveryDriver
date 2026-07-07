@@ -19,11 +19,11 @@ import com.membershipdeliverydriver.app.R
 
 object DriverNotifications {
     const val DISPATCH_CHANNEL_ID = "driver_dispatch_status"
-    const val ORDER_ALERT_CHANNEL_ID = "driver_order_alerts"
-    const val URGENT_ORDER_ALERT_CHANNEL_ID = "driver_urgent_order_alerts"
+    const val ORDER_ALERT_CHANNEL_ID = "driver_order_alerts_v2"
+    const val URGENT_ORDER_ALERT_CHANNEL_ID = "driver_urgent_order_alerts_v2"
     const val CUSTOMER_HURRY_ALERT_CHANNEL_ID = "driver_customer_hurry_alerts"
     const val ORDER_COMPLETED_CHANNEL_ID = "driver_order_completed_alerts"
-    const val ORDER_CANCELLED_CHANNEL_ID = "driver_order_cancelled_alerts"
+    const val ORDER_CANCELLED_CHANNEL_ID = "driver_order_cancelled_alerts_v2"
     const val ORDER_OVERDUE_ALERT_CHANNEL_ID = "driver_order_overdue_alerts"
     const val SOUND_NEW_ORDER = "new_order"
     const val SOUND_URGENT_ORDER = "urgent_order"

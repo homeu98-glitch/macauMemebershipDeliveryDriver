@@ -2,7 +2,10 @@ package com.membershipdeliverydriver.app.core
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
+import android.os.Build
 import com.membershipdeliverydriver.app.R
 
 object DriverSoundEffects {
@@ -27,20 +30,58 @@ object DriverSoundEffects {
     }
 
     private fun play(context: Context, resId: Int) {
-        val mediaPlayer = MediaPlayer.create(context.applicationContext, resId) ?: return
+        val appContext = context.applicationContext
+        val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val audioAttributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ALARM)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
+        val focusRequest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                .setAudioAttributes(audioAttributes)
+                .setAcceptsDelayedFocusGain(false)
+                .build()
+        } else {
+            null
+        }
+
         runCatching {
-            mediaPlayer.setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .build()
-            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioManager?.requestAudioFocus(focusRequest!!)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.requestAudioFocus(null, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            }
+        }
+
+        val mediaPlayer = MediaPlayer.create(appContext, resId) ?: return
+        runCatching {
+            mediaPlayer.setAudioAttributes(audioAttributes)
+            mediaPlayer.setVolume(1.0f, 1.0f)
+            mediaPlayer.isLooping = false
         }
         mediaPlayer.setOnCompletionListener { player ->
             player.release()
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    audioManager?.abandonAudioFocusRequest(focusRequest!!)
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager?.abandonAudioFocus(null)
+                }
+            }
         }
         mediaPlayer.setOnErrorListener { player, _, _ ->
             player.release()
+            runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    audioManager?.abandonAudioFocusRequest(focusRequest!!)
+                } else {
+                    @Suppress("DEPRECATION")
+                    audioManager?.abandonAudioFocus(null)
+                }
+            }
             true
         }
         mediaPlayer.start()

@@ -2152,7 +2152,7 @@ private fun availabilityLabel(status: DriverAvailability): String {
 private fun orderStatusLabel(status: OrderStatus): String {
     return when (status) {
         OrderStatus.NEW -> "新單"
-        OrderStatus.NEW_URGENT -> "加急新單"
+        OrderStatus.NEW_URGENT -> "急單"
         OrderStatus.ASSIGNED -> "已指派"
         OrderStatus.HEADING_TO_SHOP -> "前往商戶"
         OrderStatus.PICKED_UP -> "已取貨"
@@ -2162,7 +2162,7 @@ private fun orderStatusLabel(status: OrderStatus): String {
         OrderStatus.CANCELED_BY_DRIVER -> "騎手取消"
         OrderStatus.CANCELED_BY_SHOP_OWNER -> "商戶取消"
         OrderStatus.NEW -> "新單"
-        OrderStatus.NEW_URGENT -> "加急新單"
+        OrderStatus.NEW_URGENT -> "急單"
         OrderStatus.ISSUE_REPORTED -> "異常回報"
     }
 }

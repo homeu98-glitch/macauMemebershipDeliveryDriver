@@ -271,7 +271,7 @@ export async function POST(
             externalOrderId: order.external_order_id,
             urgent: String(isUrgent),
             deliveryFeeMop: String(order.assigned_fee_mop ?? 0),
-            playSound: "false"
+            playSound: isUrgent ? "true" : "false"
           }
         }).catch(() => undefined);
         await supabase.from("order_events").insert({
