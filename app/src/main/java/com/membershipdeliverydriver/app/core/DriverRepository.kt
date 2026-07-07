@@ -408,7 +408,7 @@ class SupabaseDriverRepository : DriverRepository {
 
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload&status=eq.new&order=created_at.asc",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&status=eq.new&order=created_at.asc",
             token = token,
         )
 
@@ -439,7 +439,7 @@ class SupabaseDriverRepository : DriverRepository {
         val orderFilter = orderIds.joinToString(",") { "\"$it\"" }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
             token = token,
         )
 
@@ -524,7 +524,7 @@ class SupabaseDriverRepository : DriverRepository {
         val completionAtByOrder = pagedCompletions.associate { it.key to it.value }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
             token = token,
         )
 
@@ -558,9 +558,10 @@ class SupabaseDriverRepository : DriverRepository {
                 accessToken = token,
                 payload = JSONObject().put("eventType", "accepted"),
             )
+            val now = OffsetDateTime.now().toString()
 
             val acceptedOrder = (cachedAvailableOrders.firstOrNull { it.id == orderId } ?: cachedOrders.firstOrNull { it.id == orderId })
-                ?.copy(status = OrderStatus.HEADING_TO_SHOP)
+                ?.copy(status = OrderStatus.HEADING_TO_SHOP, acceptedAt = now)
 
             if (acceptedOrder != null) {
                 cachedAvailableOrders = cachedAvailableOrders.filterNot { it.id == orderId }
@@ -1028,7 +1029,7 @@ class SupabaseDriverRepository : DriverRepository {
         }
 
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})",
             token = token,
         )
 
@@ -1039,7 +1040,7 @@ class SupabaseDriverRepository : DriverRepository {
         val driverId = currentDriver?.id ?: return null
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id&id=eq.${urlEncode(orderId)}",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&id=eq.${urlEncode(orderId)}",
             token = token,
         )
         return mapOrders(token, ordersArray, latestDriverLocation).firstOrNull()
@@ -1143,15 +1144,30 @@ class SupabaseDriverRepository : DriverRepository {
             token = token,
         )
 
+        val shopOrdersArray = if (shopIds.isNotEmpty()) {
+            requestArray(
+                path = "/rest/v1/orders?select=shop_id&shop_id=in.(${shopIds.joinToString(",") { "\"$it\"" }})",
+                token = token,
+            )
+        } else JSONArray()
+
         val shops = jsonArrayToMap(shopsArray) { it.getString("id") }
         val customers = jsonArrayToMap(customersArray) { it.getString("id") }
         val itemsByOrder = mutableMapOf<String, MutableList<OrderItem>>()
+        val shopSentCountById = mutableMapOf<String, Int>()
+        val acceptedAtByOrder = mutableMapOf<String, String>()
         val pickedUpAtByOrder = mutableMapOf<String, String>()
         val deliveredAtByOrder = mutableMapOf<String, String>()
         val proofPathByOrder = mutableMapOf<String, String>()
         val cancelReasonByOrder = mutableMapOf<String, String>()
         val cancelOtherReasonByOrder = mutableMapOf<String, String>()
         val cancelHandlingByOrder = mutableMapOf<String, CancelHandling>()
+        for (index in 0 until shopOrdersArray.length()) {
+            val shopId = shopOrdersArray.getJSONObject(index).optString("shop_id")
+            if (shopId.isNotBlank()) {
+                shopSentCountById[shopId] = (shopSentCountById[shopId] ?: 0) + 1
+            }
+        }
         for (index in 0 until itemsArray.length()) {
             val item = itemsArray.getJSONObject(index)
             val list = itemsByOrder.getOrPut(item.getString("order_id")) { mutableListOf() }
@@ -1161,6 +1177,9 @@ class SupabaseDriverRepository : DriverRepository {
             val event = eventsArray.getJSONObject(index)
             val orderId = event.getString("order_id")
             val eventType = event.optString("event_type")
+            if (orderId !in acceptedAtByOrder && eventType == "accepted") {
+                acceptedAtByOrder[orderId] = event.optString("created_at")
+            }
             if (
                 orderId !in pickedUpAtByOrder &&
                 (eventType == "picked_up" || eventType == "arrived_customer")
@@ -1228,6 +1247,7 @@ class SupabaseDriverRepository : DriverRepository {
                             longitude = shopLng,
                             contactName = shop.optString("contact_name", "店舖"),
                             contactPhone = shop.optString("contact_phone", ""),
+                            totalSentOrders = shopSentCountById[json.getString("shop_id")] ?: 0,
                         ),
                         customer = LocationPoint(
                             label = customer.optString("name", "客戶"),
@@ -1244,6 +1264,8 @@ class SupabaseDriverRepository : DriverRepository {
                         distanceKm = activeDistance,
                         totalAmountMop = json.optDouble("assigned_fee_mop", 0.0),
                         items = itemsByOrder[json.getString("id")] ?: emptyList(),
+                        acceptedAt = acceptedAtByOrder[json.getString("id")],
+                        paymentTag = derivePaymentTag(json),
                         pickedUpAt = pickedUpAtByOrder[json.getString("id")],
                         deliveredAt = deliveredAtByOrder[json.getString("id")],
                         proofOfDeliveryPath = proofPathByOrder[json.getString("id")],
@@ -1254,6 +1276,27 @@ class SupabaseDriverRepository : DriverRepository {
                     ),
                 )
             }
+        }
+    }
+
+    private fun derivePaymentTag(orderJson: JSONObject): String {
+        val sourcePayload = orderJson.optJSONObject("source_payload")
+        val notes = sourcePayload?.optJSONObject("notes")
+        val explicitValue = listOf(
+            notes?.optString("paymentBy", ""),
+            notes?.optString("paidBy", ""),
+            notes?.optString("payment_by", ""),
+            sourcePayload?.optString("paymentBy", ""),
+            sourcePayload?.optString("paidBy", "")
+        ).firstOrNull { !it.isNullOrBlank() }?.trim()?.lowercase().orEmpty()
+
+        val noteText = (orderJson.optString("offline_payment_note", "") + " " + notes?.optString("shopNote", "")).lowercase()
+
+        return when {
+            explicitValue in setOf("shop", "merchant", "prepaid", "paid_by_shop", "shop_paid") -> "Paid by Shop"
+            explicitValue in setOf("customer", "cod", "cash", "paid_by_customer", "customer_paid") -> "Paid by Customer"
+            "已線上付款" in noteText || "paid by shop" in noteText || "prepaid" in noteText || "shop paid" in noteText || "商戶支付" in noteText || "店舖支付" in noteText -> "Paid by Shop"
+            else -> "Paid by Customer"
         }
     }
 

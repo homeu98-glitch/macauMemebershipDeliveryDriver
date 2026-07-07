@@ -53,6 +53,29 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+async function isWithinThreeMinuteGrace(orderId: string) {
+  const supabase = createServiceRoleSupabaseClient();
+  const { data: assignment } = await supabase
+    .from("order_assignments")
+    .select("accepted_at")
+    .eq("order_id", orderId)
+    .is("canceled_at", null)
+    .order("assigned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return typeof assignment?.accepted_at === "string" && Date.now() - new Date(assignment.accepted_at).getTime() <= 3 * 60 * 1000;
+}
+
+async function cancelActiveAssignments(orderId: string) {
+  const supabase = createServiceRoleSupabaseClient();
+  await supabase
+    .from("order_assignments")
+    .update({ canceled_at: nowIso() })
+    .eq("order_id", orderId)
+    .is("canceled_at", null);
+}
+
 function normalizeMoney(value: number) {
   return Number.isFinite(value) ? Number(value) : 0;
 }
@@ -305,6 +328,19 @@ export async function cancelOrderByExternalId(
     return { found: true as const, canceled: false as const, status: order.status as string };
   }
 
+  const { data: assignment } = await supabase
+    .from("order_assignments")
+    .select("driver_id")
+    .eq("order_id", order.id)
+    .is("canceled_at", null)
+    .order("assigned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const shouldPlayCancelSound =
+    ["picked_up", "arrived_customer"].includes(order.status) ||
+    (order.status === "accepted" && await isWithinThreeMinuteGrace(order.id as string));
+
   const { error: updateError } = await supabase
     .from("orders")
     .update({
@@ -326,32 +362,29 @@ export async function cancelOrderByExternalId(
     requestedAt: requestedAt ?? nowIso()
   });
 
-  const { data: assignment } = await supabase
-    .from("order_assignments")
-    .select("driver_id")
-    .eq("order_id", order.id)
-    .is("canceled_at", null)
-    .order("assigned_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  await cancelActiveAssignments(order.id as string);
 
   if (assignment?.driver_id) {
     void sendPushToDriver(assignment.driver_id, {
-      title: "",
-      body: "",
+      title: shouldPlayCancelSound ? "訂單已取消" : "",
+      body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+      soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
       data: {
-        type: "order_invalidated",
-        externalOrderId
+        type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
+        externalOrderId,
+        ...(shouldPlayCancelSound ? { playSound: "true" } : {})
       }
     }).catch(() => undefined);
   }
 
   void sendPushToOnlineDrivers({
-    title: "",
-    body: "",
+    title: shouldPlayCancelSound ? "訂單已取消" : "",
+    body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+    soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
     data: {
-      type: "order_invalidated",
-      externalOrderId
+      type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
+      externalOrderId,
+      ...(shouldPlayCancelSound ? { playSound: "true" } : {})
     }
   }).catch(() => undefined);
 
@@ -418,7 +451,19 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     return { found: true as const, canceled: false as const, status: order.status as string };
   }
 
-  const shouldPlayCancelSound = order.status === "picked_up" || order.status === "arrived_customer";
+  const { data: assignment } = await supabase
+    .from("order_assignments")
+    .select("driver_id")
+    .eq("order_id", order.id)
+    .is("canceled_at", null)
+    .order("assigned_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const shouldPlayCancelSound =
+    order.status === "picked_up" ||
+    order.status === "arrived_customer" ||
+    (order.status === "accepted" && await isWithinThreeMinuteGrace(order.id as string));
 
   if (order.status !== "canceled") {
     const canceledAt = nowIso();
@@ -450,14 +495,7 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     });
   }
 
-  const { data: assignment } = await supabase
-    .from("order_assignments")
-    .select("driver_id")
-    .eq("order_id", order.id)
-    .is("canceled_at", null)
-    .order("assigned_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  await cancelActiveAssignments(order.id as string);
 
   if (assignment?.driver_id) {
     void sendPushToDriver(assignment.driver_id, {

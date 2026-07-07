@@ -64,6 +64,7 @@ data class LocationPoint(
     val longitude: Double,
     val contactName: String,
     val contactPhone: String,
+    val totalSentOrders: Int = 0,
 )
 
 data class OrderItem(
@@ -85,6 +86,8 @@ data class Order(
     val distanceKm: Double,
     val totalAmountMop: Double,
     val items: List<OrderItem>,
+    val acceptedAt: String? = null,
+    val paymentTag: String = "Paid by Customer",
     val pickedUpAt: String? = null,
     val deliveredAt: String? = null,
     val proofOfDeliveryUri: Uri? = null,

@@ -417,7 +417,7 @@ private fun LoginScreen(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true,
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                 )
                 OutlinedTextField(
                     value = password,
@@ -427,13 +427,13 @@ private fun LoginScreen(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true,
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                 )
                 Button(
                     onClick = onLogin,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !isLoading,
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                 ) {
                     Text(if (isLoading) "登入中..." else "登入")
                 }
@@ -444,12 +444,12 @@ private fun LoginScreen(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     OutlinedButton(
                         onClick = onRegister,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(14.dp),
                         border = BorderStroke(1.dp, Color(0xFFF1D99A))
                     ) {
                         Text("立即註冊")
@@ -457,7 +457,7 @@ private fun LoginScreen(
                     OutlinedButton(
                         onClick = onPendingApproval,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(14.dp),
                         border = BorderStroke(1.dp, Color(0xFFF1D99A))
                     ) {
                         Text("查看審核")
@@ -508,7 +508,7 @@ private fun RegistrationScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Card(
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 border = BorderStroke(1.dp, Color(0xFFF0DFC0))
             ) {
@@ -527,7 +527,7 @@ private fun RegistrationScreen(
                         label = { Text("姓名") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(14.dp),
                     )
                     OutlinedTextField(
                         value = registration.phone,
@@ -536,7 +536,7 @@ private fun RegistrationScreen(
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         singleLine = true,
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(14.dp),
                     )
                     OutlinedTextField(
                         value = registration.password,
@@ -546,7 +546,7 @@ private fun RegistrationScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         visualTransformation = PasswordVisualTransformation(),
                         singleLine = true,
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(14.dp),
                     )
                 }
             }
@@ -580,7 +580,7 @@ private fun RegistrationScreen(
                 onClick = { viewModel.submitRegistration(onSubmitted) },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading,
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(14.dp),
             ) {
                 Icon(Icons.Default.VerifiedUser, contentDescription = null)
                 Spacer(modifier = Modifier.size(8.dp))
@@ -613,7 +613,7 @@ private fun UploadTile(
             )
             OutlinedButton(
                 onClick = onUpload,
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(14.dp),
                 border = BorderStroke(1.dp, Color(0xFFF1D99A))
             ) {
                 Icon(Icons.Default.CameraAlt, contentDescription = null)
@@ -724,7 +724,7 @@ private fun HomeScreen(
                             Text(
                                 availabilityLabel(driver?.availability ?: DriverAvailability.OFFLINE),
                                 color = Color(0xFF2A1A00),
-                                style = MaterialTheme.typography.titleLarge,
+                                style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
                             Text(
@@ -751,7 +751,7 @@ private fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("可接訂單", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("可接訂單", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1038,6 +1038,23 @@ private fun OrdersScreen(
 }
 
 @Composable
+private fun PaymentTagChip(label: String) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (label == "Paid by Shop") Color(0xFFE9F7EF) else Color(0xFFEAF2FF),
+        border = BorderStroke(1.dp, if (label == "Paid by Shop") Color(0xFFB7DEC4) else Color(0xFFBED2F2))
+    ) {
+        Text(
+            label,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (label == "Paid by Shop") Color(0xFF22663A) else Color(0xFF234A84),
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
 private fun AvailableOrderCard(
     order: Order,
     isOnline: Boolean,
@@ -1046,13 +1063,13 @@ private fun AvailableOrderCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, Color(0xFFF0DFC0))
     ) {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1061,7 +1078,7 @@ private fun AvailableOrderCard(
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     if (order.isUrgent) {
                         Text(
@@ -1074,9 +1091,14 @@ private fun AvailableOrderCard(
                     Text(
                         order.shop.label,
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "已派送 ${order.shop.totalSentOrders} 張單",
+                        color = Color(0xFF2E4765),
+                        style = MaterialTheme.typography.labelSmall,
                     )
                     Text(
                         "送達時間 ${order.deliveryDeadlineText}",
@@ -1085,12 +1107,12 @@ private fun AvailableOrderCard(
                     )
                 }
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = if (order.isUrgent) Color(0xFFFFE5E5) else Color(0xFFFFF2CB)
                 ) {
                     Text(
                         text = "MOP ${order.totalAmountMop}",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                         color = if (order.isUrgent) Color(0xFFB3261E) else Color(0xFF8A5A00),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
@@ -1099,13 +1121,13 @@ private fun AvailableOrderCard(
             }
 
             Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = Color(0xFFFFFBF1),
                 border = BorderStroke(1.dp, Color(0xFFF3E6CA))
             ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         "商戶地址",
@@ -1124,19 +1146,22 @@ private fun AvailableOrderCard(
                 }
             }
 
-            Text(
-                "${distanceLabel(order)} · 請在 ${order.deliveryDeadlineText} 前完成送達",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF607286),
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                PaymentTagChip(order.paymentTag)
+                Text(
+                    "${distanceLabel(order)} · ${order.deliveryDeadlineText}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF607286),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
                     onClick = onNavigateToShop,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     border = BorderStroke(1.dp, Color(0xFFF1D99A))
                 ) {
                     Icon(Icons.Default.Directions, contentDescription = null)
@@ -1147,7 +1172,7 @@ private fun AvailableOrderCard(
                     onClick = onAcceptOrder,
                     modifier = Modifier.weight(1f),
                     enabled = isOnline,
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                 ) {
                     Text(if (isOnline) "接單" else "請先上線")
                 }
@@ -1171,7 +1196,7 @@ private fun ActiveOrderCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (order.status == OrderStatus.CANCELED && order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFFFECEC) else Color.White
         ),
@@ -1188,7 +1213,7 @@ private fun ActiveOrderCard(
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     if (order.isUrgent) {
                         Text(
@@ -1198,9 +1223,9 @@ private fun ActiveOrderCard(
                             fontWeight = FontWeight.Bold,
                         )
                     }
-                    Text(displayLabel, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
+                    Text(displayLabel, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        order.shop.label,
+                        "${order.shop.label} · 已派送 ${order.shop.totalSentOrders} 張單",
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFF2E4765),
                     )
@@ -1227,13 +1252,13 @@ private fun ActiveOrderCard(
             DeliveryStageStrip(status = order.status)
 
             Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(14.dp),
                 color = Color(0xFFFFFBF1),
                 border = BorderStroke(1.dp, Color(0xFFF3E6CA))
             ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     ContactLocationRow(
                         title = order.shop.label,
@@ -1250,11 +1275,14 @@ private fun ActiveOrderCard(
                 }
             }
 
-            Text(
-                "${distanceLabel(order)} · 請盡快完成本單",
-                color = Color(0xFF607286),
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                PaymentTagChip(order.paymentTag)
+                Text(
+                    "${distanceLabel(order)} · 請盡快完成本單",
+                    color = Color(0xFF607286),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             if (order.status == OrderStatus.CANCELED) {
                 Text(
                     when (order.cancelHandling) {
@@ -1278,7 +1306,7 @@ private fun ActiveOrderCard(
                     },
                     enabled = order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFD32F2F) else MaterialTheme.colorScheme.primary
                     )
@@ -1306,15 +1334,15 @@ private fun ActiveOrderCard(
                     Text("拍照後完成訂單")
                 }
             }
-            val graceSecondsLeft = rememberGraceCancelSecondsLeft(order.pickedUpAt)
-            if (order.status == OrderStatus.PICKED_UP && graceSecondsLeft > 0) {
+            val graceSecondsLeft = rememberGraceCancelSecondsLeft(order.acceptedAt)
+            if ((order.status == OrderStatus.PICKED_UP || order.status == OrderStatus.HEADING_TO_SHOP || order.status == OrderStatus.ASSIGNED) && graceSecondsLeft > 0) {
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     color = Color(0xFFFFEFEF),
                     border = BorderStroke(1.dp, Color(0xFFE6B7B7)),
                 ) {
                     Text(
-                        "可在 ${formatGraceCountdown(graceSecondsLeft)} 內取消並釋出回首頁（無需填寫原因）",
+                        "可在 ${formatGraceCountdown(graceSecondsLeft)} 內取消並釋出回首頁",
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                         color = Color(0xFFB3261E),
                         style = MaterialTheme.typography.bodyMedium,
@@ -1324,7 +1352,7 @@ private fun ActiveOrderCard(
                 Button(
                     onClick = onGraceCancel,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
                 ) {
                     Text("立即取消並釋出")
@@ -1334,7 +1362,7 @@ private fun ActiveOrderCard(
                     onClick = onCancelOrder,
                     modifier = Modifier.fillMaxWidth(),
                     enabled = order.status != OrderStatus.DELIVERED,
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB3261E)),
                     border = BorderStroke(1.dp, Color(0xFFE58A8A))
                 ) {
@@ -1389,7 +1417,7 @@ private fun ContactLocationRow(
 private fun DeliveryStageStrip(status: OrderStatus) {
     if (status == OrderStatus.CANCELED) {
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(14.dp),
             color = Color(0xFFFFEFEF),
             border = BorderStroke(1.dp, Color(0xFFE6B7B7))
         ) {
@@ -1413,7 +1441,7 @@ private fun DeliveryStageStrip(status: OrderStatus) {
     )
 
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         color = Color(0xFFFFF8E8),
         border = BorderStroke(1.dp, Color(0xFFF3E6CA))
     ) {
@@ -1599,7 +1627,7 @@ private fun OrderDetailScreen(
                         )
                         OutlinedButton(
                             onClick = { proofLauncher.launch("image/*") },
-                            shape = RoundedCornerShape(18.dp),
+                            shape = RoundedCornerShape(14.dp),
                             border = BorderStroke(1.dp, Color(0xFFF1D99A))
                         ) {
                             Icon(Icons.Default.CameraAlt, contentDescription = null)
@@ -1622,7 +1650,7 @@ private fun OrderDetailScreen(
                             onValueChange = { issueNote = it },
                             label = { Text("異常說明") },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(18.dp),
+                            shape = RoundedCornerShape(14.dp),
                         )
                         Button(
                             onClick = { onReportIssue(issueNote) },
@@ -1667,12 +1695,12 @@ private fun LocationCard(
             Text("聯絡人：$contactName · $contactPhone", style = MaterialTheme.typography.bodySmall)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 OutlinedButton(
                     onClick = onNavigate,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     border = BorderStroke(1.dp, Color(0xFFF1D99A))
                 ) {
                     Icon(Icons.Default.Directions, contentDescription = null)
@@ -1682,7 +1710,7 @@ private fun LocationCard(
                 OutlinedButton(
                     onClick = onCall,
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                     border = BorderStroke(1.dp, Color(0xFFF1D99A))
                 ) {
                     Icon(Icons.Default.Call, contentDescription = null)
@@ -1791,7 +1819,7 @@ private fun CompletedOrdersScreen(
                             ) {
                                 Text(
                                     if (order.status == OrderStatus.CANCELED) "已取消" else "MOP ${order.totalAmountMop}",
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = if (order.status == OrderStatus.CANCELED) Color(0xFFB3261E) else Color(0xFF8A5A00),
                                     fontWeight = FontWeight.Bold,
@@ -1835,7 +1863,7 @@ private fun CompletedOrdersScreen(
                 OutlinedButton(
                     onClick = onLoadMore,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(14.dp),
                 ) {
                     Text(if (uiState.isLoadingCompletedOrders) "載入中..." else "載入更多")
                 }
@@ -1893,21 +1921,21 @@ private fun HistoryChoiceChips(
 }
 
 @Composable
-private fun rememberGraceCancelSecondsLeft(pickedUpAt: String?, limitSeconds: Int = 180): Int {
-    if (pickedUpAt.isNullOrBlank()) return 0
-    var secondsLeft by remember(pickedUpAt) { mutableStateOf(computeGraceCancelSecondsLeft(pickedUpAt, limitSeconds)) }
-    LaunchedEffect(pickedUpAt) {
+private fun rememberGraceCancelSecondsLeft(startedAt: String?, limitSeconds: Int = 180): Int {
+    if (startedAt.isNullOrBlank()) return 0
+    var secondsLeft by remember(startedAt) { mutableStateOf(computeGraceCancelSecondsLeft(startedAt, limitSeconds)) }
+    LaunchedEffect(startedAt) {
         while (true) {
-            secondsLeft = computeGraceCancelSecondsLeft(pickedUpAt, limitSeconds)
+            secondsLeft = computeGraceCancelSecondsLeft(startedAt, limitSeconds)
             delay(1000)
         }
     }
     return secondsLeft
 }
 
-private fun computeGraceCancelSecondsLeft(pickedUpAt: String, limitSeconds: Int): Int {
+private fun computeGraceCancelSecondsLeft(startedAt: String, limitSeconds: Int): Int {
     return runCatching {
-        val started = OffsetDateTime.parse(pickedUpAt)
+        val started = OffsetDateTime.parse(startedAt)
         val elapsed = Duration.between(started, OffsetDateTime.now()).coerceAtLeast(Duration.ZERO).seconds.toInt()
         (limitSeconds - elapsed).coerceAtLeast(0)
     }.getOrDefault(0)
@@ -1944,7 +1972,7 @@ private fun ProfileScreen(
         }
         item {
             Card(
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 border = BorderStroke(1.dp, Color(0xFFF0DFC0))
             ) {
@@ -1967,7 +1995,7 @@ private fun ProfileScreen(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     SummaryCard(title = "範圍收入", value = "MOP $filteredTotal", modifier = Modifier.weight(1f))
                     SummaryCard(title = "筆數", value = "${filteredEarnings.size}", modifier = Modifier.weight(1f))

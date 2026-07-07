@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { createServiceRoleSupabaseClient } from "../../../../../../lib/supabase";
@@ -90,15 +90,25 @@ export async function POST(
     return NextResponse.json({ message: "Order not found." }, { status: 404 });
   }
 
-  // Ensure assignment exists for non-accept transitions
+  let assignment:
+    | {
+        id: string;
+        driver_id: string;
+        canceled_at: string | null;
+        accepted_at: string | null;
+      }
+    | null = null;
+
   if (body.eventType !== "accepted") {
-    const { data: assignment } = await supabase
+    const { data } = await supabase
       .from("order_assignments")
-      .select("driver_id,canceled_at")
+      .select("id,driver_id,canceled_at,accepted_at")
       .eq("order_id", params.orderId)
       .order("assigned_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    assignment = data as typeof assignment;
 
     if (!assignment || assignment.canceled_at) {
       return NextResponse.json(
@@ -125,21 +135,25 @@ export async function POST(
         );
       }
 
-      if (order.status === "new") {
-        await supabase.from("order_assignments").insert({
-          order_id: params.orderId,
-          driver_id: verified.driverId,
-          accepted_at: now
-        });
-        await supabase.from("orders").update({ status: "accepted", updated_at: now }).eq("id", params.orderId);
-        await supabase.from("order_events").insert({
-          order_id: params.orderId,
-          event_type: "accepted",
-          actor_type: "driver",
-          actor_driver_id: verified.driverId,
-          payload: { note: "騎手已接單" }
-        });
-      }
+      await supabase
+        .from("order_assignments")
+        .update({ canceled_at: now })
+        .eq("order_id", params.orderId)
+        .is("canceled_at", null);
+
+      await supabase.from("order_assignments").insert({
+        order_id: params.orderId,
+        driver_id: verified.driverId,
+        accepted_at: now
+      });
+      await supabase.from("orders").update({ status: "accepted", updated_at: now }).eq("id", params.orderId);
+      await supabase.from("order_events").insert({
+        order_id: params.orderId,
+        event_type: "accepted",
+        actor_type: "driver",
+        actor_driver_id: verified.driverId,
+        payload: { note: "騎手已接單" }
+      });
     }
 
     if (body.eventType === "picked_up") {
@@ -201,90 +215,31 @@ export async function POST(
         note: "騎手取消配送"
       };
 
-      if (order.status === "picked_up") {
-        const { data: pickedUpEvent } = await supabase
-          .from("order_events")
-          .select("created_at")
-          .eq("order_id", params.orderId)
-          .eq("event_type", "picked_up")
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      const isUrgent =
+        order.source_payload &&
+        typeof order.source_payload === "object" &&
+        typeof (order.source_payload as Record<string, unknown>).priceRaisedAt === "string" &&
+        Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt);
 
-        const canGraceRelease =
-          body.action === "grace_release" &&
-          typeof pickedUpEvent?.created_at === "string" &&
-          Date.now() - new Date(pickedUpEvent.created_at).getTime() <= 3 * 60 * 1000;
+      if (body.action === "grace_release") {
+        const withinGrace =
+          typeof assignment?.accepted_at === "string" &&
+          Date.now() - new Date(assignment.accepted_at).getTime() <= 3 * 60 * 1000;
+        const canRelease =
+          withinGrace &&
+          !["picked_up", "arrived_customer", "delivered", "canceled"].includes(order.status);
 
-        if (canGraceRelease) {
-          const { data: latestAssignment } = await supabase
-            .from("order_assignments")
-            .select("id")
-            .eq("order_id", params.orderId)
-            .eq("driver_id", verified.driverId)
-            .is("canceled_at", null)
-            .order("assigned_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (latestAssignment?.id) {
-            await supabase
-              .from("order_assignments")
-              .update({ canceled_at: now })
-              .eq("id", latestAssignment.id);
-          }
-
-          await supabase.from("orders").update({ status: "new", updated_at: now }).eq("id", params.orderId);
-
-          const isUrgent =
-            order.source_payload &&
-            typeof order.source_payload === "object" &&
-            typeof (order.source_payload as Record<string, unknown>).priceRaisedAt === "string" &&
-            Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt);
-
-          await sendPushToOnlineDrivers({
-            title: isUrgent ? "有急單呀, 快D睇下" : "有新訂單可接",
-            body: `訂單已重新釋出，配送費 MOP ${order.assigned_fee_mop ?? 0}。`,
-            soundKey: isUrgent ? "urgent_order" : "new_order",
-            data: {
-              type: "new_order",
-              externalOrderId: order.external_order_id,
-              urgent: String(isUrgent),
-              deliveryFeeMop: String(order.assigned_fee_mop ?? 0),
-              playSound: "false"
-            }
-          }).catch(() => undefined);
-        } else {
-          await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
-        }
-      } else if (order.status === "arrived_customer") {
-        await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
-      } else {
-        const { data: latestAssignment } = await supabase
-          .from("order_assignments")
-          .select("id")
-          .eq("order_id", params.orderId)
-          .eq("driver_id", verified.driverId)
-          .is("canceled_at", null)
-          .order("assigned_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (latestAssignment?.id) {
-          await supabase
-            .from("order_assignments")
-            .update({ canceled_at: now })
-            .eq("id", latestAssignment.id);
+        if (!canRelease) {
+          return NextResponse.json(
+            { message: "Grace cancel window expired or order already picked up." },
+            { status: 409 }
+          );
         }
 
+        if (assignment?.id) {
+          await supabase.from("order_assignments").update({ canceled_at: now }).eq("id", assignment.id);
+        }
         await supabase.from("orders").update({ status: "new", updated_at: now }).eq("id", params.orderId);
-
-        const isUrgent =
-          order.source_payload &&
-          typeof order.source_payload === "object" &&
-          typeof (order.source_payload as Record<string, unknown>).priceRaisedAt === "string" &&
-          Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt);
-
         await sendPushToOnlineDrivers({
           title: isUrgent ? "有急單呀, 快D睇下" : "有新訂單可接",
           body: `訂單已重新釋出，配送費 MOP ${order.assigned_fee_mop ?? 0}。`,
@@ -297,33 +252,58 @@ export async function POST(
             playSound: "false"
           }
         }).catch(() => undefined);
+        await supabase.from("order_events").insert({
+          order_id: params.orderId,
+          event_type: "issue_reported",
+          actor_type: "driver",
+          actor_driver_id: verified.driverId,
+          payload: { ...cancelPayload, cancel_reason: "grace_release", note: "騎手 3 分鐘內取消接單並釋出" }
+        });
+      } else if (order.status === "arrived_customer" || order.status === "picked_up") {
+        await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
+        await supabase.from("order_events").insert({
+          order_id: params.orderId,
+          event_type: "issue_reported",
+          actor_type: "driver",
+          actor_driver_id: verified.driverId,
+          payload: cancelPayload
+        });
+      } else {
+        if (assignment?.id) {
+          await supabase.from("order_assignments").update({ canceled_at: now }).eq("id", assignment.id);
+        }
+        await supabase.from("orders").update({ status: "new", updated_at: now }).eq("id", params.orderId);
+        await sendPushToOnlineDrivers({
+          title: isUrgent ? "有急單呀, 快D睇下" : "有新訂單可接",
+          body: `訂單已重新釋出，配送費 MOP ${order.assigned_fee_mop ?? 0}。`,
+          soundKey: isUrgent ? "urgent_order" : "new_order",
+          data: {
+            type: "new_order",
+            externalOrderId: order.external_order_id,
+            urgent: String(isUrgent),
+            deliveryFeeMop: String(order.assigned_fee_mop ?? 0),
+            playSound: "false"
+          }
+        }).catch(() => undefined);
+        await supabase.from("order_events").insert({
+          order_id: params.orderId,
+          event_type: "issue_reported",
+          actor_type: "driver",
+          actor_driver_id: verified.driverId,
+          payload: cancelPayload
+        });
       }
-
-      await supabase.from("order_events").insert({
-        order_id: params.orderId,
-        event_type: "issue_reported",
-        actor_type: "driver",
-        actor_driver_id: verified.driverId,
-        payload: cancelPayload
-      });
     }
 
     const shouldDispatchCancelCallback =
       body.eventType !== "canceled" ||
-      order.status === "arrived_customer" ||
-      (order.status === "picked_up" && body.action !== "grace_release");
+      ((order.status === "picked_up" || order.status === "arrived_customer") && body.action !== "grace_release");
 
     const callbackResult = shouldDispatchCancelCallback
       ? await dispatchOrderCallback({
           orderId: params.orderId,
-          eventType:
-            body.eventType === "canceled"
-              ? "canceled"
-              : body.eventType,
-          note:
-            body.eventType === "canceled"
-              ? body.cancelReason ?? body.note
-              : body.note,
+          eventType: body.eventType === "canceled" ? "canceled" : body.eventType,
+          note: body.eventType === "canceled" ? body.cancelReason ?? body.note : body.note,
           action: body.action
         } as any)
       : { success: true, skipped: true };
