@@ -327,6 +327,27 @@ class DriverViewModel(
         }
     }
 
+
+    fun confirmOrderCanceled(orderId: String) {
+        viewModelScope.launch {
+            when (val result = repository.confirmOrderCanceled(orderId)) {
+                is ApiResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            orders = it.orders.filterNot { order -> order.id == orderId },
+                            errorMessage = "已確認取消。",
+                        )
+                    }
+                    refreshDashboard()
+                }
+                is ApiResult.Failure -> {
+                    _uiState.update { it.copy(errorMessage = result.message) }
+                    refreshDashboard()
+                }
+            }
+        }
+    }
+
     fun viewProof(orderId: String) {
         _uiState.update { it.copy(proofViewerOrderId = orderId, proofViewerBytes = null, proofViewerLoading = true) }
         viewModelScope.launch {

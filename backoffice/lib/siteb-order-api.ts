@@ -368,8 +368,6 @@ export async function cancelOrderByExternalId(
     requestedAt: requestedAt ?? nowIso()
   });
 
-  await cancelActiveAssignments(order.id as string);
-
   if (assignment?.driver_id) {
     void sendPushToDriver(assignment.driver_id, {
       title: shouldPlayCancelSound ? "訂單已取消" : "",
@@ -378,7 +376,8 @@ export async function cancelOrderByExternalId(
       data: {
         type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
         externalOrderId,
-        ...(shouldPlayCancelSound ? { playSound: "true" } : {})
+        ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
+        requireCancelConfirm: "true"
       }
     }).catch(() => undefined);
   }
@@ -390,7 +389,8 @@ export async function cancelOrderByExternalId(
     data: {
       type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
       externalOrderId,
-      ...(shouldPlayCancelSound ? { playSound: "true" } : {})
+      ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
+        requireCancelConfirm: "true"
     }
   }).catch(() => undefined);
 
@@ -466,10 +466,13 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     .limit(1)
     .maybeSingle();
 
+  const withinGrace = await isWithinThreeMinuteGrace(order.id as string);
+
   const shouldPlayCancelSound =
     order.status === "picked_up" ||
     order.status === "arrived_customer" ||
-    (order.status === "accepted" && await isWithinThreeMinuteGrace(order.id as string));
+    withinGrace ||
+    order.status === "accepted";
 
   if (order.status !== "canceled") {
     const canceledAt = nowIso();
@@ -501,8 +504,6 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     });
   }
 
-  await cancelActiveAssignments(order.id as string);
-
   if (assignment?.driver_id) {
     void sendPushToDriver(assignment.driver_id, {
       title: shouldPlayCancelSound ? "訂單已取消" : "",
@@ -511,7 +512,8 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
       data: {
         type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
         externalOrderId: order.external_order_id,
-        ...(shouldPlayCancelSound ? { playSound: "true" } : {})
+        ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
+        requireCancelConfirm: "true"
       }
     }).catch(() => undefined);
   }
@@ -523,7 +525,8 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     data: {
       type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
       externalOrderId: order.external_order_id,
-      ...(shouldPlayCancelSound ? { playSound: "true" } : {})
+      ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
+        requireCancelConfirm: "true"
     }
   }).catch(() => undefined);
 

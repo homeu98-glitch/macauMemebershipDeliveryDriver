@@ -11,7 +11,8 @@ type DriverEventType =
   | "picked_up"
   | "delivered"
   | "exception_reported"
-  | "canceled";
+  | "canceled"
+  | "cancel_confirmed";
 
 type AssignmentRow = {
   id: string;
@@ -127,6 +128,19 @@ export async function POST(
   const now = new Date().toISOString();
 
   try {
+    if (body.eventType === "cancel_confirmed") {
+      if (assignment?.id) {
+        await supabase.from("order_assignments").update({ canceled_at: now }).eq("id", assignment.id);
+      }
+      await supabase.from("order_events").insert({
+        order_id: params.orderId,
+        event_type: "driver_confirmed_cancel",
+        actor_type: "driver",
+        actor_driver_id: verified.driverId,
+        payload: { note: "騎手已確認訂單取消" }
+      });
+    }
+
     if (body.eventType === "accepted") {
       if (order.status !== "new") {
         return NextResponse.json(

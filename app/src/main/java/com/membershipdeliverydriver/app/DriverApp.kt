@@ -291,6 +291,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onProofSelected = viewModel::uploadProofOfDelivery,
                     onCancelOrder = viewModel::cancelOrder,
                     onGraceCancel = viewModel::cancelPickedUpWithinGrace,
+                    onConfirmCanceled = viewModel::confirmOrderCanceled,
                 )
             }
             composable(Routes.Completed) {
@@ -832,6 +833,7 @@ private fun OrdersScreen(
     onProofSelected: (String, Uri) -> Unit,
     onCancelOrder: (String, String, String?, com.membershipdeliverydriver.app.core.CancelHandling) -> Unit,
     onGraceCancel: (String) -> Unit,
+    onConfirmCanceled: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val pullRefreshState = rememberPullRefreshState(
@@ -937,6 +939,7 @@ private fun OrdersScreen(
                         completionOrderId = order.id
                     },
                     onGraceCancel = { onGraceCancel(order.id) },
+                    onConfirmCanceled = { onConfirmCanceled(order.id) },
                     onCancelOrder = {
                         cancelOrderId = order.id
                         cancelReason = "臨時有事無法配送"
@@ -1192,6 +1195,7 @@ private fun ActiveOrderCard(
     onMarkPickedUp: () -> Unit,
     onCompleteOrder: () -> Unit,
     onGraceCancel: () -> Unit,
+    onConfirmCanceled: () -> Unit,
     onCancelOrder: () -> Unit,
 ) {
     Card(
@@ -1288,30 +1292,28 @@ private fun ActiveOrderCard(
                     when (order.cancelHandling) {
                         com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP -> "已取消配送，請把商品退回商戶。"
                         com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING -> "已取消配送且不退回，需由商戶端處理。"
-                        null -> "已取消配送。"
+                        null -> "訂單已被商戶取消。"
                     },
                     color = if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFB3261E) else Color(0xFF8A5A00),
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Text(
-                    "訂單會在商戶確認取消後自動結束並移到已完成紀錄。",
-                    color = Color(0xFF607286),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+
                 Button(
-                    onClick = {
-                        if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) {
-                            onNavigateToShop()
-                        }
-                    },
-                    enabled = order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP,
+                    onClick = onConfirmCanceled,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFD32F2F) else MaterialTheme.colorScheme.primary
-                    )
+                    shape = RoundedCornerShape(18.dp),
                 ) {
-                    Text(if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) "導航退回商戶" else "等待商戶處理")
+                    Text("確認已取消")
+                }
+
+                if (order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) {
+                    OutlinedButton(
+                        onClick = onNavigateToShop,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                    ) {
+                        Text("導航退回商戶")
+                    }
                 }
             } else if (order.status == OrderStatus.HEADING_TO_SHOP || order.status == OrderStatus.ASSIGNED) {
                 Button(

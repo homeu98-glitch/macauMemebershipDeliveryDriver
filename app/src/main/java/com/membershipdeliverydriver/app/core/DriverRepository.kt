@@ -48,6 +48,7 @@ interface DriverRepository {
         handling: CancelHandling,
     ): ApiResult<Order>
     suspend fun cancelPickedUpWithinGrace(orderId: String): ApiResult<Unit>
+    suspend fun confirmOrderCanceled(orderId: String): ApiResult<Unit>
     suspend fun reportIssue(orderId: String, note: String): ApiResult<Order>
     suspend fun logout()
 }
@@ -274,6 +275,22 @@ class SupabaseDriverRepository : DriverRepository {
             ApiResult.Success(Unit)
         } catch (error: Exception) {
             ApiResult.Failure(error.message ?: "取消訂單失敗。")
+        }
+    }
+
+
+    override suspend fun confirmOrderCanceled(orderId: String): ApiResult<Unit> = withContext(Dispatchers.IO) {
+        val token = ensureActiveAccessToken() ?: return@withContext ApiResult.Failure("請先登入。")
+        try {
+            postOrderStatusAndCallback(
+                orderId = orderId,
+                accessToken = token,
+                payload = JSONObject().put("eventType", "cancel_confirmed"),
+            )
+            cachedOrders = cachedOrders.filterNot { it.id == orderId }
+            ApiResult.Success(Unit)
+        } catch (error: Exception) {
+            ApiResult.Failure(error.message ?: "確認取消失敗。")
         }
     }
 
@@ -559,6 +576,15 @@ class SupabaseDriverRepository : DriverRepository {
                 payload = JSONObject().put("eventType", "accepted"),
             )
             val now = OffsetDateTime.now().toString()
+
+            val refreshedAlways = loadOrders()
+            val refreshedAlwaysOrder = refreshedAlways.firstOrNull { it.id == orderId }
+            if (refreshedAlwaysOrder != null) {
+                cachedAvailableOrders = cachedAvailableOrders.filterNot { it.id == orderId }
+                cachedOrders = refreshedAlways
+                return@withContext ApiResult.Success(refreshedAlwaysOrder, warning)
+            }
+
 
             val acceptedOrder = (cachedAvailableOrders.firstOrNull { it.id == orderId } ?: cachedOrders.firstOrNull { it.id == orderId })
                 ?.copy(status = OrderStatus.HEADING_TO_SHOP, acceptedAt = now)
