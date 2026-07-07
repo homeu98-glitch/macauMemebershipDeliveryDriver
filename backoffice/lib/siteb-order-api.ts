@@ -466,7 +466,8 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
       soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
       data: {
         type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
-        externalOrderId: order.external_order_id
+        externalOrderId: order.external_order_id,
+        ...(shouldPlayCancelSound ? { playSound: "true" } : {})
       }
     }).catch(() => undefined);
   }
@@ -477,7 +478,8 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
     data: {
       type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
-      externalOrderId: order.external_order_id
+      externalOrderId: order.external_order_id,
+      ...(shouldPlayCancelSound ? { playSound: "true" } : {})
     }
   }).catch(() => undefined);
 
@@ -624,7 +626,8 @@ export async function raiseOrderPriceByExternalId(
       externalOrderId,
       urgent: "true",
       deliveryFeeMop: String(normalizeMoney(newDeliveryFeeMop)),
-      raiseReason: reason
+      raiseReason: reason,
+      playSound: "true"
     }
   };
 

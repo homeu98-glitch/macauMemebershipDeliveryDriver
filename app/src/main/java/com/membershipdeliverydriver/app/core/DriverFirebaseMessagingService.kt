@@ -41,6 +41,7 @@ class DriverFirebaseMessagingService : FirebaseMessagingService() {
 
         val soundKey = message.data["soundKey"]
         val updateType = message.data["type"]
+        val shouldPlaySound = message.data["playSound"] == "true"
 
         if (updateType == "order_invalidated") {
             sendBroadcast(Intent(ACTION_ORDER_UPDATED))
@@ -77,6 +78,13 @@ class DriverFirebaseMessagingService : FirebaseMessagingService() {
             (System.currentTimeMillis() % 100000).toInt(),
             notification
         )
+
+        if (shouldPlaySound) {
+            when (soundKey) {
+                DriverNotifications.SOUND_URGENT_ORDER -> DriverSoundEffects.playUrgentOrder(applicationContext)
+                DriverNotifications.SOUND_ORDER_CANCELLED -> DriverSoundEffects.playOrderCancelled(applicationContext)
+            }
+        }
 
         sendBroadcast(Intent(ACTION_ORDER_UPDATED))
     }

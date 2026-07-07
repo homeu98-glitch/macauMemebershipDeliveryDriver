@@ -47,6 +47,7 @@ interface DriverRepository {
         otherReason: String?,
         handling: CancelHandling,
     ): ApiResult<Order>
+    suspend fun cancelPickedUpWithinGrace(orderId: String): ApiResult<Unit>
     suspend fun reportIssue(orderId: String, note: String): ApiResult<Order>
     suspend fun logout()
 }
@@ -254,6 +255,23 @@ class SupabaseDriverRepository : DriverRepository {
             } else {
                 ApiResult.Failure("找不到訂單。")
             }
+        } catch (error: Exception) {
+            ApiResult.Failure(error.message ?: "取消訂單失敗。")
+        }
+    }
+
+    override suspend fun cancelPickedUpWithinGrace(orderId: String): ApiResult<Unit> = withContext(Dispatchers.IO) {
+        val token = ensureActiveAccessToken() ?: return@withContext ApiResult.Failure("請先登入。")
+        try {
+            postOrderStatusAndCallback(
+                orderId = orderId,
+                accessToken = token,
+                payload = JSONObject()
+                    .put("eventType", "canceled")
+                    .put("action", "grace_release"),
+            )
+            cachedOrders = cachedOrders.filterNot { it.id == orderId }
+            ApiResult.Success(Unit)
         } catch (error: Exception) {
             ApiResult.Failure(error.message ?: "取消訂單失敗。")
         }

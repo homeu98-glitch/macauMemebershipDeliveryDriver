@@ -307,6 +307,26 @@ class DriverViewModel(
         }
     }
 
+    fun cancelPickedUpWithinGrace(orderId: String) {
+        viewModelScope.launch {
+            when (val result = repository.cancelPickedUpWithinGrace(orderId)) {
+                is ApiResult.Success -> {
+                    _uiState.update {
+                        it.copy(
+                            orders = it.orders.filterNot { order -> order.id == orderId },
+                            errorMessage = "已取消並釋出訂單，其他騎手可重新接單。",
+                        )
+                    }
+                    refreshDashboard()
+                }
+                is ApiResult.Failure -> {
+                    _uiState.update { it.copy(errorMessage = result.message) }
+                    refreshDashboard()
+                }
+            }
+        }
+    }
+
     fun viewProof(orderId: String) {
         _uiState.update { it.copy(proofViewerOrderId = orderId, proofViewerBytes = null, proofViewerLoading = true) }
         viewModelScope.launch {

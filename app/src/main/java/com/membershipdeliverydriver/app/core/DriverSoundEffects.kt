@@ -10,6 +10,14 @@ object DriverSoundEffects {
         play(context, R.raw.sound_new_order)
     }
 
+    fun playUrgentOrder(context: Context) {
+        play(context, R.raw.sound_urgent_order)
+    }
+
+    fun playOrderCancelled(context: Context) {
+        play(context, R.raw.sound_order_cancelled)
+    }
+
     fun playOrderOverdue(context: Context) {
         play(context, R.raw.sound_order_overdue)
     }

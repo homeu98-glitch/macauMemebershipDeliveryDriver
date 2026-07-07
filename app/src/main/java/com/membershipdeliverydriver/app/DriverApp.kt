@@ -290,6 +290,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onMarkPickedUp = viewModel::markOrderPickedUp,
                     onProofSelected = viewModel::uploadProofOfDelivery,
                     onCancelOrder = viewModel::cancelOrder,
+                    onGraceCancel = viewModel::cancelPickedUpWithinGrace,
                 )
             }
             composable(Routes.Completed) {
@@ -830,6 +831,7 @@ private fun OrdersScreen(
     onMarkPickedUp: (String) -> Unit,
     onProofSelected: (String, Uri) -> Unit,
     onCancelOrder: (String, String, String?, com.membershipdeliverydriver.app.core.CancelHandling) -> Unit,
+    onGraceCancel: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val pullRefreshState = rememberPullRefreshState(
@@ -934,6 +936,7 @@ private fun OrdersScreen(
                     onCompleteOrder = {
                         completionOrderId = order.id
                     },
+                    onGraceCancel = { onGraceCancel(order.id) },
                     onCancelOrder = {
                         cancelOrderId = order.id
                         cancelReason = "臨時有事無法配送"
@@ -1163,6 +1166,7 @@ private fun ActiveOrderCard(
     onCallCustomer: () -> Unit,
     onMarkPickedUp: () -> Unit,
     onCompleteOrder: () -> Unit,
+    onGraceCancel: () -> Unit,
     onCancelOrder: () -> Unit,
 ) {
     Card(
@@ -1302,15 +1306,40 @@ private fun ActiveOrderCard(
                     Text("拍照後完成訂單")
                 }
             }
-            OutlinedButton(
-                onClick = onCancelOrder,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = order.status != OrderStatus.DELIVERED,
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB3261E)),
-                border = BorderStroke(1.dp, Color(0xFFE58A8A))
-            ) {
-                Text("取消訂單")
+            val graceSecondsLeft = rememberGraceCancelSecondsLeft(order.pickedUpAt)
+            if (order.status == OrderStatus.PICKED_UP && graceSecondsLeft > 0) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color(0xFFFFEFEF),
+                    border = BorderStroke(1.dp, Color(0xFFE6B7B7)),
+                ) {
+                    Text(
+                        "可在 ${formatGraceCountdown(graceSecondsLeft)} 內取消並釋出回首頁（無需填寫原因）",
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                        color = Color(0xFFB3261E),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Button(
+                    onClick = onGraceCancel,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                ) {
+                    Text("立即取消並釋出")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = onCancelOrder,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = order.status != OrderStatus.DELIVERED,
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFB3261E)),
+                    border = BorderStroke(1.dp, Color(0xFFE58A8A))
+                ) {
+                    Text("取消訂單")
+                }
             }
         }
     }
@@ -1861,6 +1890,33 @@ private fun HistoryChoiceChips(
             )
         }
     }
+}
+
+@Composable
+private fun rememberGraceCancelSecondsLeft(pickedUpAt: String?, limitSeconds: Int = 180): Int {
+    if (pickedUpAt.isNullOrBlank()) return 0
+    var secondsLeft by remember(pickedUpAt) { mutableStateOf(computeGraceCancelSecondsLeft(pickedUpAt, limitSeconds)) }
+    LaunchedEffect(pickedUpAt) {
+        while (true) {
+            secondsLeft = computeGraceCancelSecondsLeft(pickedUpAt, limitSeconds)
+            delay(1000)
+        }
+    }
+    return secondsLeft
+}
+
+private fun computeGraceCancelSecondsLeft(pickedUpAt: String, limitSeconds: Int): Int {
+    return runCatching {
+        val started = OffsetDateTime.parse(pickedUpAt)
+        val elapsed = Duration.between(started, OffsetDateTime.now()).coerceAtLeast(Duration.ZERO).seconds.toInt()
+        (limitSeconds - elapsed).coerceAtLeast(0)
+    }.getOrDefault(0)
+}
+
+private fun formatGraceCountdown(secondsLeft: Int): String {
+    val minutes = secondsLeft / 60
+    val seconds = secondsLeft % 60
+    return "%d:%02d".format(minutes, seconds)
 }
 
 @Composable

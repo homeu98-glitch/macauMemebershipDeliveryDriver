@@ -201,7 +201,63 @@ export async function POST(
         note: "騎手取消配送"
       };
 
-      if (order.status === "picked_up" || order.status === "arrived_customer") {
+      if (order.status === "picked_up") {
+        const { data: pickedUpEvent } = await supabase
+          .from("order_events")
+          .select("created_at")
+          .eq("order_id", params.orderId)
+          .eq("event_type", "picked_up")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const canGraceRelease =
+          body.action === "grace_release" &&
+          typeof pickedUpEvent?.created_at === "string" &&
+          Date.now() - new Date(pickedUpEvent.created_at).getTime() <= 3 * 60 * 1000;
+
+        if (canGraceRelease) {
+          const { data: latestAssignment } = await supabase
+            .from("order_assignments")
+            .select("id")
+            .eq("order_id", params.orderId)
+            .eq("driver_id", verified.driverId)
+            .is("canceled_at", null)
+            .order("assigned_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (latestAssignment?.id) {
+            await supabase
+              .from("order_assignments")
+              .update({ canceled_at: now })
+              .eq("id", latestAssignment.id);
+          }
+
+          await supabase.from("orders").update({ status: "new", updated_at: now }).eq("id", params.orderId);
+
+          const isUrgent =
+            order.source_payload &&
+            typeof order.source_payload === "object" &&
+            typeof (order.source_payload as Record<string, unknown>).priceRaisedAt === "string" &&
+            Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt);
+
+          await sendPushToOnlineDrivers({
+            title: isUrgent ? "有急單呀, 快D睇下" : "有新訂單可接",
+            body: `訂單已重新釋出，配送費 MOP ${order.assigned_fee_mop ?? 0}。`,
+            soundKey: isUrgent ? "urgent_order" : "new_order",
+            data: {
+              type: "new_order",
+              externalOrderId: order.external_order_id,
+              urgent: String(isUrgent),
+              deliveryFeeMop: String(order.assigned_fee_mop ?? 0),
+              playSound: "false"
+            }
+          }).catch(() => undefined);
+        } else {
+          await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
+        }
+      } else if (order.status === "arrived_customer") {
         await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
       } else {
         const { data: latestAssignment } = await supabase
@@ -237,7 +293,8 @@ export async function POST(
             type: "new_order",
             externalOrderId: order.external_order_id,
             urgent: String(isUrgent),
-            deliveryFeeMop: String(order.assigned_fee_mop ?? 0)
+            deliveryFeeMop: String(order.assigned_fee_mop ?? 0),
+            playSound: "false"
           }
         }).catch(() => undefined);
       }
@@ -252,7 +309,9 @@ export async function POST(
     }
 
     const shouldDispatchCancelCallback =
-      body.eventType !== "canceled" || order.status === "picked_up" || order.status === "arrived_customer";
+      body.eventType !== "canceled" ||
+      order.status === "arrived_customer" ||
+      (order.status === "picked_up" && body.action !== "grace_release");
 
     const callbackResult = shouldDispatchCancelCallback
       ? await dispatchOrderCallback({
