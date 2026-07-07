@@ -670,6 +670,24 @@ private fun PendingApprovalScreen(
 
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
+private fun DebugMessageCard(message: String) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFFEEF4FF),
+        border = BorderStroke(1.dp, Color(0xFFB7CAE8))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text("Debug", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFF234A84))
+            Text(message, style = MaterialTheme.typography.bodySmall, color = Color(0xFF234A84))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
 private fun HomeScreen(
     uiState: com.membershipdeliverydriver.app.core.DriverAppState,
     onToggleAvailability: () -> Unit,
@@ -744,6 +762,9 @@ private fun HomeScreen(
                         )
                     }
                 }
+            }
+            uiState.debugMessage?.let { debugMessage ->
+                item { DebugMessageCard(debugMessage) }
             }
             item {
                 Row(
@@ -875,6 +896,9 @@ private fun OrdersScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            uiState.debugMessage?.let { debugMessage ->
+                item { DebugMessageCard(debugMessage) }
+            }
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1337,7 +1361,7 @@ private fun ActiveOrderCard(
                 }
             }
             val graceSecondsLeft = rememberGraceCancelSecondsLeft(order.acceptedAt)
-            if (order.status != OrderStatus.DELIVERED && order.status != OrderStatus.CANCELED && graceSecondsLeft > 0) {
+            if ((order.status == OrderStatus.HEADING_TO_SHOP || order.status == OrderStatus.ASSIGNED) && graceSecondsLeft > 0) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = Color(0xFFFFEFEF),
@@ -1923,7 +1947,7 @@ private fun HistoryChoiceChips(
 }
 
 @Composable
-private fun rememberGraceCancelSecondsLeft(startedAt: String?, limitSeconds: Int = 180): Int {
+private fun rememberGraceCancelSecondsLeft(startedAt: String?, limitSeconds: Int = 30): Int {
     if (startedAt.isNullOrBlank()) return 0
     var secondsLeft by remember(startedAt) { mutableStateOf(computeGraceCancelSecondsLeft(startedAt, limitSeconds)) }
     LaunchedEffect(startedAt) {

@@ -87,7 +87,7 @@ data class Order(
     val totalAmountMop: Double,
     val items: List<OrderItem>,
     val acceptedAt: String? = null,
-    val paymentTag: String = "Paid by Customer",
+    val paymentTag: String = "客人支付",
     val pickedUpAt: String? = null,
     val deliveredAt: String? = null,
     val proofOfDeliveryUri: Uri? = null,
@@ -148,6 +148,7 @@ data class DriverAppState(
     val proofViewerLoading: Boolean = false,
     val earningsFilter: HistoryRange = HistoryRange.TODAY,
     val errorMessage: String? = null,
+    val debugMessage: String? = null,
 )
 
 data class PagedOrdersResult(

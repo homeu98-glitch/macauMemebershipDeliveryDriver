@@ -64,7 +64,7 @@ async function isWithinThreeMinuteGrace(orderId: string) {
     .limit(1)
     .maybeSingle();
 
-  return typeof assignment?.accepted_at === "string" && Date.now() - new Date(assignment.accepted_at).getTime() <= 3 * 60 * 1000;
+  return typeof assignment?.accepted_at === "string" && Date.now() - new Date(assignment.accepted_at).getTime() <= 30 * 1000;
 }
 
 async function cancelActiveAssignments(orderId: string) {

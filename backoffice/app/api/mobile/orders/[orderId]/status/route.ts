@@ -240,7 +240,7 @@ export async function POST(
       if (body.action === "grace_release") {
         const withinGrace =
           typeof assignment?.accepted_at === "string" &&
-          Date.now() - new Date(assignment.accepted_at).getTime() <= 3 * 60 * 1000;
+          Date.now() - new Date(assignment.accepted_at).getTime() <= 30 * 1000;
         const canRelease =
           withinGrace &&
           !["delivered", "canceled"].includes(order.status);

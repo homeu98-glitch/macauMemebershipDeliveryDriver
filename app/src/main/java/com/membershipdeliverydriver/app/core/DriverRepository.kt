@@ -1364,10 +1364,10 @@ class SupabaseDriverRepository : DriverRepository {
         val noteText = (orderJson.optString("offline_payment_note", "") + " " + notes?.optString("shopNote", "")).lowercase()
 
         return when {
-            explicitValue in setOf("shop", "merchant", "prepaid", "paid_by_shop", "shop_paid") -> "Paid by Shop"
-            explicitValue in setOf("customer", "cod", "cash", "paid_by_customer", "customer_paid") -> "Paid by Customer"
-            "已線上付款" in noteText || "paid by shop" in noteText || "prepaid" in noteText || "shop paid" in noteText || "商戶支付" in noteText || "店舖支付" in noteText -> "Paid by Shop"
-            else -> "Paid by Customer"
+            explicitValue in setOf("shop", "merchant", "prepaid", "paid_by_shop", "shop_paid") -> "商戶支付"
+            explicitValue in setOf("customer", "cod", "cash", "paid_by_customer", "customer_paid") -> "客人支付"
+            "已線上付款" in noteText || "paid by shop" in noteText || "prepaid" in noteText || "shop paid" in noteText || "商戶支付" in noteText || "店舖支付" in noteText -> "商戶支付"
+            else -> "客人支付"
         }
     }
 
