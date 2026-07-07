@@ -1,7 +1,9 @@
 package com.membershipdeliverydriver.app.core
 
 import android.content.Context
-import android.content.Intent
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import com.membershipdeliverydriver.app.BuildConfig
 import java.nio.charset.StandardCharsets
 import java.util.UUID
@@ -17,7 +19,8 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
 
 object DriverMqttManager {
-    const val ACTION_ORDER_UPDATED = "com.membershipdeliverydriver.app.ORDER_UPDATED"
+    private val _realtimeEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
+    val realtimeEvents: SharedFlow<Unit> = _realtimeEvents.asSharedFlow()
     private var client: MqttAsyncClient? = null
     private var activeDriverId: String? = null
 
@@ -125,6 +128,6 @@ object DriverMqttManager {
             }
         }
 
-        context.sendBroadcast(Intent(ACTION_ORDER_UPDATED))
+        _realtimeEvents.tryEmit(Unit)
     }
 }

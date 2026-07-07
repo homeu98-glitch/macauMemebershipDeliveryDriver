@@ -1,9 +1,7 @@
 package com.membershipdeliverydriver.app
 
 import android.Manifest
-import android.content.BroadcastReceiver
 import android.content.Intent
-import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
@@ -204,26 +202,10 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
         }
     }
 
-    DisposableEffect(uiState.currentDriver?.id, context) {
-        if (uiState.currentDriver == null) {
-            onDispose { }
-        } else {
-            val receiver = object : BroadcastReceiver() {
-                override fun onReceive(context: android.content.Context?, intent: Intent?) {
-                    if (intent?.action == com.membershipdeliverydriver.app.core.DriverMqttManager.ACTION_ORDER_UPDATED) {
-                        viewModel.onPushOrderUpdate()
-                    }
-                }
-            }
-            ContextCompat.registerReceiver(
-                context,
-                receiver,
-                IntentFilter(com.membershipdeliverydriver.app.core.DriverMqttManager.ACTION_ORDER_UPDATED),
-                ContextCompat.RECEIVER_NOT_EXPORTED,
-            )
-            onDispose {
-                runCatching { context.unregisterReceiver(receiver) }
-            }
+    LaunchedEffect(uiState.currentDriver?.id) {
+        if (uiState.currentDriver == null) return@LaunchedEffect
+        com.membershipdeliverydriver.app.core.DriverMqttManager.realtimeEvents.collect {
+            viewModel.onPushOrderUpdate()
         }
     }
 
