@@ -45,6 +45,10 @@ class DriverFirebaseMessagingService : FirebaseMessagingService() {
             message.data["playSound"] == "true" ||
                 soundKey == DriverNotifications.SOUND_URGENT_ORDER ||
                 soundKey == DriverNotifications.SOUND_ORDER_CANCELLED
+        DriverSessionStore.saveLastPushDebug(
+            applicationContext,
+            "FCM type=${updateType ?: "null"}, soundKey=${soundKey ?: "null"}, playSound=${message.data["playSound"] ?: "null"}, title=${message.data["title"] ?: message.notification?.title ?: "null"}"
+        )
 
         if (updateType == "order_invalidated") {
             sendBroadcast(Intent(ACTION_ORDER_UPDATED))

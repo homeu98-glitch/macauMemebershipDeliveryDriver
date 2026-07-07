@@ -7,6 +7,7 @@ object DriverSessionStore {
     private const val KEY_ACCESS_TOKEN = "access_token"
     private const val KEY_REFRESH_TOKEN = "refresh_token"
     private const val KEY_SAVED_AT = "saved_at"
+    private const val KEY_LAST_PUSH_DEBUG = "last_push_debug"
     private const val SESSION_TTL_MS = 24L * 60L * 60L * 1000L
 
     fun saveSession(context: Context, accessToken: String, refreshToken: String) {
@@ -51,12 +52,26 @@ object DriverSessionStore {
             .apply()
     }
 
+
+    fun saveLastPushDebug(context: Context, value: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_PUSH_DEBUG, value)
+            .apply()
+    }
+
+    fun getLastPushDebug(context: Context): String? {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_LAST_PUSH_DEBUG, null)
+    }
+
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)
             .remove(KEY_SAVED_AT)
+            .remove(KEY_LAST_PUSH_DEBUG)
             .apply()
     }
 }

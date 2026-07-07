@@ -1133,7 +1133,7 @@ private fun AvailableOrderCard(
                 ) {
                     if (order.isUrgent) {
                         Text(
-                            "NEW_URGENT",
+                            "急單",
                             color = Color(0xFFB3261E),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,

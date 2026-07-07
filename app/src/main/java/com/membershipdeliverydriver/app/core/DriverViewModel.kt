@@ -37,7 +37,8 @@ class DriverViewModel(
     }
 
     fun onPushOrderUpdate() {
-        setDebugMessage("收到推播更新，開始刷新訂單。")
+        val pushDebug = DriverSessionStore.getLastPushDebug(AppContextHolder.requireContext())
+        setDebugMessage(pushDebug ?: "收到推播更新，開始刷新訂單。")
         refreshDashboard()
     }
 
