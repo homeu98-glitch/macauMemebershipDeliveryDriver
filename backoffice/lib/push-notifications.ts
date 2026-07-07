@@ -10,7 +10,15 @@ const firebaseAdminMessaging = require("firebase-admin/messaging") as {
         priority?: string;
         ttl?: number;
       };
-    }) => Promise<{ successCount: number; failureCount: number }>;
+    }) => Promise<{
+      successCount: number;
+      failureCount: number;
+      responses: Array<{
+        success: boolean;
+        messageId?: string;
+        error?: { code?: string; message?: string };
+      }>;
+    }>;
   };
 };
 
@@ -25,6 +33,16 @@ type DriverPushTokenRow = {
   driver_id: string;
   fcm_token: string;
 };
+
+
+function maskToken(token: string) {
+  if (token.length <= 12) return token;
+  return `${token.slice(0, 8)}...${token.slice(-4)}`;
+}
+
+function logPush(event: string, payload: Record<string, unknown>) {
+  console.info(`[push] ${event} ${JSON.stringify(payload)}`);
+}
 
 async function loadDriverTokens(driverId?: string) {
   const supabase = createServiceRoleSupabaseClient();
@@ -49,29 +67,66 @@ export async function sendPushToDriver(driverId: string, payload: SendPushOption
   const rows = await loadDriverTokens(driverId);
   const tokens = [...new Set(rows.map((row) => row.fcm_token).filter(Boolean))];
   if (!tokens.length) {
-    return { successCount: 0, failureCount: 0, message: "No registered push tokens found." };
+    logPush("no_tokens", {
+      driverId,
+      title: payload.title,
+      soundKey: payload.soundKey ?? "new_order",
+      data: payload.data ?? null,
+    });
+    return { successCount: 0, failureCount: 0, message: "No registered push tokens found.", tokenCount: 0, tokenDebug: [] };
   }
 
   getFirebaseAdminApp();
   const messaging = firebaseAdminMessaging.getMessaging();
   const soundKey = payload.soundKey ?? "new_order";
+  const tokenDebug = tokens.map(maskToken);
+  const dataPayload = {
+    ...(payload.data ?? {}),
+    soundKey,
+    title: payload.title,
+    body: payload.body,
+  };
+
+  logPush("send_start", {
+    driverId,
+    tokenCount: tokens.length,
+    tokenDebug,
+    title: payload.title,
+    soundKey,
+    data: dataPayload,
+  });
+
   const result = await messaging.sendEachForMulticast({
     tokens,
-    data: {
-      ...(payload.data ?? {}),
-      soundKey,
-      title: payload.title,
-      body: payload.body,
-    },
+    data: dataPayload,
     android: {
       priority: "high",
       ttl: 24 * 60 * 60 * 1000,
     },
   });
 
+  const responseDebug = result.responses.map((response, index) => ({
+    token: tokenDebug[index],
+    success: response.success,
+    messageId: response.messageId,
+    errorCode: response.error?.code,
+    errorMessage: response.error?.message,
+  }));
+
+  logPush("send_result", {
+    driverId,
+    tokenCount: tokens.length,
+    successCount: result.successCount,
+    failureCount: result.failureCount,
+    responseDebug,
+  });
+
   return {
     successCount: result.successCount,
     failureCount: result.failureCount,
+    tokenCount: tokens.length,
+    tokenDebug,
+    responseDebug,
   };
 }
 
