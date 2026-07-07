@@ -281,32 +281,8 @@ export async function POST(
           actor_driver_id: verified.driverId,
           payload: { ...cancelPayload, cancel_reason: "grace_release", note: "騎手 3 分鐘內取消接單並釋出" }
         });
-      } else if (order.status === "arrived_customer" || order.status === "picked_up") {
-        await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
-        await supabase.from("order_events").insert({
-          order_id: params.orderId,
-          event_type: "issue_reported",
-          actor_type: "driver",
-          actor_driver_id: verified.driverId,
-          payload: cancelPayload
-        });
       } else {
-        if (assignment?.id) {
-          await supabase.from("order_assignments").delete().eq("id", assignment.id);
-        }
-        await supabase.from("orders").update({ status: "new", updated_at: now }).eq("id", params.orderId);
-        await sendPushToOnlineDrivers({
-          title: isUrgent ? "有急單呀, 快D睇下" : "有新訂單可接",
-          body: `訂單已重新釋出，配送費 MOP ${order.assigned_fee_mop ?? 0}。`,
-          soundKey: isUrgent ? "urgent_order" : "new_order",
-          data: {
-            type: "new_order",
-            externalOrderId: order.external_order_id,
-            urgent: String(isUrgent),
-            deliveryFeeMop: String(order.assigned_fee_mop ?? 0),
-            playSound: "false"
-          }
-        }).catch(() => undefined);
+        await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);
         await supabase.from("order_events").insert({
           order_id: params.orderId,
           event_type: "issue_reported",
@@ -318,8 +294,7 @@ export async function POST(
     }
 
     const shouldDispatchCancelCallback =
-      (body.eventType !== "canceled" && body.eventType !== "cancel_confirmed") ||
-      ((order.status === "picked_up" || order.status === "arrived_customer") && body.action !== "grace_release");
+      body.eventType !== "cancel_confirmed" && !(body.eventType === "canceled" && body.action === "grace_release");
 
     const callbackResult = shouldDispatchCancelCallback
       ? await dispatchOrderCallback({

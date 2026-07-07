@@ -287,18 +287,12 @@ class DriverViewModel(
                 is ApiResult.Success -> {
                     _uiState.update {
                         it.copy(
-                            orders =
-                                if (result.value.status == OrderStatus.CANCELED && result.value.pickedUpAt.isNullOrBlank()) {
-                                    it.orders.filterNot { order -> order.id == orderId }
-                                } else {
-                                    it.orders.replaceOrder(result.value)
-                                },
-                            errorMessage =
-                                if (result.value.status == OrderStatus.CANCELED && result.value.pickedUpAt.isNullOrBlank()) {
-                                    "已取消接單，訂單已重新釋出。"
-                                } else {
-                                    "已取消訂單。"
-                                },
+                            orders = it.orders.replaceOrder(result.value),
+                            errorMessage = if (result.value.status == OrderStatus.CANCELED) {
+                                "已提交取消，等待商戶確認。"
+                            } else {
+                                "已取消訂單。"
+                            },
                         )
                     }
                     result.warning?.let { warning ->
