@@ -569,7 +569,16 @@ class SupabaseDriverRepository : DriverRepository {
                     .sortedBy { it.etaMinutes }
                 ApiResult.Success(acceptedOrder, warning)
             } else {
-                ApiResult.Failure("已接單，但暫時無法更新畫面，請重新整理。")
+                // Fallback: refresh from server to avoid "accepted then disappeared" edge cases
+                val refreshed = loadOrders()
+                val refreshedOrder = refreshed.firstOrNull { it.id == orderId }
+                if (refreshedOrder != null) {
+                    cachedAvailableOrders = cachedAvailableOrders.filterNot { it.id == orderId }
+                    cachedOrders = refreshed
+                    ApiResult.Success(refreshedOrder, warning)
+                } else {
+                    ApiResult.Failure("已接單，但暫時無法更新畫面，請重新整理。")
+                }
             }
         } catch (error: Exception) {
             ApiResult.Failure(error.message ?: "接單失敗。")

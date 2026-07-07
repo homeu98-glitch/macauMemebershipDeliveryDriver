@@ -324,7 +324,12 @@ export async function cancelOrderByExternalId(
     return { found: false as const };
   }
 
-  if (["picked_up", "arrived_customer", "delivered"].includes(order.status)) {
+  if (order.status === "delivered") {
+    return { found: true as const, canceled: false as const, status: order.status as string };
+  }
+
+  const withinGrace = await isWithinThreeMinuteGrace(order.id as string);
+  if (["picked_up", "arrived_customer"].includes(order.status) && !withinGrace) {
     return { found: true as const, canceled: false as const, status: order.status as string };
   }
 
@@ -339,7 +344,8 @@ export async function cancelOrderByExternalId(
 
   const shouldPlayCancelSound =
     ["picked_up", "arrived_customer"].includes(order.status) ||
-    (order.status === "accepted" && await isWithinThreeMinuteGrace(order.id as string));
+    withinGrace ||
+    order.status === "accepted";
 
   const { error: updateError } = await supabase
     .from("orders")

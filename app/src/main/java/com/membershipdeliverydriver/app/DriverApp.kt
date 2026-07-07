@@ -1335,7 +1335,7 @@ private fun ActiveOrderCard(
                 }
             }
             val graceSecondsLeft = rememberGraceCancelSecondsLeft(order.acceptedAt)
-            if ((order.status == OrderStatus.PICKED_UP || order.status == OrderStatus.HEADING_TO_SHOP || order.status == OrderStatus.ASSIGNED) && graceSecondsLeft > 0) {
+            if (order.status != OrderStatus.DELIVERED && order.status != OrderStatus.CANCELED && graceSecondsLeft > 0) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = Color(0xFFFFEFEF),

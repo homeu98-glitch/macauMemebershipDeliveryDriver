@@ -227,11 +227,11 @@ export async function POST(
           Date.now() - new Date(assignment.accepted_at).getTime() <= 3 * 60 * 1000;
         const canRelease =
           withinGrace &&
-          !["picked_up", "arrived_customer", "delivered", "canceled"].includes(order.status);
+          !["delivered", "canceled"].includes(order.status);
 
         if (!canRelease) {
           return NextResponse.json(
-            { message: "Grace cancel window expired or order already picked up." },
+            { message: "Grace cancel window expired or order already completed." },
             { status: 409 }
           );
         }
