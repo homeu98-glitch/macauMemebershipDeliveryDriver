@@ -7,8 +7,8 @@ function stableUrls(request: Request) {
   const url = new URL(request.url);
   const origin = url.origin;
   return {
-    landingPageUrl: `${origin}/download/driver`,
-    stableDownloadUrl: `${origin}/download/driver/latest`
+    landingPageUrl: `${origin}/apkdownload`,
+    stableDownloadUrl: `${origin}/apkdownload/latest`
   };
 }
 

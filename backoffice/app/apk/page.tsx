@@ -31,8 +31,8 @@ export default function ApkManagerPage() {
   const [releaseNotes, setReleaseNotes] = useState("");
 
   const origin = useMemo(() => (typeof window === "undefined" ? "" : window.location.origin), []);
-  const fallbackLandingPageUrl = origin ? `${origin}/download/driver` : "";
-  const fallbackStableDownloadUrl = origin ? `${origin}/download/driver/latest` : "";
+  const fallbackLandingPageUrl = origin ? `${origin}/apkdownload` : "";
+  const fallbackStableDownloadUrl = origin ? `${origin}/apkdownload/latest` : "";
 
   const [landingPageUrl, setLandingPageUrl] = useState(fallbackLandingPageUrl);
   const [stableDownloadUrl, setStableDownloadUrl] = useState(fallbackStableDownloadUrl);
@@ -69,7 +69,7 @@ export default function ApkManagerPage() {
 
   useEffect(() => {
     async function updateQr() {
-      const url = stableDownloadUrl || fallbackStableDownloadUrl;
+      const url = landingPageUrl || fallbackLandingPageUrl;
       if (!url) return;
       const dataUrl = await QRCode.toDataURL(url, { margin: 1, width: 260 });
       setQrDataUrl(dataUrl);
@@ -151,12 +151,12 @@ export default function ApkManagerPage() {
 
         <div className="card" style={{ padding: 18, marginTop: 18 }}>
           <strong>QR Code</strong>
-          <div className="muted">掃描後會打開固定下載連結。</div>
+          <div className="muted">掃描後會先打開公開下載頁，再由車手按按鈕下載 APK。</div>
           {qrDataUrl ? (
             <div style={{ marginTop: 12, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
               <img src={qrDataUrl} alt="Driver APK QR" style={{ width: 220, height: 220, borderRadius: 14, border: "1px solid var(--panel-border)" }} />
               <div className="muted" style={{ maxWidth: 420 }}>
-                連結：<span className="code">{stableDownloadUrl}</span>
+                連結：<span className="code">{landingPageUrl}</span>
               </div>
             </div>
           ) : (
