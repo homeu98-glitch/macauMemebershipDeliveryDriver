@@ -14,7 +14,7 @@ const navItems = [
   { href: "/riders/applications", label: "騎手審核" },
   { href: "/riders", label: "騎手列表" },
   { href: "/orders", label: "訂單管理" },
-  { href: "/apk", label: "安裝設置", newTab: true },
+  { href: "/apk", label: "安裝設置" },
   { href: "/callbacks", label: "回調紀錄" },
   { href: "/settings", label: "系統設定" }
 ];
@@ -174,8 +174,6 @@ export function AppShell({
                 key={item.href}
                 className={`nav-link${active ? " active" : ""}`}
                 href={item.href}
-                target={item.newTab ? "_blank" : undefined}
-                rel={item.newTab ? "noreferrer" : undefined}
               >
                 <span>{item.label}</span>
                 <span className="muted">›</span>
