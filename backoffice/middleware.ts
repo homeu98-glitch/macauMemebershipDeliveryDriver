@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 const SESSION_COOKIE_NAME = "backoffice_session";
 
-const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/logout"];
+const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/logout", "/apkdownload"];
 
 function isPublicRoute(pathname: string) {
   return (
     PUBLIC_ROUTES.includes(pathname) ||
+    pathname.startsWith("/apkdownload") ||
     pathname.startsWith("/api/v1/") ||
     pathname.startsWith("/api/mobile/") ||
     pathname.startsWith("/_next") ||
