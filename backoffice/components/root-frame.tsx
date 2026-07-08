@@ -14,7 +14,7 @@ export function RootFrame({
 }) {
   const pathname = usePathname();
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname.startsWith("/download")) {
     return <>{children}</>;
   }
 
