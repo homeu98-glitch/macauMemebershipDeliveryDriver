@@ -1,11 +1,17 @@
 import Link from "next/link";
 
+import { getDriverAppDownloadConfig } from "../../../lib/app-release-config";
+
 export const metadata = {
   title: "Driver App Download",
   description: "Download the latest driver app APK."
 };
 
-export default function DriverDownloadPage() {
+export const dynamic = "force-dynamic";
+
+export default async function DriverDownloadPage() {
+  const config = await getDriverAppDownloadConfig().catch(() => null);
+
   return (
     <main
       style={{
@@ -29,11 +35,25 @@ export default function DriverDownloadPage() {
           Tap the button below to download the latest Android APK for delivery riders.
         </p>
 
-        <div className="btn-row" style={{ marginTop: 24 }}>
-          <a className="btn btn-primary" href="/download/driver/latest">
-            Download APK
-          </a>
-        </div>
+        {config ? (
+          <>
+            <div className="hint" style={{ marginTop: 20 }}>
+              <strong>Version:</strong> {config.version}
+              <br />
+              <strong>Notes:</strong> {config.releaseNotes}
+            </div>
+
+            <div className="btn-row" style={{ marginTop: 24 }}>
+              <a className="btn btn-primary" href="/download/driver/latest">
+                Download APK
+              </a>
+            </div>
+          </>
+        ) : (
+          <div className="error" style={{ marginTop: 20 }}>
+            APK download is not configured yet.
+          </div>
+        )}
 
         <div className="hint" style={{ marginTop: 18 }}>
           If Android blocks installation, open the downloaded file and allow installation from this browser or file manager.
