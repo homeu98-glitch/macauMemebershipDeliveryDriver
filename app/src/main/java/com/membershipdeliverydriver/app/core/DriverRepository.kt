@@ -1047,6 +1047,13 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
         return if (digits.startsWith("853")) digits else "853$digits"
     }
 
+    private fun nullableJsonText(obj: JSONObject, key: String): String? {
+        if (!obj.has(key) || obj.isNull(key)) return null
+        return obj.optString(key)
+            .trim()
+            .takeUnless { it.isBlank() || it.equals("null", ignoreCase = true) }
+    }
+
     private fun jsonArrayToMap(array: JSONArray, key: (JSONObject) -> String): Map<String, JSONObject> {
         val map = mutableMapOf<String, JSONObject>()
         for (index in 0 until array.length()) {
@@ -1384,7 +1391,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                         shop = LocationPoint(
                             label = shop.optString("name", "店舖"),
                             address = shop.optString("address", ""),
-                            district = shop.optString("district").ifBlank { null },
+                            district = nullableJsonText(shop, "district"),
                             latitude = shopLat,
                             longitude = shopLng,
                             contactName = shop.optString("contact_name", "店舖"),
@@ -1394,7 +1401,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                         customer = LocationPoint(
                             label = customer.optString("name", "客戶"),
                             address = customer.optString("address", ""),
-                            district = customer.optString("district").ifBlank { null },
+                            district = nullableJsonText(customer, "district"),
                             latitude = customer.optDouble("latitude", 0.0),
                             longitude = customer.optDouble("longitude", 0.0),
                             contactName = customer.optString("name", "客戶"),
