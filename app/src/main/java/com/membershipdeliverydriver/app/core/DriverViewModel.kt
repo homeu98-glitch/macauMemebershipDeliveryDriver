@@ -241,12 +241,28 @@ class DriverViewModel(
         _uiState.update { it.copy(updateInfo = null) }
     }
 
-    fun selectPickupDistrictFilter(value: String?) {
-        _uiState.update { it.copy(pickupDistrictFilter = value) }
+    fun selectPickupDistrictFilter(value: String) {
+        _uiState.update { state ->
+            val next = state.pickupDistrictFilter.toMutableSet()
+            if (!next.add(value)) next.remove(value)
+            state.copy(pickupDistrictFilter = next)
+        }
     }
 
-    fun selectDestinationDistrictFilter(value: String?) {
-        _uiState.update { it.copy(destinationDistrictFilter = value) }
+    fun clearPickupDistrictFilter() {
+        _uiState.update { it.copy(pickupDistrictFilter = emptySet()) }
+    }
+
+    fun selectDestinationDistrictFilter(value: String) {
+        _uiState.update { state ->
+            val next = state.destinationDistrictFilter.toMutableSet()
+            if (!next.add(value)) next.remove(value)
+            state.copy(destinationDistrictFilter = next)
+        }
+    }
+
+    fun clearDestinationDistrictFilter() {
+        _uiState.update { it.copy(destinationDistrictFilter = emptySet()) }
     }
 
 

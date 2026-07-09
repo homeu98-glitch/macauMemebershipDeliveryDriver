@@ -74,10 +74,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -324,7 +323,9 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onAcceptOrder = viewModel::acceptOrder,
                     onRefresh = viewModel::refreshDashboard,
                     onSelectPickupDistrict = viewModel::selectPickupDistrictFilter,
+                    onClearPickupDistrict = viewModel::clearPickupDistrictFilter,
                     onSelectDestinationDistrict = viewModel::selectDestinationDistrictFilter,
+                    onClearDestinationDistrict = viewModel::clearDestinationDistrictFilter,
                 )
             }
             composable(Routes.Orders) {
@@ -715,6 +716,7 @@ private fun PendingApprovalScreen(
     }
 }
 
+
 @OptIn(ExperimentalMaterialApi::class)
 @Composable
 private fun HomeScreen(
@@ -722,8 +724,10 @@ private fun HomeScreen(
     onToggleAvailability: () -> Unit,
     onAcceptOrder: (String) -> Unit,
     onRefresh: () -> Unit,
-    onSelectPickupDistrict: (String?) -> Unit,
-    onSelectDestinationDistrict: (String?) -> Unit,
+    onSelectPickupDistrict: (String) -> Unit,
+    onClearPickupDistrict: () -> Unit,
+    onSelectDestinationDistrict: (String) -> Unit,
+    onClearDestinationDistrict: () -> Unit,
 ) {
     val context = LocalContext.current
     val driver = uiState.currentDriver
@@ -731,27 +735,40 @@ private fun HomeScreen(
         refreshing = uiState.isRefreshing,
         onRefresh = onRefresh,
     )
-    var pickupExpanded by rememberSaveable { mutableStateOf(false) }
-    var destinationExpanded by rememberSaveable { mutableStateOf(false) }
+    var expandedFilter by rememberSaveable { mutableStateOf<String?>(null) }
 
     val destinationOptions = remember(uiState.availableOrders, uiState.pickupDistrictFilter) {
         uiState.availableOrders
-            .filter { order -> uiState.pickupDistrictFilter == null || order.shop.district == uiState.pickupDistrictFilter }
+            .filter { order -> uiState.pickupDistrictFilter.isEmpty() || order.shop.district in uiState.pickupDistrictFilter }
             .mapNotNull { it.customer.district?.takeIf(String::isNotBlank) }
             .distinct()
             .sorted()
     }
     val pickupOptions = remember(uiState.availableOrders, uiState.destinationDistrictFilter) {
         uiState.availableOrders
-            .filter { order -> uiState.destinationDistrictFilter == null || order.customer.district == uiState.destinationDistrictFilter }
+            .filter { order -> uiState.destinationDistrictFilter.isEmpty() || order.customer.district in uiState.destinationDistrictFilter }
             .mapNotNull { it.shop.district?.takeIf(String::isNotBlank) }
             .distinct()
             .sorted()
     }
     val filteredOrders = remember(uiState.availableOrders, uiState.pickupDistrictFilter, uiState.destinationDistrictFilter) {
         uiState.availableOrders.filter { order ->
-            (uiState.pickupDistrictFilter == null || order.shop.district == uiState.pickupDistrictFilter) &&
-                (uiState.destinationDistrictFilter == null || order.customer.district == uiState.destinationDistrictFilter)
+            (uiState.pickupDistrictFilter.isEmpty() || order.shop.district in uiState.pickupDistrictFilter) &&
+                (uiState.destinationDistrictFilter.isEmpty() || order.customer.district in uiState.destinationDistrictFilter)
+        }
+    }
+    val pickupSummary = remember(uiState.pickupDistrictFilter) {
+        when {
+            uiState.pickupDistrictFilter.isEmpty() -> "全部"
+            uiState.pickupDistrictFilter.size <= 2 -> uiState.pickupDistrictFilter.sorted().joinToString("、")
+            else -> "已選 ${uiState.pickupDistrictFilter.size} 區"
+        }
+    }
+    val destinationSummary = remember(uiState.destinationDistrictFilter) {
+        when {
+            uiState.destinationDistrictFilter.isEmpty() -> "全部"
+            uiState.destinationDistrictFilter.size <= 2 -> uiState.destinationDistrictFilter.sorted().joinToString("、")
+            else -> "已選 ${uiState.destinationDistrictFilter.size} 區"
         }
     }
 
@@ -853,16 +870,16 @@ private fun HomeScreen(
             }
             item {
                 Surface(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().animateContentSize(),
                     shape = RoundedCornerShape(14.dp),
                     color = Color.White,
                     border = BorderStroke(1.dp, Color(0xFFF1E0BE))
                 ) {
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Box(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth()) {
                             TextButton(
-                                onClick = { pickupExpanded = true },
-                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { expandedFilter = if (expandedFilter == "pickup") null else "pickup" },
+                                modifier = Modifier.weight(1f),
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -872,7 +889,7 @@ private fun HomeScreen(
                                     Column(horizontalAlignment = Alignment.Start) {
                                         Text("取貨地區", color = Color(0xFF6C7F93), style = MaterialTheme.typography.labelSmall)
                                         Text(
-                                            uiState.pickupDistrictFilter ?: "全部",
+                                            pickupSummary,
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = Color(0xFF2E4765),
                                             fontWeight = FontWeight.SemiBold,
@@ -881,35 +898,15 @@ private fun HomeScreen(
                                     Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color(0xFF2E4765))
                                 }
                             }
-                            DropdownMenu(expanded = pickupExpanded, onDismissRequest = { pickupExpanded = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("全部") },
-                                    onClick = {
-                                        onSelectPickupDistrict(null)
-                                        pickupExpanded = false
-                                    }
-                                )
-                                pickupOptions.forEach { district ->
-                                    DropdownMenuItem(
-                                        text = { Text(district) },
-                                        onClick = {
-                                            onSelectPickupDistrict(district)
-                                            pickupExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(48.dp)
-                                .background(Color(0xFFF1E0BE))
-                        )
-                        Box(modifier = Modifier.weight(1f)) {
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(54.dp)
+                                    .background(Color(0xFFF1E0BE))
+                            )
                             TextButton(
-                                onClick = { destinationExpanded = true },
-                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { expandedFilter = if (expandedFilter == "destination") null else "destination" },
+                                modifier = Modifier.weight(1f),
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -919,7 +916,7 @@ private fun HomeScreen(
                                     Column(horizontalAlignment = Alignment.Start) {
                                         Text("送達地區", color = Color(0xFF6C7F93), style = MaterialTheme.typography.labelSmall)
                                         Text(
-                                            uiState.destinationDistrictFilter ?: "全部",
+                                            destinationSummary,
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = Color(0xFF2E4765),
                                             fontWeight = FontWeight.SemiBold,
@@ -928,24 +925,26 @@ private fun HomeScreen(
                                     Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color(0xFF2E4765))
                                 }
                             }
-                            DropdownMenu(expanded = destinationExpanded, onDismissRequest = { destinationExpanded = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("全部") },
-                                    onClick = {
-                                        onSelectDestinationDistrict(null)
-                                        destinationExpanded = false
-                                    }
-                                )
-                                destinationOptions.forEach { district ->
-                                    DropdownMenuItem(
-                                        text = { Text(district) },
-                                        onClick = {
-                                            onSelectDestinationDistrict(district)
-                                            destinationExpanded = false
-                                        }
-                                    )
-                                }
-                            }
+                        }
+
+                        AnimatedVisibility(visible = expandedFilter == "pickup") {
+                            DistrictFilterInlinePanel(
+                                title = "選擇取貨地區",
+                                options = pickupOptions,
+                                selected = uiState.pickupDistrictFilter,
+                                onToggle = onSelectPickupDistrict,
+                                onClear = onClearPickupDistrict,
+                            )
+                        }
+
+                        AnimatedVisibility(visible = expandedFilter == "destination") {
+                            DistrictFilterInlinePanel(
+                                title = "選擇送達地區",
+                                options = destinationOptions,
+                                selected = uiState.destinationDistrictFilter,
+                                onToggle = onSelectDestinationDistrict,
+                                onClear = onClearDestinationDistrict,
+                            )
                         }
                     }
                 }
@@ -976,6 +975,77 @@ private fun HomeScreen(
             progress = pullRefreshState.progress,
             modifier = Modifier.align(Alignment.TopCenter),
         )
+    }
+}
+
+@Composable
+private fun DistrictFilterInlinePanel(
+    title: String,
+    options: List<String>,
+    selected: Set<String>,
+    onToggle: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFFFFBF1))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.labelLarge, color = Color(0xFF2E4765), fontWeight = FontWeight.SemiBold)
+                Text("可多選，會即時篩選首頁訂單", style = MaterialTheme.typography.bodySmall, color = Color(0xFF6C7F93))
+            }
+            TextButton(onClick = onClear, enabled = selected.isNotEmpty()) {
+                Text("清除")
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 260.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            if (options.isEmpty()) {
+                Text(
+                    "目前沒有可選地區。",
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF6C7F93),
+                )
+            } else {
+                options.forEach { district ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onToggle(district) }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            district,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF2E4765),
+                        )
+                        Checkbox(
+                            checked = district in selected,
+                            onCheckedChange = { onToggle(district) }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2058,15 +2128,25 @@ private fun CompletedOrdersScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text("訂單 ${index + 1}", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "交易編號 ${order.transactionCode ?: order.externalOrderId}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF6C7F93),
+                            )
                             Text(
                                 "${order.shop.label} → ${order.customer.label}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF2E4765),
                             )
                             Text(
-                                order.deliveredAt?.let { formatter.format(OffsetDateTime.parse(it)) } ?: "完成時間待同步",
+                                "取貨時間：${order.pickedUpAt?.let { formatter.format(OffsetDateTime.parse(it)) } ?: "待同步"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                "完成時間：${order.deliveredAt?.let { formatter.format(OffsetDateTime.parse(it)) } ?: "待同步"}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
