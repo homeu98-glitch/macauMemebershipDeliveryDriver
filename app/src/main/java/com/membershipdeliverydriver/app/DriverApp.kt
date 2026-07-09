@@ -2634,30 +2634,26 @@ private fun openNavigation(
     longitude: Double,
     label: String,
 ) {
-    val safeLabel = label.ifBlank { "目的地" }
-    val encodedLabel = Uri.encode(safeLabel)
-
-    val amapUri = Uri.parse(
-        "androidamap://route?sourceApplication=membership-driver&dlat=$latitude&dlon=$longitude&dname=$encodedLabel&dev=0&t=0"
-    )
-    val amapIntent = Intent(Intent.ACTION_VIEW, amapUri).apply {
-        addCategory(Intent.CATEGORY_DEFAULT)
-        setPackage("com.autonavi.minimap")
+    val geoIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("geo:0,0?q=$latitude,$longitude"),
+    ).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
-    val fallbackIntent = Intent(
-        Intent.ACTION_VIEW,
-        Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude"),
-    ).apply {
+    val chooserIntent = Intent.createChooser(geoIntent, if (label.isBlank()) "選擇導航 App" else "選擇導航 App：$label").apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 
     val packageManager = context.packageManager
     when {
-        amapIntent.resolveActivity(packageManager) != null -> context.startActivity(amapIntent)
-        fallbackIntent.resolveActivity(packageManager) != null -> context.startActivity(fallbackIntent)
-        else -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://uri.amap.com/navigation?to=$longitude,$latitude,$encodedLabel&mode=car&policy=1&src=membership-driver")))
+        geoIntent.resolveActivity(packageManager) != null -> context.startActivity(chooserIntent)
+        else -> context.startActivity(
+            Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://www.google.com/maps/search/?api=1&query=$latitude,$longitude")
+            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+        )
     }
 }
 
