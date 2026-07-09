@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "../../../../../../lib/auth";
 import { createServiceRoleSupabaseClient } from "../../../../../../lib/supabase";
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
@@ -17,6 +21,10 @@ export async function POST(
     return NextResponse.json({ message: "審核狀態不正確。" }, { status: 400 });
   }
 
+  const reviewerId = isUuid(sessionUser.id) ? sessionUser.id : null;
+  const reviewedAt = new Date().toISOString();
+  const reviewStatus = body.status === "approved" ? "approved" : "rejected";
+
   const supabase = createServiceRoleSupabaseClient();
 
   const { data: application, error: fetchError } = await supabase
@@ -29,14 +37,12 @@ export async function POST(
     return NextResponse.json({ message: "找不到申請資料。" }, { status: 404 });
   }
 
-  const reviewStatus = body.status === "approved" ? "approved" : "rejected";
-
   const { error: applicationError } = await supabase
     .from("driver_applications")
     .update({
       review_status: reviewStatus,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: sessionUser.id
+      reviewed_at: reviewedAt,
+      reviewed_by: reviewerId
     })
     .eq("id", params.id);
 
@@ -55,15 +61,19 @@ export async function POST(
     return NextResponse.json({ message: profileError.message }, { status: 500 });
   }
 
-  await supabase
+  const { error: documentError } = await supabase
     .from("driver_documents")
     .update({
       verification_status: reviewStatus,
-      verified_at: new Date().toISOString(),
-      verified_by: sessionUser.id
+      verified_at: reviewedAt,
+      verified_by: reviewerId
     })
     .eq("driver_id", application.driver_id)
     .in("document_type", ["selfie", "macau_id", "driving_licence"]);
+
+  if (documentError) {
+    return NextResponse.json({ message: documentError.message }, { status: 500 });
+  }
 
   return NextResponse.json({ success: true });
 }
