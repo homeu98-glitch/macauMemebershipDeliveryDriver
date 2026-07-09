@@ -2412,26 +2412,6 @@ private fun CuteDriverPullRefreshIndicator(
     modifier: Modifier = Modifier,
 ) {
     val clamped = progress.coerceIn(0f, 1.4f)
-    val infinite = rememberInfiniteTransition(label = "driverPull")
-    val rideOffset by infinite.animateFloat(
-        initialValue = -8f,
-        targetValue = 8f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
-        label = "rideOffset",
-    )
-    val wheelRotation by infinite.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(700, easing = LinearEasing), RepeatMode.Restart),
-        label = "wheelRotation",
-    )
-    val bounce by infinite.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "bounce",
-    )
-
     AnimatedVisibility(
         visible = refreshing || clamped > 0.02f,
         enter = fadeIn(tween(180)) + slideInVertically(initialOffsetY = { -it / 2 }),
@@ -2448,43 +2428,15 @@ private fun CuteDriverPullRefreshIndicator(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Box(modifier = Modifier.size(width = 124.dp, height = 56.dp)) {
-                    Canvas(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .offset { IntOffset((rideOffset * clamped).toInt(), (((if (refreshing) bounce else clamped) * -4f)).toInt()) }
-                    ) {
-                        val roadY = size.height * 0.82f
-                        val leftWheel = Offset(size.width * 0.33f, roadY - 6f)
-                        val rightWheel = Offset(size.width * 0.70f, roadY - 6f)
-                        drawRoundRect(
-                            color = Color(0xFFFFF0C7),
-                            topLeft = Offset(2f, roadY - 14f),
-                            size = Size(size.width - 4f, 22f),
-                            cornerRadius = CornerRadius(16f, 16f)
-                        )
-                        drawLine(Color(0xFFE0C68C), Offset(12f, roadY + 2f), Offset(size.width - 12f, roadY + 2f), strokeWidth = 3f, cap = StrokeCap.Round)
-                        fun drawWheel(center: Offset) {
-                            drawCircle(color = Color(0xFF374151), radius = 10f, center = center)
-                            drawCircle(color = Color.White, radius = 4f, center = center)
-                            val radians = Math.toRadians(wheelRotation.toDouble())
-                            val dx = kotlin.math.cos(radians).toFloat() * 9f
-                            val dy = kotlin.math.sin(radians).toFloat() * 9f
-                            drawLine(Color.White, center - Offset(dx, dy), center + Offset(dx, dy), strokeWidth = 1.7f, cap = StrokeCap.Round)
-                            drawLine(Color.White, center - Offset(dy, -dx), center + Offset(dy, -dx), strokeWidth = 1.7f, cap = StrokeCap.Round)
-                        }
-                        drawWheel(leftWheel)
-                        drawWheel(rightWheel)
-                        drawLine(Color(0xFFFFC83D), Offset(leftWheel.x, leftWheel.y - 10f), Offset(size.width * 0.50f, roadY - 26f), strokeWidth = 5f, cap = StrokeCap.Round)
-                        drawLine(Color(0xFFFFC83D), Offset(size.width * 0.50f, roadY - 26f), Offset(rightWheel.x - 5f, rightWheel.y - 10f), strokeWidth = 5f, cap = StrokeCap.Round)
-                        drawLine(Color(0xFFFFC83D), Offset(size.width * 0.47f, roadY - 26f), Offset(size.width * 0.60f, roadY - 38f), strokeWidth = 5f, cap = StrokeCap.Round)
-                        drawLine(Color(0xFFEF4444), Offset(size.width * 0.58f, roadY - 37f), Offset(size.width * 0.73f, roadY - 37f), strokeWidth = 4f, cap = StrokeCap.Round)
-                        drawCircle(color = Color(0xFF0EA5E9), radius = 7f, center = Offset(size.width * 0.30f, roadY - 34f))
-                        drawLine(Color(0xFF0EA5E9), Offset(size.width * 0.30f, roadY - 27f), Offset(size.width * 0.42f, roadY - 20f), strokeWidth = 5f, cap = StrokeCap.Round)
-                        drawLine(Color(0xFF0EA5E9), Offset(size.width * 0.38f, roadY - 22f), Offset(size.width * 0.48f, roadY - 32f), strokeWidth = 4f, cap = StrokeCap.Round)
-                        drawLine(Color(0xFF0EA5E9), Offset(size.width * 0.39f, roadY - 21f), Offset(size.width * 0.35f, roadY - 8f), strokeWidth = 4f, cap = StrokeCap.Round)
-                    }
-                }
+                coil.compose.AsyncImage(
+                    model = R.drawable.refresh_driver_pull,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(width = 124.dp, height = 56.dp)
+                        .graphicsLayer {
+                            alpha = 0.55f + (clamped.coerceAtMost(1f) * 0.45f)
+                        },
+                )
                 Text(
                     if (refreshing) "Driver is riding over..." else "Pull to send the rider out",
                     style = MaterialTheme.typography.bodySmall,
