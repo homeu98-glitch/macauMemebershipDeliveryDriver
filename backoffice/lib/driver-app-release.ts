@@ -1,5 +1,13 @@
 import { createServiceRoleSupabaseClient } from "./supabase";
 
+
+function normalizeCreatedBy(value?: string | null) {
+  if (!value) return null;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : null;
+}
+
 export type DriverAppRelease = {
   id: string;
   version: string;
@@ -67,7 +75,7 @@ export async function createDriverAppRelease(input: {
       version,
       apk_url: apkUrl,
       release_notes: input.releaseNotes?.trim() ?? "",
-      created_by: input.createdBy ?? null,
+      created_by: normalizeCreatedBy(input.createdBy),
       is_active: false
     })
     .select("id,version,apk_url,release_notes,created_at,is_active")
