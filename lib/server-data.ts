@@ -138,7 +138,7 @@ export async function listOrders(): Promise<Order[]> {
   const supabase = createServiceRoleSupabaseClient();
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("id,external_order_id,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id")
+    .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -181,7 +181,7 @@ export async function listOrders(): Promise<Order[]> {
 
     return {
       id: item.id,
-      code: item.external_order_id,
+      code: item.transaction_code ?? item.external_order_id,
       status: orderStatusLabel(item.status),
       customerName: customer?.name ?? "未命名客戶",
       storeName: shop?.name ?? "未命名店舖",
@@ -200,7 +200,7 @@ export async function getOrderById(id: string): Promise<Order | null> {
   const supabase = createServiceRoleSupabaseClient();
   const { data: order, error } = await supabase
     .from("orders")
-    .select("id,external_order_id,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id")
+    .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -223,7 +223,7 @@ export async function getOrderById(id: string): Promise<Order | null> {
 
   return {
     id: order.id,
-    code: order.external_order_id,
+    code: order.transaction_code ?? order.external_order_id,
     status: orderStatusLabel(order.status),
     customerName: customer?.name ?? "未命名客戶",
     storeName: shop?.name ?? "未命名店舖",

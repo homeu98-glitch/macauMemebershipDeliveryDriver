@@ -88,6 +88,7 @@ data class OrderItem(
 data class Order(
     val id: String,
     val externalOrderId: String,
+    val transactionCode: String? = null,
     val status: OrderStatus,
     val isUrgent: Boolean = false,
     val shop: LocationPoint,
@@ -162,6 +163,7 @@ data class DriverAppState(
     val completedOrders: List<Order> = emptyList(),
     val earnings: List<EarningEntry> = emptyList(),
     val activeOrderId: String? = null,
+    val acceptingOrderId: String? = null,
     val completedOrdersFilter: HistoryRange = HistoryRange.TODAY,
     val completedOrdersPage: Int = 0,
     val completedOrdersHasMore: Boolean = true,

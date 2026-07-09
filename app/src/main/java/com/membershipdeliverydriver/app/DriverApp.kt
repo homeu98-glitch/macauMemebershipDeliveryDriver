@@ -57,6 +57,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -234,6 +235,14 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
         }
     }
 
+    LaunchedEffect(currentRoute, uiState.currentDriver?.id) {
+        if (uiState.currentDriver == null) return@LaunchedEffect
+        if (currentRoute == Routes.Profile) {
+            viewModel.refreshAnnouncements()
+            viewModel.checkForUpdates()
+        }
+    }
+
     val startDestination = if (uiState.currentDriver == null) Routes.Login else Routes.Home
 
     Scaffold(
@@ -333,6 +342,8 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                 ProfileScreen(
                     uiState = uiState,
                     onEarningsFilterSelected = viewModel::updateEarningsFilter,
+                    onCheckForUpdates = { viewModel.checkForUpdates(manual = true) },
+                    onRefreshAnnouncements = { viewModel.refreshAnnouncements(showMessage = true) },
                     onLogout = viewModel::logout,
                 )
             }
@@ -789,7 +800,7 @@ private fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("可接訂單", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -948,6 +959,8 @@ private fun HomeScreen(
                 AvailableOrderCard(
                     order = order,
                     isOnline = driver?.availability == DriverAvailability.ONLINE,
+                    isAccepting = uiState.acceptingOrderId == order.id,
+                    acceptActionLocked = uiState.acceptingOrderId != null,
                     onNavigateToShop = {
                         openNavigation(context, order.shop.latitude, order.shop.longitude, order.shop.label)
                     },
@@ -1202,6 +1215,8 @@ private fun PaymentTagChip(label: String) {
 private fun AvailableOrderCard(
     order: Order,
     isOnline: Boolean,
+    isAccepting: Boolean,
+    acceptActionLocked: Boolean,
     onNavigateToShop: () -> Unit,
     onAcceptOrder: () -> Unit,
 ) {
@@ -1212,8 +1227,8 @@ private fun AvailableOrderCard(
         border = BorderStroke(1.dp, Color(0xFFF0DFC0))
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1238,6 +1253,11 @@ private fun AvailableOrderCard(
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "交易編號 ${order.transactionCode ?: order.externalOrderId}",
+                        color = Color(0xFF6C7F93),
+                        style = MaterialTheme.typography.bodySmall,
                     )
                     Text(
                         "已派送 ${order.shop.totalSentOrders} 張單",
@@ -1278,8 +1298,8 @@ private fun AvailableOrderCard(
                 border = BorderStroke(1.dp, Color(0xFFF3E6CA))
             ) {
                 Column(
-                    modifier = Modifier.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
                         "商戶地址",
@@ -1330,11 +1350,28 @@ private fun AvailableOrderCard(
                 Button(
                     onClick = onAcceptOrder,
                     modifier = Modifier.weight(1f),
-                    enabled = isOnline,
+                    enabled = isOnline && !acceptActionLocked,
                     shape = RoundedCornerShape(14.dp),
                 ) {
-                    Text(if (isOnline) "接單" else "請先上線")
+                    if (isAccepting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White,
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text("接單中...")
+                    } else {
+                        Text(if (isOnline) "接單" else "請先上線")
+                    }
                 }
+            }
+            if (isAccepting) {
+                Text(
+                    "正在為你接單，請稍候...",
+                    color = Color(0xFF6C7F93),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
     }
@@ -1365,7 +1402,7 @@ private fun ActiveOrderCard(
             if (order.status.isCanceledLike() && order.cancelHandling == com.membershipdeliverydriver.app.core.CancelHandling.NOT_RETURNING) Color(0xFFE58A8A) else Color(0xFFF0DFC0)
         )
     ) {
-        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1384,6 +1421,11 @@ private fun ActiveOrderCard(
                         )
                     }
                     Text(displayLabel, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "交易編號 ${order.transactionCode ?: order.externalOrderId}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF6C7F93),
+                    )
                     Text(
                         "${order.shop.label} · 已派送 ${order.shop.totalSentOrders} 張單",
                         style = MaterialTheme.typography.bodySmall,
@@ -1417,8 +1459,8 @@ private fun ActiveOrderCard(
                 border = BorderStroke(1.dp, Color(0xFFF3E6CA))
             ) {
                 Column(
-                    modifier = Modifier.padding(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     ContactLocationRow(
                         title = order.shop.label,
@@ -2109,6 +2151,8 @@ private fun formatGraceCountdown(secondsLeft: Int): String {
 private fun ProfileScreen(
     uiState: com.membershipdeliverydriver.app.core.DriverAppState,
     onEarningsFilterSelected: (com.membershipdeliverydriver.app.core.HistoryRange) -> Unit,
+    onCheckForUpdates: () -> Unit,
+    onRefreshAnnouncements: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val driver = uiState.currentDriver
@@ -2138,6 +2182,18 @@ private fun ProfileScreen(
                     Text(driver?.fullName ?: "未登入", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text("電話：${driver?.phone ?: "-"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("版本：${com.membershipdeliverydriver.app.BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("若未收到更新推送，可手動檢查更新。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedButton(onClick = onCheckForUpdates, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                            Text("檢查更新")
+                        }
+                        OutlinedButton(onClick = onRefreshAnnouncements, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
+                            Text("刷新公告")
+                        }
+                    }
                     StatusBadge(
                         label = "審核狀態：${approvalLabel(driver?.approvalStatus ?: ApprovalStatus.PENDING_APPROVAL)}",
                         highlight = driver?.approvalStatus == ApprovalStatus.APPROVED,

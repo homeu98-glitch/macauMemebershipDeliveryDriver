@@ -249,6 +249,47 @@ class DriverViewModel(
         _uiState.update { it.copy(destinationDistrictFilter = value) }
     }
 
+
+fun refreshAnnouncements(showMessage: Boolean = false) {
+    viewModelScope.launch {
+        runCatching { repository.loadAnnouncements() }
+            .onSuccess { ann ->
+                _uiState.update { it.copy(announcements = ann) }
+                if (showMessage) {
+                    _uiState.update {
+                        it.copy(errorMessage = if (ann.isEmpty()) "目前沒有新公告。" else "公告已更新。")
+                    }
+                }
+            }
+            .onFailure { error ->
+                if (showMessage) {
+                    _uiState.update { it.copy(errorMessage = error.message ?: "刷新公告失敗。") }
+                }
+            }
+    }
+}
+
+fun checkForUpdates(manual: Boolean = false) {
+    viewModelScope.launch {
+        runCatching { repository.fetchLatestAppRelease() }
+            .onSuccess { latest ->
+                when {
+                    latest != null && isNewerVersion(com.membershipdeliverydriver.app.BuildConfig.VERSION_NAME, latest.version) -> {
+                        _uiState.update { it.copy(updateInfo = latest) }
+                    }
+                    manual -> {
+                        _uiState.update { it.copy(errorMessage = "已是最新版本。") }
+                    }
+                }
+            }
+            .onFailure { error ->
+                if (manual) {
+                    _uiState.update { it.copy(errorMessage = error.message ?: "檢查更新失敗。") }
+                }
+            }
+    }
+}
+
     fun logout() {
         viewModelScope.launch {
             DriverNotifications.stopDispatchService(AppContextHolder.requireContext())
@@ -258,11 +299,14 @@ class DriverViewModel(
     }
 
     fun acceptOrder(orderId: String) {
+        if (_uiState.value.acceptingOrderId != null) return
+        _uiState.update { it.copy(acceptingOrderId = orderId, errorMessage = null) }
         viewModelScope.launch {
             when (val result = repository.acceptOrder(orderId)) {
                 is ApiResult.Success -> {
                     _uiState.update {
                         it.copy(
+                            acceptingOrderId = null,
                             availableOrders = it.availableOrders.filterNot { order -> order.id == orderId },
                             orders = (it.orders.filterNot { order -> order.id == orderId } + result.value)
                                 .sortedBy { order -> order.etaMinutes },
@@ -273,7 +317,7 @@ class DriverViewModel(
                     }
                 }
                 is ApiResult.Failure -> {
-                    _uiState.update { it.copy(errorMessage = result.message) }
+                    _uiState.update { it.copy(acceptingOrderId = null, errorMessage = result.message) }
                 }
             }
         }

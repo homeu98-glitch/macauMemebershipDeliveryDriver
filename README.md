@@ -15,6 +15,7 @@
 - 車手 APK 直接下載（固定）：`/apkdownload/latest`
 - 後台 APK 版本管理：`/apk`
 - 後台 公告發布：`/announcements`
+- 後台 地區同步：`/districts`
 
 ## OTA 更新（非 Play Store）
 
@@ -31,6 +32,7 @@ Android 無法完全靜默自動更新 APK。本專案的 OTA 流程是：
 - 技術文檔索引：`docs/README.md`
 - SiteA 整合：`docs/integration/sitea.md`
 - SiteB Callback/Status：`docs/integration/siteb.md`
+- 車手功能摘要：`docs/features/driver_app_features.md`
 
 ## 開發
 

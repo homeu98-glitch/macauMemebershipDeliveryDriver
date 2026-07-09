@@ -418,7 +418,7 @@ class SupabaseDriverRepository : DriverRepository {
 
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&status=eq.new&order=created_at.asc",
+            path = "/rest/v1/orders?select=id,external_order_id,transaction_code,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&status=eq.new&order=created_at.asc",
             token = token,
         )
 
@@ -450,7 +450,7 @@ class SupabaseDriverRepository : DriverRepository {
         val orderFilter = orderIds.joinToString(",") { "\"$it\"" }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
+            path = "/rest/v1/orders?select=id,external_order_id,transaction_code,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
             token = token,
         )
 
@@ -535,7 +535,7 @@ class SupabaseDriverRepository : DriverRepository {
         val completionAtByOrder = pagedCompletions.associate { it.key to it.value }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
+            path = "/rest/v1/orders?select=id,external_order_id,transaction_code,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
             token = token,
         )
 
@@ -1129,7 +1129,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
         }
 
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})",
+            path = "/rest/v1/orders?select=id,external_order_id,transaction_code,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})",
             token = token,
         )
 
@@ -1140,7 +1140,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
         val driverId = currentDriver?.id ?: return null
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=eq.${urlEncode(orderId)}",
+            path = "/rest/v1/orders?select=id,external_order_id,transaction_code,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=eq.${urlEncode(orderId)}",
             token = token,
         )
         return mapOrders(token, ordersArray, latestDriverLocation).firstOrNull()
@@ -1386,6 +1386,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                     Order(
                         id = json.getString("id"),
                         externalOrderId = json.optString("external_order_id", json.getString("id")),
+                        transactionCode = nullableJsonText(json, "transaction_code"),
                         status = mappedStatus,
                         isUrgent = isUrgentOrder,
                         shop = LocationPoint(
