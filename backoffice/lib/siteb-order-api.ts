@@ -101,6 +101,23 @@ function validateRequiredString(value: string | undefined | null, field: string)
   }
 }
 
+function requireResolvedDistrict(
+  latitude: number | null | undefined,
+  longitude: number | null | undefined,
+  label: string
+) {
+  if (latitude == null || longitude == null || !Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new Error(`${label} latitude/longitude is required to determine district`);
+  }
+
+  const district = findMacauDistrict(latitude, longitude);
+  if (!district) {
+    throw new Error(`${label} district could not be resolved from Macau GeoJSON`);
+  }
+
+  return district;
+}
+
 export function validateCreateOrderInput(input: CreateOrderInput) {
   const callback = normalizeCallback(input.callback);
   validateRequiredString(input.externalOrderId, "externalOrderId");
@@ -113,6 +130,8 @@ export function validateCreateOrderInput(input: CreateOrderInput) {
   if (normalizeDeliveryMode(input.deliveryMode) === "scheduled" && !input.deliveryDeadline?.trim()) {
     throw new Error("deliveryDeadline is required when deliveryMode is scheduled");
   }
+  requireResolvedDistrict(input.shop?.latitude ?? null, input.shop?.longitude ?? null, "shop");
+  requireResolvedDistrict(input.customer?.latitude ?? null, input.customer?.longitude ?? null, "customer");
   if (normalizeDeliveryMode(input.deliveryMode) !== "scheduled") {
     return;
   }
