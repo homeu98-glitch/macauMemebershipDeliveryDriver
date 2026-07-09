@@ -10,8 +10,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -34,7 +37,21 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
@@ -89,7 +106,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
@@ -98,6 +120,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
@@ -929,30 +952,10 @@ private fun HomeScreen(
             }
             if (filteredOrders.isEmpty()) {
                 item {
-                    Card(
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFF1E0BE))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(20.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                if (uiState.availableOrders.isEmpty()) "目前沒有可接訂單" else "目前沒有符合篩選的訂單",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                if (uiState.availableOrders.isEmpty())
-                                    "保持上線並下拉刷新，新的配送票單會出現在這裡。"
-                                else
-                                    "請調整上方的取貨地區或送達地區篩選。",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
-                    }
+                    FriendlyEmptyState(
+                        title = if (uiState.availableOrders.isEmpty()) "暫時還沒有新單" else "目前沒有符合篩選的訂單",
+                        subtitle = if (uiState.availableOrders.isEmpty()) "先休息一下，保持上線並下拉刷新，下一張單很快就會來。" else "請調整上方的取貨地區或送達地區篩選。",
+                    )
                 }
             }
             items(filteredOrders, key = { it.id }) { order ->
@@ -968,9 +971,9 @@ private fun HomeScreen(
                 )
             }
         }
-        PullRefreshIndicator(
+        CuteDriverPullRefreshIndicator(
             refreshing = uiState.isRefreshing,
-            state = pullRefreshState,
+            progress = pullRefreshState.progress,
             modifier = Modifier.align(Alignment.TopCenter),
         )
     }
@@ -1014,6 +1017,15 @@ private fun OrdersScreen(
         }
     }
     val activeOrders = orders.filterNot { it.status == OrderStatus.DELIVERED || (it.status.isCanceledLike() && !it.deliveredAt.isNullOrBlank()) }
+    var rewardOrder by remember { mutableStateOf<Order?>(null) }
+    val latestCompletedOrder = uiState.completedOrders.firstOrNull()
+    LaunchedEffect(latestCompletedOrder?.id) {
+        if (latestCompletedOrder != null && !latestCompletedOrder.status.isCanceledLike()) {
+            rewardOrder = latestCompletedOrder
+            delay(2200)
+            if (rewardOrder?.id == latestCompletedOrder.id) rewardOrder = null
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -1052,26 +1064,10 @@ private fun OrdersScreen(
             }
             if (activeOrders.isEmpty()) {
                 item {
-                    Card(
-                        shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFF1E0BE))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(20.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                "目前沒有進行中的訂單",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                "你接下的配送工單會在這裡集中顯示。",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
+                    FriendlyEmptyState(
+                        title = "目前沒有進行中的訂單",
+                        subtitle = "準備好後接下一張單，這裡會即時顯示你的配送進度。",
+                    )
                 }
             }
             items(activeOrders.size, key = { index -> activeOrders[index].id }) { index ->
@@ -1185,9 +1181,9 @@ private fun OrdersScreen(
                 }
             )
         }
-        PullRefreshIndicator(
+        CuteDriverPullRefreshIndicator(
             refreshing = uiState.isRefreshing,
-            state = pullRefreshState,
+            progress = pullRefreshState.progress,
             modifier = Modifier.align(Alignment.TopCenter),
         )
     }
@@ -1211,6 +1207,7 @@ private fun PaymentTagChip(label: String) {
     }
 }
 
+
 @Composable
 private fun AvailableOrderCard(
     order: Order,
@@ -1220,158 +1217,199 @@ private fun AvailableOrderCard(
     onNavigateToShop: () -> Unit,
     onAcceptOrder: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, Color(0xFFF0DFC0))
+    var cardVisible by remember(order.id) { mutableStateOf(false) }
+    var showArrivalGlow by remember(order.id) { mutableStateOf(true) }
+    val borderColor by animateColorAsState(
+        targetValue = if (showArrivalGlow) Color(0xFFFFC84A) else Color(0xFFF0DFC0),
+        animationSpec = tween(850),
+        label = "availableBorder",
+    )
+    val cardScale by animateFloatAsState(
+        targetValue = if (showArrivalGlow) 1.015f else 1f,
+        animationSpec = tween(550),
+        label = "availableScale",
+    )
+    val urgentPulse = if (order.isUrgent) {
+        rememberInfiniteTransition(label = "urgentPulse")
+            .animateFloat(
+                initialValue = 0.95f,
+                targetValue = 1.05f,
+                animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "urgentPulseValue",
+            ).value
+    } else 1f
+
+    LaunchedEffect(order.id) {
+        cardVisible = true
+        delay(1800)
+        showArrivalGlow = false
+    }
+
+    AnimatedVisibility(
+        visible = cardVisible,
+        enter = slideInVertically(initialOffsetY = { it / 3 }) + fadeIn(animationSpec = tween(320)),
+        exit = fadeOut(animationSpec = tween(180)) + slideOutVertically(targetOffsetY = { -it / 5 }),
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer {
+                    scaleX = cardScale
+                    scaleY = cardScale
+                }
+                .animateContentSize(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, borderColor)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    if (order.isUrgent) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        if (order.isUrgent) {
+                            Text(
+                                "急單",
+                                color = Color(0xFFB3261E),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.graphicsLayer { scaleX = urgentPulse; scaleY = urgentPulse },
+                            )
+                        }
                         Text(
-                            "急單",
-                            color = Color(0xFFB3261E),
+                            order.shop.label,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            "交易編號 ${order.transactionCode ?: order.externalOrderId}",
+                            color = Color(0xFF6C7F93),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "已派送 ${order.shop.totalSentOrders} 張單",
+                            color = Color(0xFF2E4765),
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                        Text(
+                            "送達時間 ${order.deliveryDeadlineText}",
+                            color = Color(0xFF6C7F93),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        val publishedAtText = remember(order.publishedAt) {
+                            order.publishedAt?.let { runCatching { DateTimeFormatter.ofPattern("MM/dd HH:mm").format(OffsetDateTime.parse(it)) }.getOrNull() }
+                        }
+                        Text(
+                            "發單日期 ${publishedAtText ?: "-"}",
+                            color = Color(0xFF6C7F93),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (order.isUrgent) Color(0xFFFFE5E5) else Color(0xFFFFF2CB)
+                    ) {
+                        Text(
+                            text = "MOP ${order.totalAmountMop}",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            color = if (order.isUrgent) Color(0xFFB3261E) else Color(0xFF8A5A00),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
                         )
                     }
-                    Text(
-                        order.shop.label,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        "交易編號 ${order.transactionCode ?: order.externalOrderId}",
-                        color = Color(0xFF6C7F93),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    Text(
-                        "已派送 ${order.shop.totalSentOrders} 張單",
-                        color = Color(0xFF2E4765),
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                    Text(
-                        "送達時間 ${order.deliveryDeadlineText}",
-                        color = Color(0xFF6C7F93),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    val publishedAtText = remember(order.publishedAt) {
-                        order.publishedAt?.let { runCatching { DateTimeFormatter.ofPattern("MM/dd HH:mm").format(OffsetDateTime.parse(it)) }.getOrNull() }
-                    }
-                    Text(
-                        "發單日期 ${publishedAtText ?: "-"}",
-                        color = Color(0xFF6C7F93),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
                 }
+
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = if (order.isUrgent) Color(0xFFFFE5E5) else Color(0xFFFFF2CB)
+                    color = Color(0xFFFFFBF1),
+                    border = BorderStroke(1.dp, Color(0xFFF3E6CA))
                 ) {
-                    Text(
-                        text = "MOP ${order.totalAmountMop}",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        color = if (order.isUrgent) Color(0xFFB3261E) else Color(0xFF8A5A00),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = Color(0xFFFFFBF1),
-                border = BorderStroke(1.dp, Color(0xFFF3E6CA))
-            ) {
-                Column(
-                    modifier = Modifier.padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        "商戶地址",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color(0xFF2E4765),
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(order.shop.address, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        "客戶地址",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color(0xFF2E4765),
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(order.customer.address, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                PaymentTagChip(order.paymentTag)
-                Text(
-                    "取貨區：${order.shop.district ?: "未分區"} · 送達區：${order.customer.district ?: "未分區"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF607286),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${distanceLabel(order)} · ${order.deliveryDeadlineText}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF607286),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = onNavigateToShop,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, Color(0xFFF1D99A))
-                ) {
-                    Icon(Icons.Default.Directions, contentDescription = null)
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("前往商戶")
-                }
-                Button(
-                    onClick = onAcceptOrder,
-                    modifier = Modifier.weight(1f),
-                    enabled = isOnline && !acceptActionLocked,
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    if (isAccepting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White,
+                    Column(
+                        modifier = Modifier.padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            "商戶地址",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color(0xFF2E4765),
+                            fontWeight = FontWeight.SemiBold,
                         )
-                        Spacer(modifier = Modifier.size(8.dp))
-                        Text("接單中...")
-                    } else {
-                        Text(if (isOnline) "接單" else "請先上線")
+                        Text(order.shop.address, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            "客戶地址",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color(0xFF2E4765),
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(order.customer.address, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            }
-            if (isAccepting) {
-                Text(
-                    "正在為你接單，請稍候...",
-                    color = Color(0xFF6C7F93),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PaymentTagChip(order.paymentTag)
+                    Text(
+                        "取貨區：${order.shop.district ?: "未分區"} · 送達區：${order.customer.district ?: "未分區"}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF607286),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${distanceLabel(order)} · ${order.deliveryDeadlineText}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF607286),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = onNavigateToShop,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0xFFF1D99A))
+                    ) {
+                        Icon(Icons.Default.Directions, contentDescription = null)
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text("前往商戶")
+                    }
+                    Button(
+                        onClick = onAcceptOrder,
+                        modifier = Modifier.weight(1f),
+                        enabled = isOnline && !acceptActionLocked,
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        if (isAccepting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = Color.White,
+                            )
+                            Spacer(modifier = Modifier.size(8.dp))
+                            Text("接單中...")
+                        } else {
+                            Text(if (isOnline) "接單" else "請先上線")
+                        }
+                    }
+                }
+                if (isAccepting) {
+                    Text(
+                        "正在為你接單，請稍候，馬上出發...",
+                        color = Color(0xFF6C7F93),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
     }
@@ -1613,6 +1651,7 @@ private fun ContactLocationRow(
     }
 }
 
+
 @Composable
 private fun DeliveryStageStrip(status: OrderStatus) {
     if (status.isCanceledLike()) {
@@ -1639,6 +1678,18 @@ private fun DeliveryStageStrip(status: OrderStatus) {
         "已取貨" to (status == OrderStatus.PICKED_UP || status == OrderStatus.HEADING_TO_CUSTOMER || status == OrderStatus.DELIVERED),
         "前往客戶" to (status == OrderStatus.HEADING_TO_CUSTOMER || status == OrderStatus.DELIVERED)
     )
+    val activeIndex = when (status) {
+        OrderStatus.ASSIGNED, OrderStatus.HEADING_TO_SHOP -> 0
+        OrderStatus.PICKED_UP -> 1
+        OrderStatus.HEADING_TO_CUSTOMER, OrderStatus.DELIVERED -> 2
+        else -> 0
+    }
+    val pulse by rememberInfiniteTransition(label = "stagePulse").animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(850, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "stagePulseValue",
+    )
 
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -1648,21 +1699,36 @@ private fun DeliveryStageStrip(status: OrderStatus) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            stages.forEach { (label, done) ->
+            stages.forEachIndexed { index, (label, done) ->
+                val background by animateColorAsState(
+                    targetValue = when {
+                        done && index == activeIndex && status != OrderStatus.DELIVERED -> Color(0xFFFFD76A).copy(alpha = pulse)
+                        done -> Color(0xFFFFD76A)
+                        else -> Color.White
+                    },
+                    animationSpec = tween(350),
+                    label = "stageColor$index",
+                )
+                val scale by animateFloatAsState(
+                    targetValue = if (index == activeIndex && status != OrderStatus.DELIVERED) 1.02f else 1f,
+                    animationSpec = tween(350),
+                    label = "stageScale$index",
+                )
                 Surface(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).graphicsLayer { scaleX = scale; scaleY = scale },
                     shape = RoundedCornerShape(14.dp),
-                    color = if (done) Color(0xFFFFD76A) else Color.White
+                    color = background
                 ) {
                     Text(
                         text = label,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp),
                         color = if (done) Color(0xFF6E4A00) else Color(0xFF8A97A6),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = if (done) FontWeight.SemiBold else FontWeight.Normal,
+                        textAlign = TextAlign.Center,
                     )
                 }
             }
@@ -1973,17 +2039,10 @@ private fun CompletedOrdersScreen(
         }
         if (uiState.completedOrders.isEmpty() && !uiState.isLoadingCompletedOrders) {
             item {
-                Card(
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(1.dp, Color(0xFFF1E0BE))
-                ) {
-                    Text(
-                        "這個時間範圍內還沒有已完成訂單。",
-                        modifier = Modifier.padding(18.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                FriendlyEmptyState(
+                    title = "這個時間範圍內還沒有已完成訂單",
+                    subtitle = "完成第一張單之後，這裡會出現你的成果與送達紀錄。",
+                )
             }
         }
         items(uiState.completedOrders.size, key = { index -> uiState.completedOrders[index].id }) { index ->
@@ -2343,6 +2402,146 @@ private fun HistoryRangeChips(
     }
 }
 
+
+
+
+@Composable
+private fun CuteDriverPullRefreshIndicator(
+    refreshing: Boolean,
+    progress: Float,
+    modifier: Modifier = Modifier,
+) {
+    val clamped = progress.coerceIn(0f, 1.4f)
+    val infinite = rememberInfiniteTransition(label = "driverPull")
+    val rideOffset by infinite.animateFloat(
+        initialValue = -8f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Reverse),
+        label = "rideOffset",
+    )
+    val wheelRotation by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(700, easing = LinearEasing), RepeatMode.Restart),
+        label = "wheelRotation",
+    )
+    val bounce by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "bounce",
+    )
+
+    AnimatedVisibility(
+        visible = refreshing || clamped > 0.02f,
+        enter = fadeIn(tween(180)) + slideInVertically(initialOffsetY = { -it / 2 }),
+        exit = fadeOut(tween(180)) + slideOutVertically(targetOffsetY = { -it / 2 }),
+        modifier = modifier.padding(top = 10.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color.White.copy(alpha = 0.96f),
+            border = BorderStroke(1.dp, Color(0xFFF0DFC0))
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Box(modifier = Modifier.size(width = 124.dp, height = 56.dp)) {
+                    Canvas(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .offset { IntOffset((rideOffset * clamped).toInt(), (((if (refreshing) bounce else clamped) * -4f)).toInt()) }
+                    ) {
+                        val roadY = size.height * 0.82f
+                        val leftWheel = Offset(size.width * 0.33f, roadY - 6f)
+                        val rightWheel = Offset(size.width * 0.70f, roadY - 6f)
+                        drawRoundRect(
+                            color = Color(0xFFFFF0C7),
+                            topLeft = Offset(2f, roadY - 14f),
+                            size = Size(size.width - 4f, 22f),
+                            cornerRadius = CornerRadius(16f, 16f)
+                        )
+                        drawLine(Color(0xFFE0C68C), Offset(12f, roadY + 2f), Offset(size.width - 12f, roadY + 2f), strokeWidth = 3f, cap = StrokeCap.Round)
+                        fun drawWheel(center: Offset) {
+                            drawCircle(color = Color(0xFF374151), radius = 10f, center = center)
+                            drawCircle(color = Color.White, radius = 4f, center = center)
+                            val radians = Math.toRadians(wheelRotation.toDouble())
+                            val dx = kotlin.math.cos(radians).toFloat() * 9f
+                            val dy = kotlin.math.sin(radians).toFloat() * 9f
+                            drawLine(Color.White, center - Offset(dx, dy), center + Offset(dx, dy), strokeWidth = 1.7f, cap = StrokeCap.Round)
+                            drawLine(Color.White, center - Offset(dy, -dx), center + Offset(dy, -dx), strokeWidth = 1.7f, cap = StrokeCap.Round)
+                        }
+                        drawWheel(leftWheel)
+                        drawWheel(rightWheel)
+                        drawLine(Color(0xFFFFC83D), Offset(leftWheel.x, leftWheel.y - 10f), Offset(size.width * 0.50f, roadY - 26f), strokeWidth = 5f, cap = StrokeCap.Round)
+                        drawLine(Color(0xFFFFC83D), Offset(size.width * 0.50f, roadY - 26f), Offset(rightWheel.x - 5f, rightWheel.y - 10f), strokeWidth = 5f, cap = StrokeCap.Round)
+                        drawLine(Color(0xFFFFC83D), Offset(size.width * 0.47f, roadY - 26f), Offset(size.width * 0.60f, roadY - 38f), strokeWidth = 5f, cap = StrokeCap.Round)
+                        drawLine(Color(0xFFEF4444), Offset(size.width * 0.58f, roadY - 37f), Offset(size.width * 0.73f, roadY - 37f), strokeWidth = 4f, cap = StrokeCap.Round)
+                        drawCircle(color = Color(0xFF0EA5E9), radius = 7f, center = Offset(size.width * 0.30f, roadY - 34f))
+                        drawLine(Color(0xFF0EA5E9), Offset(size.width * 0.30f, roadY - 27f), Offset(size.width * 0.42f, roadY - 20f), strokeWidth = 5f, cap = StrokeCap.Round)
+                        drawLine(Color(0xFF0EA5E9), Offset(size.width * 0.38f, roadY - 22f), Offset(size.width * 0.48f, roadY - 32f), strokeWidth = 4f, cap = StrokeCap.Round)
+                        drawLine(Color(0xFF0EA5E9), Offset(size.width * 0.39f, roadY - 21f), Offset(size.width * 0.35f, roadY - 8f), strokeWidth = 4f, cap = StrokeCap.Round)
+                    }
+                }
+                Text(
+                    if (refreshing) "Driver is riding over..." else "Pull to send the rider out",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF6C7F93),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FriendlyEmptyState(title: String, subtitle: String) {
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color(0xFFF1E0BE))
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            CuteDriverPullRefreshIndicator(refreshing = true, progress = 1f)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+@Composable
+private fun CompletionRewardBanner(amountMop: Double) {
+    val sparkle by rememberInfiniteTransition(label = "rewardSparkle").animateFloat(
+        initialValue = 0.94f,
+        targetValue = 1.04f,
+        animationSpec = infiniteRepeatable(tween(500, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "rewardScale",
+    )
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = Color(0xFFFFF2CB),
+        border = BorderStroke(1.dp, Color(0xFFF3D26B)),
+        modifier = Modifier.graphicsLayer { scaleX = sparkle; scaleY = sparkle }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("🎉", style = MaterialTheme.typography.titleLarge)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Delivery completed", fontWeight = FontWeight.Bold, color = Color(0xFF6E4A00))
+                Text("+ MOP ${String.format("%.0f", amountMop)}", color = Color(0xFF8A5A00), style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
 @Composable
 private fun SummaryCard(
     title: String,
@@ -2350,15 +2549,34 @@ private fun SummaryCard(
     modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier,
+        modifier = modifier.animateContentSize(),
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, Color(0xFFF0DFC0))
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            AnimatedSummaryValue(value)
         }
+    }
+}
+
+@Composable
+private fun AnimatedSummaryValue(value: String) {
+    val mopMatch = Regex("""^MOP\s+([0-9]+(?:\.[0-9]+)?)$""").matchEntire(value)
+    val numberMatch = Regex("""^[0-9]+(?:\.[0-9]+)?$""").matchEntire(value)
+    when {
+        mopMatch != null -> {
+            val target = mopMatch.groupValues[1].toFloatOrNull() ?: 0f
+            val animated by animateFloatAsState(targetValue = target, animationSpec = tween(900, easing = FastOutSlowInEasing), label = "summaryMop")
+            Text("MOP ${String.format("%.0f", animated)}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        }
+        numberMatch != null -> {
+            val target = numberMatch.groupValues[0].toFloatOrNull() ?: 0f
+            val animated by animateFloatAsState(targetValue = target, animationSpec = tween(850, easing = FastOutSlowInEasing), label = "summaryNumber")
+            Text(String.format("%.0f", animated), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+        }
+        else -> Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
     }
 }
 

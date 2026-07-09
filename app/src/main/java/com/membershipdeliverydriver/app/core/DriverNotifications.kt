@@ -145,7 +145,7 @@ object DriverNotifications {
         )
 
         return NotificationCompat.Builder(context, DISPATCH_CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setSmallIcon(R.drawable.ic_notification_driver)
             .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round))
             .setContentTitle("配送中樞已啟動")
             .setContentText("$driverName 目前上線中，系統會持續留意新工單。")
@@ -180,7 +180,7 @@ object DriverNotifications {
             context,
             channelIdFor(if (urgent) SOUND_URGENT_ORDER else SOUND_NEW_ORDER)
         )
-            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setSmallIcon(R.drawable.ic_notification_driver)
             .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round))
             .setContentTitle(title)
             .setContentText(message)
@@ -211,7 +211,7 @@ object DriverNotifications {
         )
 
         val notification = NotificationCompat.Builder(context, channelIdFor(soundKey))
-            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setSmallIcon(R.drawable.ic_notification_driver)
             .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round))
             .setContentTitle(title)
             .setContentText(body)

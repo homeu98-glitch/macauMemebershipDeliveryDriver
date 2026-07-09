@@ -250,45 +250,44 @@ class DriverViewModel(
     }
 
 
-fun refreshAnnouncements(showMessage: Boolean = false) {
-    viewModelScope.launch {
-        runCatching { repository.loadAnnouncements() }
-            .onSuccess { ann ->
-                _uiState.update { it.copy(announcements = ann) }
-                if (showMessage) {
-                    _uiState.update {
-                        it.copy(errorMessage = if (ann.isEmpty()) "目前沒有新公告。" else "公告已更新。")
+    fun refreshAnnouncements(showMessage: Boolean = false) {
+        viewModelScope.launch {
+            runCatching { repository.loadAnnouncements() }
+                .onSuccess { ann ->
+                    _uiState.update { it.copy(announcements = ann) }
+                    if (showMessage) {
+                        _uiState.update {
+                            it.copy(errorMessage = if (ann.isEmpty()) "目前沒有新公告。" else "公告已更新。") }
                     }
                 }
-            }
-            .onFailure { error ->
-                if (showMessage) {
-                    _uiState.update { it.copy(errorMessage = error.message ?: "刷新公告失敗。") }
+                .onFailure { error ->
+                    if (showMessage) {
+                        _uiState.update { it.copy(errorMessage = error.message ?: "刷新公告失敗。") }
+                    }
                 }
-            }
+        }
     }
-}
 
-fun checkForUpdates(manual: Boolean = false) {
-    viewModelScope.launch {
-        runCatching { repository.fetchLatestAppRelease() }
-            .onSuccess { latest ->
-                when {
-                    latest != null && isNewerVersion(com.membershipdeliverydriver.app.BuildConfig.VERSION_NAME, latest.version) -> {
-                        _uiState.update { it.copy(updateInfo = latest) }
-                    }
-                    manual -> {
-                        _uiState.update { it.copy(errorMessage = "已是最新版本。") }
+    fun checkForUpdates(manual: Boolean = false) {
+        viewModelScope.launch {
+            runCatching { repository.fetchLatestAppRelease() }
+                .onSuccess { latest ->
+                    when {
+                        latest != null && isNewerVersion(com.membershipdeliverydriver.app.BuildConfig.VERSION_NAME, latest.version) -> {
+                            _uiState.update { it.copy(updateInfo = latest) }
+                        }
+                        manual -> {
+                            _uiState.update { it.copy(errorMessage = "已是最新版本。") }
+                        }
                     }
                 }
-            }
-            .onFailure { error ->
-                if (manual) {
-                    _uiState.update { it.copy(errorMessage = error.message ?: "檢查更新失敗。") }
+                .onFailure { error ->
+                    if (manual) {
+                        _uiState.update { it.copy(errorMessage = error.message ?: "檢查更新失敗。") }
+                    }
                 }
-            }
+        }
     }
-}
 
     fun logout() {
         viewModelScope.launch {
