@@ -1,3 +1,4 @@
+import { getDriverAppDownloadConfig } from "../../lib/app-release-config";
 import { getActiveDriverAppRelease } from "../../lib/driver-app-release";
 
 export const metadata = {
@@ -9,6 +10,18 @@ export const dynamic = "force-dynamic";
 
 export default async function ApkDownloadPage() {
   const active = await getActiveDriverAppRelease().catch(() => null);
+  const legacyConfig = active ? null : await getDriverAppDownloadConfig().catch(() => null);
+  const current = active
+    ? {
+        version: active.version,
+        releaseNotes: active.releaseNotes
+      }
+    : legacyConfig
+      ? {
+          version: legacyConfig.version,
+          releaseNotes: legacyConfig.releaseNotes
+        }
+      : null;
 
   return (
     <main
@@ -31,12 +44,12 @@ export default async function ApkDownloadPage() {
         <h1 className="page-title">澳門會員車手</h1>
         <p className="page-subtitle">請按下面按鈕下載最新 APK 並安裝到 Android 手機。</p>
 
-        {active ? (
+        {current ? (
           <>
             <div className="hint" style={{ marginTop: 20 }}>
-              <strong>版本：</strong> {active.version}
+              <strong>版本：</strong> {current.version}
               <br />
-              <strong>更新說明：</strong> {active.releaseNotes || "-"}
+              <strong>更新說明：</strong> {current.releaseNotes || "-"}
             </div>
 
             <div className="btn-row" style={{ marginTop: 24 }}>

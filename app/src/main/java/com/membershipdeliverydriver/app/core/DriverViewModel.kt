@@ -11,7 +11,14 @@ import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 
 private fun isNewerVersion(current: String, latest: String): Boolean {
-    fun parse(v: String) = v.split(".").map { it.toIntOrNull() ?: 0 }
+    fun parse(v: String): List<Int> {
+        return Regex("""\d+""")
+            .findAll(v)
+            .map { it.value.toIntOrNull() ?: 0 }
+            .toList()
+            .ifEmpty { listOf(0) }
+    }
+
     val a = parse(current)
     val b = parse(latest)
     val n = maxOf(a.size, b.size)
