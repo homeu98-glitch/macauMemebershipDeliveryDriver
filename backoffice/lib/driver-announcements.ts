@@ -1,6 +1,5 @@
 import { createServiceRoleSupabaseClient } from "./supabase";
 
-
 function normalizeCreatedBy(value?: string | null) {
   if (!value) return null;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
@@ -73,7 +72,7 @@ export async function createDriverAnnouncement(input: {
       content,
       published,
       published_at: published ? now : null,
-      created_by: input.createdBy ?? null
+      created_by: normalizeCreatedBy(input.createdBy)
     })
     .select("id,title,content,created_at,published")
     .single();
