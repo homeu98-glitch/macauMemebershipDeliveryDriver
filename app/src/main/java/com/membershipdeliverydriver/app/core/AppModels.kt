@@ -72,6 +72,7 @@ data class LoginForm(
 data class LocationPoint(
     val label: String,
     val address: String,
+    val district: String? = null,
     val latitude: Double,
     val longitude: Double,
     val contactName: String,
@@ -164,6 +165,8 @@ data class DriverAppState(
     val completedOrdersFilter: HistoryRange = HistoryRange.TODAY,
     val completedOrdersPage: Int = 0,
     val completedOrdersHasMore: Boolean = true,
+    val pickupDistrictFilter: String? = null,
+    val destinationDistrictFilter: String? = null,
     val announcements: List<DriverAnnouncement> = emptyList(),
     val updateInfo: AppUpdateInfo? = null,
     val registrationSubmitted: Boolean = false,

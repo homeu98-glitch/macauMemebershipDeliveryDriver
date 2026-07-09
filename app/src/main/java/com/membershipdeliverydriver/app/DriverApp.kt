@@ -38,6 +38,7 @@ import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Directions
@@ -57,6 +58,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -288,6 +291,8 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onToggleAvailability = viewModel::toggleAvailability,
                     onAcceptOrder = viewModel::acceptOrder,
                     onRefresh = viewModel::refreshDashboard,
+                    onSelectPickupDistrict = viewModel::selectPickupDistrictFilter,
+                    onSelectDestinationDistrict = viewModel::selectDestinationDistrictFilter,
                 )
             }
             composable(Routes.Orders) {
@@ -683,6 +688,8 @@ private fun HomeScreen(
     onToggleAvailability: () -> Unit,
     onAcceptOrder: (String) -> Unit,
     onRefresh: () -> Unit,
+    onSelectPickupDistrict: (String?) -> Unit,
+    onSelectDestinationDistrict: (String?) -> Unit,
 ) {
     val context = LocalContext.current
     val driver = uiState.currentDriver
@@ -690,6 +697,29 @@ private fun HomeScreen(
         refreshing = uiState.isRefreshing,
         onRefresh = onRefresh,
     )
+    var pickupExpanded by rememberSaveable { mutableStateOf(false) }
+    var destinationExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val destinationOptions = remember(uiState.availableOrders, uiState.pickupDistrictFilter) {
+        uiState.availableOrders
+            .filter { order -> uiState.pickupDistrictFilter == null || order.shop.district == uiState.pickupDistrictFilter }
+            .mapNotNull { it.customer.district?.takeIf(String::isNotBlank) }
+            .distinct()
+            .sorted()
+    }
+    val pickupOptions = remember(uiState.availableOrders, uiState.destinationDistrictFilter) {
+        uiState.availableOrders
+            .filter { order -> uiState.destinationDistrictFilter == null || order.customer.district == uiState.destinationDistrictFilter }
+            .mapNotNull { it.shop.district?.takeIf(String::isNotBlank) }
+            .distinct()
+            .sorted()
+    }
+    val filteredOrders = remember(uiState.availableOrders, uiState.pickupDistrictFilter, uiState.destinationDistrictFilter) {
+        uiState.availableOrders.filter { order ->
+            (uiState.pickupDistrictFilter == null || order.shop.district == uiState.pickupDistrictFilter) &&
+                (uiState.destinationDistrictFilter == null || order.customer.district == uiState.destinationDistrictFilter)
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -778,7 +808,7 @@ private fun HomeScreen(
                         border = BorderStroke(1.dp, Color(0xFFF6D56A))
                     ) {
                         Text(
-                            text = "${uiState.availableOrders.size} 張",
+                            text = "${filteredOrders.size} 張",
                             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                             color = Color(0xFF6E4A00),
                             style = MaterialTheme.typography.labelLarge,
@@ -787,7 +817,106 @@ private fun HomeScreen(
                     }
                 }
             }
-            if (uiState.availableOrders.isEmpty()) {
+            item {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, Color(0xFFF1E0BE))
+                ) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            TextButton(
+                                onClick = { pickupExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(horizontalAlignment = Alignment.Start) {
+                                        Text("取貨地區", color = Color(0xFF6C7F93), style = MaterialTheme.typography.labelSmall)
+                                        Text(
+                                            uiState.pickupDistrictFilter ?: "全部",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color(0xFF2E4765),
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color(0xFF2E4765))
+                                }
+                            }
+                            DropdownMenu(expanded = pickupExpanded, onDismissRequest = { pickupExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("全部") },
+                                    onClick = {
+                                        onSelectPickupDistrict(null)
+                                        pickupExpanded = false
+                                    }
+                                )
+                                pickupOptions.forEach { district ->
+                                    DropdownMenuItem(
+                                        text = { Text(district) },
+                                        onClick = {
+                                            onSelectPickupDistrict(district)
+                                            pickupExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(48.dp)
+                                .background(Color(0xFFF1E0BE))
+                        )
+                        Box(modifier = Modifier.weight(1f)) {
+                            TextButton(
+                                onClick = { destinationExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(horizontalAlignment = Alignment.Start) {
+                                        Text("送達地區", color = Color(0xFF6C7F93), style = MaterialTheme.typography.labelSmall)
+                                        Text(
+                                            uiState.destinationDistrictFilter ?: "全部",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = Color(0xFF2E4765),
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = Color(0xFF2E4765))
+                                }
+                            }
+                            DropdownMenu(expanded = destinationExpanded, onDismissRequest = { destinationExpanded = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("全部") },
+                                    onClick = {
+                                        onSelectDestinationDistrict(null)
+                                        destinationExpanded = false
+                                    }
+                                )
+                                destinationOptions.forEach { district ->
+                                    DropdownMenuItem(
+                                        text = { Text(district) },
+                                        onClick = {
+                                            onSelectDestinationDistrict(district)
+                                            destinationExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (filteredOrders.isEmpty()) {
                 item {
                     Card(
                         shape = RoundedCornerShape(24.dp),
@@ -799,12 +928,15 @@ private fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                "目前沒有可接訂單",
+                                if (uiState.availableOrders.isEmpty()) "目前沒有可接訂單" else "目前沒有符合篩選的訂單",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                "保持上線並下拉刷新，新的配送票單會出現在這裡。",
+                                if (uiState.availableOrders.isEmpty())
+                                    "保持上線並下拉刷新，新的配送票單會出現在這裡。"
+                                else
+                                    "請調整上方的取貨地區或送達地區篩選。",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
@@ -812,7 +944,7 @@ private fun HomeScreen(
                     }
                 }
             }
-            items(uiState.availableOrders, key = { it.id }) { order ->
+            items(filteredOrders, key = { it.id }) { order ->
                 AvailableOrderCard(
                     order = order,
                     isOnline = driver?.availability == DriverAvailability.ONLINE,
@@ -1169,6 +1301,13 @@ private fun AvailableOrderCard(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 PaymentTagChip(order.paymentTag)
                 Text(
+                    "取貨區：${order.shop.district ?: "未分區"} · 送達區：${order.customer.district ?: "未分區"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF607286),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
                     "${distanceLabel(order)} · ${order.deliveryDeadlineText}",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF607286),
@@ -1298,6 +1437,13 @@ private fun ActiveOrderCard(
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 PaymentTagChip(order.paymentTag)
+                Text(
+                    "取貨區：${order.shop.district ?: "未分區"} · 送達區：${order.customer.district ?: "未分區"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF607286),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "${distanceLabel(order)} · 請盡快完成本單",
                     color = Color(0xFF607286),

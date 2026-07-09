@@ -16,6 +16,7 @@ const navItems = [
   { href: "/orders", label: "訂單管理" },
   { href: "/apk", label: "安裝設置" },
   { href: "/announcements", label: "公告發布" },
+  { href: "/districts", label: "地區同步" },
   { href: "/callbacks", label: "回調紀錄" },
   { href: "/settings", label: "系統設定" }
 ];

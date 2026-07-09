@@ -668,8 +668,8 @@ class SupabaseDriverRepository : DriverRepository {
                     id = orderId,
                     externalOrderId = orderId,
                     status = OrderStatus.DELIVERED,
-                    shop = LocationPoint("", "", 0.0, 0.0, "", ""),
-                    customer = LocationPoint("", "", 0.0, 0.0, "", ""),
+                    shop = LocationPoint("", "", null, 0.0, 0.0, "", ""),
+                    customer = LocationPoint("", "", null, 0.0, 0.0, "", ""),
                     customerNote = "",
                     etaMinutes = 0,
                     deliveryDeadlineText = "",
@@ -1242,14 +1242,14 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
 
         val shopsArray = if (shopIds.isNotEmpty()) {
             requestArray(
-                path = "/rest/v1/shops?select=id,name,address,latitude,longitude,contact_name,contact_phone&id=in.(${shopIds.joinToString(",") { "\"$it\"" }})",
+                path = "/rest/v1/shops?select=id,name,address,district,latitude,longitude,contact_name,contact_phone&id=in.(${shopIds.joinToString(",") { "\"$it\"" }})",
                 token = token,
             )
         } else JSONArray()
 
         val customersArray = if (customerIds.isNotEmpty()) {
             requestArray(
-                path = "/rest/v1/customers?select=id,name,address,latitude,longitude,phone,delivery_note&id=in.(${customerIds.joinToString(",") { "\"$it\"" }})",
+                path = "/rest/v1/customers?select=id,name,address,district,latitude,longitude,phone,delivery_note&id=in.(${customerIds.joinToString(",") { "\"$it\"" }})",
                 token = token,
             )
         } else JSONArray()
@@ -1384,6 +1384,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                         shop = LocationPoint(
                             label = shop.optString("name", "店舖"),
                             address = shop.optString("address", ""),
+                            district = shop.optString("district").ifBlank { null },
                             latitude = shopLat,
                             longitude = shopLng,
                             contactName = shop.optString("contact_name", "店舖"),
@@ -1393,6 +1394,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                         customer = LocationPoint(
                             label = customer.optString("name", "客戶"),
                             address = customer.optString("address", ""),
+                            district = customer.optString("district").ifBlank { null },
                             latitude = customer.optDouble("latitude", 0.0),
                             longitude = customer.optDouble("longitude", 0.0),
                             contactName = customer.optString("name", "客戶"),

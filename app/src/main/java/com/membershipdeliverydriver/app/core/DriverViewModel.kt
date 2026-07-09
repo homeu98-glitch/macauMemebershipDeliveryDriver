@@ -241,6 +241,14 @@ class DriverViewModel(
         _uiState.update { it.copy(updateInfo = null) }
     }
 
+    fun selectPickupDistrictFilter(value: String?) {
+        _uiState.update { it.copy(pickupDistrictFilter = value) }
+    }
+
+    fun selectDestinationDistrictFilter(value: String?) {
+        _uiState.update { it.copy(destinationDistrictFilter = value) }
+    }
+
     fun logout() {
         viewModelScope.launch {
             DriverNotifications.stopDispatchService(AppContextHolder.requireContext())

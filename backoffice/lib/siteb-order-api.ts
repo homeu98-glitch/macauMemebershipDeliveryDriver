@@ -1,6 +1,7 @@
 import { sendPushToDriver, sendPushToOnlineDrivers } from "./push-notifications";
 import { dispatchOrderCallback } from "./siteb-callbacks";
 import { createServiceRoleSupabaseClient } from "./supabase";
+import { findMacauDistrict } from "./districts";
 
 type ShopInput = {
   externalShopId?: string;
@@ -135,6 +136,7 @@ async function upsertShop(shop: ShopInput) {
         longitude: shop.longitude ?? null,
         contact_name: shop.contactName ?? null,
         contact_phone: shop.contactPhone ?? null,
+        district: findMacauDistrict(shop.latitude ?? null, shop.longitude ?? null),
         updated_at: nowIso()
       },
       { onConflict: "external_shop_id" }
@@ -162,6 +164,7 @@ async function upsertCustomer(customer: CustomerInput) {
         latitude: customer.latitude ?? null,
         longitude: customer.longitude ?? null,
         delivery_note: customer.deliveryNote ?? null,
+        district: findMacauDistrict(customer.latitude ?? null, customer.longitude ?? null),
         updated_at: nowIso()
       },
       { onConflict: "external_customer_id" }
