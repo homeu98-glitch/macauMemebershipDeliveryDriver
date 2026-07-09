@@ -44,9 +44,10 @@ export async function getActiveDriverAppRelease(): Promise<DriverAppRelease | nu
     .from("driver_app_releases")
     .select("id,version,apk_url,release_notes,created_at,is_active")
     .eq("is_active", true)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
   if (error) throw error;
-  return data ? mapRow(data) : null;
+  return data && data.length > 0 ? mapRow(data[0]) : null;
 }
 
 export async function createDriverAppRelease(input: {
