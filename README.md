@@ -1,82 +1,54 @@
-# Membership Delivery Driver
+# macauMemebershipDeliveryDriver
 
-Macau-focused delivery driver project containing both the Android rider app and the Next.js backoffice.
+澳門會員配送系統（Backoffice + 車手 Android App）。
 
-## Project structure
+## 專案結構
 
-```text
-MembershipDeliveryDriver/
-├─ app/                 # Android rider app (Kotlin + Jetpack Compose)
-├─ backoffice/          # Next.js backoffice
-├─ supabase/            # SQL schema and migrations
-├─ build.gradle.kts
-├─ settings.gradle.kts
-└─ README.md
-```
+- `backoffice/`: 管理後台（Next.js）
+- `app/`: 車手 Android App（Kotlin / Jetpack Compose）
+- `supabase/`: Supabase SQL schema / policies
+- `lib/`: 共享後端工具（供 backoffice 使用）
 
-## Android rider app
+## 主要連結
 
-The Android app includes:
+- 車手 APK 公開下載頁（固定）：`/apkdownload`
+- 車手 APK 直接下載（固定）：`/apkdownload/latest`
+- 後台 APK 版本管理：`/apk`
+- 後台 公告發布：`/announcements`
 
-- rider login and registration
-- pending approval flow
-- active order workflow
-- real `已取貨` action
-- proof-of-delivery upload flow
-- Firebase push notifications
-- per-event Cantonese notification sounds
-- earnings and profile pages
+## OTA 更新（非 Play Store）
 
-Main Android entry points:
+Android 無法完全靜默自動更新 APK。本專案的 OTA 流程是：
 
-- `app/src/main/java/com/membershipdeliverydriver/app/DriverApp.kt`
-- `app/src/main/java/com/membershipdeliverydriver/app/core/DriverRepository.kt`
-- `app/src/main/java/com/membershipdeliverydriver/app/core/DriverNotifications.kt`
+1. App 啟動後呼叫公開 API 取得最新版本資訊
+2. 若 `latest.version` 高於 `BuildConfig.VERSION_NAME`，顯示更新提示
+3. 使用者點擊後跳轉到固定下載頁 `/apkdownload` 再手動安裝
 
-## Backoffice
+詳見：`docs/flows/ota_update_flow.md`
 
-The backoffice includes:
+## 技術文檔
 
-- dashboard
-- rider approval workflow
-- orders list and order details
-- callback visibility
-- push-token registration visibility
-- dashboard test-order creation buttons
-- testing page for fake orders and test push
-- Firebase Admin push sending
+- 技術文檔索引：`docs/README.md`
+- SiteA 整合：`docs/integration/sitea.md`
+- SiteB Callback/Status：`docs/integration/siteb.md`
 
-Main backoffice entry points:
+## 開發
 
-- `backoffice/app/dashboard/page.tsx`
-- `backoffice/components/backoffice.tsx`
-- `backoffice/lib/siteb-order-api.ts`
-- `backoffice/lib/push-notifications.ts`
+### Backoffice
 
-## Backoffice local setup
-
-```powershell
+```bash
 cd backoffice
 npm install
-Copy-Item '.env.example' '.env.local'
 npm run dev
 ```
 
-## Backoffice environment variables
+### Android App
 
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=replace-with-your-anon-key
-NEXT_PUBLIC_API_BASE_URL=https://your-api.example.com
-SUPABASE_SERVICE_ROLE_KEY=replace-with-your-service-role-key
-BACKOFFICE_SESSION_SECRET=replace-with-a-long-random-session-secret
-JWT_SHARED_SECRET=replace-with-your-jwt-shared-secret
-FIREBASE_ADMIN_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"..."}
+```bash
+./gradlew :app:assembleDebug
 ```
 
-## Notes
+## 部署
 
-- Keep service-role and Firebase Admin credentials server-side only.
-- Do not place privileged keys inside the Android app.
-- The Android app is built from the repo root with Gradle.
-- The backoffice is deployed separately from `backoffice/`.
+- Backoffice：Vercel
+- DB/Storage：Supabase

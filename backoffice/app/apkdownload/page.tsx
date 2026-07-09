@@ -1,4 +1,4 @@
-import { getDriverAppDownloadConfig } from "../../lib/app-release-config";
+import { getActiveDriverAppRelease } from "../../lib/driver-app-release";
 
 export const metadata = {
   title: "澳門會員車手 下載",
@@ -8,7 +8,7 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function ApkDownloadPage() {
-  const config = await getDriverAppDownloadConfig().catch(() => null);
+  const active = await getActiveDriverAppRelease().catch(() => null);
 
   return (
     <main
@@ -29,28 +29,22 @@ export default async function ApkDownloadPage() {
       >
         <div className="eyebrow">澳門會員配送系統</div>
         <h1 className="page-title">澳門會員車手</h1>
-        <p className="page-subtitle">
-          請按下面按鈕下載最新 APK 並安裝到 Android 手機。
-        </p>
+        <p className="page-subtitle">請按下面按鈕下載最新 APK 並安裝到 Android 手機。</p>
 
-        {config ? (
+        {active ? (
           <>
             <div className="hint" style={{ marginTop: 20 }}>
-              <strong>版本：</strong> {config.version}
+              <strong>版本：</strong> {active.version}
               <br />
-              <strong>更新說明：</strong> {config.releaseNotes}
+              <strong>更新說明：</strong> {active.releaseNotes || "-"}
             </div>
 
             <div className="btn-row" style={{ marginTop: 24 }}>
-              <a className="btn btn-primary" href="/apkdownload/latest">
-                下載 APK
-              </a>
+              <a className="btn btn-primary" href="/apkdownload/latest">下載 APK</a>
             </div>
           </>
         ) : (
-          <div className="error" style={{ marginTop: 20 }}>
-            APK 尚未設定，請稍後再試。
-          </div>
+          <div className="error" style={{ marginTop: 20 }}>APK 尚未設定，請稍後再試。</div>
         )}
 
         <div className="hint" style={{ marginTop: 18 }}>

@@ -10,6 +10,19 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 
+private fun isNewerVersion(current: String, latest: String): Boolean {
+    fun parse(v: String) = v.split(".").map { it.toIntOrNull() ?: 0 }
+    val a = parse(current)
+    val b = parse(latest)
+    val n = maxOf(a.size, b.size)
+    for (i in 0 until n) {
+        val ai = a.getOrElse(i) { 0 }
+        val bi = b.getOrElse(i) { 0 }
+        if (bi != ai) return bi > ai
+    }
+    return false
+}
+
 class DriverViewModel(
     private val repository: DriverRepository = SupabaseDriverRepository(),
 ) : ViewModel() {
@@ -20,6 +33,14 @@ class DriverViewModel(
 
     init {
         viewModelScope.launch {
+            // Check OTA update info early (no login required)
+            runCatching {
+                val latest = repository.fetchLatestAppRelease()
+                if (latest != null && isNewerVersion(com.membershipdeliverydriver.app.BuildConfig.VERSION_NAME, latest.version)) {
+                    _uiState.update { it.copy(updateInfo = latest) }
+                }
+            }
+
             when (val restored = repository.restoreSession()) {
                 is ApiResult.Success -> {
                     if (restored.value.availability == DriverAvailability.ONLINE) {
@@ -34,6 +55,11 @@ class DriverViewModel(
                         _uiState.update { it.copy(errorMessage = warning) }
                     }
                     refreshDashboard()
+                    // Load announcements
+                    runCatching {
+                        val ann = repository.loadAnnouncements()
+                        _uiState.update { it.copy(announcements = ann) }
+                    }
                 }
                 is ApiResult.Failure -> {
                     _uiState.update { it.copy(errorMessage = restored.message) }
@@ -118,6 +144,11 @@ class DriverViewModel(
                         _uiState.update { it.copy(errorMessage = warning) }
                     }
                     refreshDashboard()
+                    // Load announcements
+                    runCatching {
+                        val ann = repository.loadAnnouncements()
+                        _uiState.update { it.copy(announcements = ann) }
+                    }
                 }
                 is ApiResult.Failure -> {
                     _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
@@ -204,6 +235,10 @@ class DriverViewModel(
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun dismissUpdateInfo() {
+        _uiState.update { it.copy(updateInfo = null) }
     }
 
     fun logout() {
@@ -298,6 +333,11 @@ class DriverViewModel(
                         _uiState.update { it.copy(errorMessage = warning) }
                     }
                     refreshDashboard()
+                    // Load announcements
+                    runCatching {
+                        val ann = repository.loadAnnouncements()
+                        _uiState.update { it.copy(announcements = ann) }
+                    }
                 }
                 is ApiResult.Failure -> {
                     _uiState.update { it.copy(errorMessage = result.message) }
@@ -325,10 +365,20 @@ class DriverViewModel(
                         )
                     }
                     refreshDashboard()
+                    // Load announcements
+                    runCatching {
+                        val ann = repository.loadAnnouncements()
+                        _uiState.update { it.copy(announcements = ann) }
+                    }
                 }
                 is ApiResult.Failure -> {
                     _uiState.update { it.copy(errorMessage = result.message) }
                     refreshDashboard()
+                    // Load announcements
+                    runCatching {
+                        val ann = repository.loadAnnouncements()
+                        _uiState.update { it.copy(announcements = ann) }
+                    }
                 }
             }
         }
@@ -346,10 +396,20 @@ class DriverViewModel(
                         )
                     }
                     refreshDashboard()
+                    // Load announcements
+                    runCatching {
+                        val ann = repository.loadAnnouncements()
+                        _uiState.update { it.copy(announcements = ann) }
+                    }
                 }
                 is ApiResult.Failure -> {
                     _uiState.update { it.copy(errorMessage = result.message) }
                     refreshDashboard()
+                    // Load announcements
+                    runCatching {
+                        val ann = repository.loadAnnouncements()
+                        _uiState.update { it.copy(announcements = ann) }
+                    }
                 }
             }
         }
@@ -423,6 +483,7 @@ class DriverViewModel(
                 val availableOrders = repository.loadAvailableOrders()
                 val orders = repository.loadOrders()
                 val earnings = repository.loadEarnings()
+            val announcements = runCatching { repository.loadAnnouncements() }.getOrDefault(emptyList())
                 val deliveredToday = orders.count { it.status == OrderStatus.DELIVERED }
                 val todayEarnings = earnings
                     .filter { it.completedAt.toLocalDate() == java.time.LocalDate.now() }

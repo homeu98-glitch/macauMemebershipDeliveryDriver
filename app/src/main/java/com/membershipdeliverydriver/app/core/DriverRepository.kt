@@ -50,6 +50,8 @@ interface DriverRepository {
     suspend fun cancelPickedUpWithinGrace(orderId: String): ApiResult<Unit>
     suspend fun confirmOrderCanceled(orderId: String): ApiResult<Unit>
     suspend fun reportIssue(orderId: String, note: String): ApiResult<Order>
+    suspend fun loadAnnouncements(): List<DriverAnnouncement>
+    suspend fun fetchLatestAppRelease(): AppUpdateInfo?
     suspend fun logout()
 }
 
@@ -416,7 +418,7 @@ class SupabaseDriverRepository : DriverRepository {
 
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&status=eq.new&order=created_at.asc",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&status=eq.new&order=created_at.asc",
             token = token,
         )
 
@@ -448,7 +450,7 @@ class SupabaseDriverRepository : DriverRepository {
         val orderFilter = orderIds.joinToString(",") { "\"$it\"" }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&order=promised_at.asc&id=in.($orderFilter)&status=not.eq.delivered",
             token = token,
         )
 
@@ -533,7 +535,7 @@ class SupabaseDriverRepository : DriverRepository {
         val completionAtByOrder = pagedCompletions.associate { it.key to it.value }
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})&order=promised_at.desc",
             token = token,
         )
 
@@ -794,7 +796,71 @@ class SupabaseDriverRepository : DriverRepository {
         }
     }
 
-    override suspend fun logout() = withContext(Dispatchers.IO) {
+    
+
+override suspend fun loadAnnouncements(): List<DriverAnnouncement> = withContext(Dispatchers.IO) {
+    val token = ensureActiveAccessToken() ?: return@withContext emptyList()
+    return@withContext try {
+        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+        val request = Request.Builder()
+            .url("$baseUrl/api/mobile/announcements")
+            .get()
+            .addHeader("x-supabase-access-token", token)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext emptyList()
+            val body = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(body) }.getOrNull() ?: return@withContext emptyList()
+            val items = json.optJSONArray("items") ?: JSONArray()
+
+            buildList {
+                for (index in 0 until items.length()) {
+                    val row = items.optJSONObject(index) ?: continue
+                    add(
+                        DriverAnnouncement(
+                            id = row.optString("id"),
+                            title = row.optString("title"),
+                            content = row.optString("content"),
+                            createdAt = row.optString("createdAt"),
+                        )
+                    )
+                }
+            }
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+override suspend fun fetchLatestAppRelease(): AppUpdateInfo? = withContext(Dispatchers.IO) {
+    return@withContext try {
+        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+        val request = Request.Builder()
+            .url("$baseUrl/api/public/driver-app/latest")
+            .get()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return@withContext null
+            val body = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(body) }.getOrNull() ?: return@withContext null
+            if (!json.optBoolean("success")) return@withContext null
+
+            val version = json.optString("version").trim()
+            if (version.isBlank()) return@withContext null
+
+            AppUpdateInfo(
+                version = version,
+                releaseNotes = json.optString("releaseNotes").trim(),
+                downloadPageUrl = json.optString("landingPageUrl").trim(),
+            )
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+override suspend fun logout() = withContext(Dispatchers.IO) {
         session = null
         currentDriver = null
         currentAuthUserId = null
@@ -1056,7 +1122,7 @@ class SupabaseDriverRepository : DriverRepository {
         }
 
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=in.(${orderIds.joinToString(",") { "\"$it\"" }})",
             token = token,
         )
 
@@ -1067,7 +1133,7 @@ class SupabaseDriverRepository : DriverRepository {
         val driverId = currentDriver?.id ?: return null
         val latestDriverLocation = loadLatestDriverLocation(token, driverId)
         val ordersArray = requestArray(
-            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,shop_id,customer_id,source_payload,offline_payment_note&id=eq.${urlEncode(orderId)}",
+            path = "/rest/v1/orders?select=id,external_order_id,status,assigned_fee_mop,promised_at,created_at,shop_id,customer_id,source_payload,offline_payment_note&id=eq.${urlEncode(orderId)}",
             token = token,
         )
         return mapOrders(token, ordersArray, latestDriverLocation).firstOrNull()
@@ -1336,6 +1402,7 @@ class SupabaseDriverRepository : DriverRepository {
                         etaMinutes = calculateEtaMinutes(json.optString("promised_at", "")),
                         deliveryDeadlineText = formatDeadline(json.optString("promised_at", "")),
                         promisedAt = json.optString("promised_at").ifBlank { null },
+                        publishedAt = json.optString("created_at").ifBlank { null },
                         distanceKm = activeDistance,
                         totalAmountMop = json.optDouble("assigned_fee_mop", 0.0),
                         items = itemsByOrder[json.getString("id")] ?: emptyList(),
@@ -1391,10 +1458,10 @@ class SupabaseDriverRepository : DriverRepository {
         val noteText = (orderJson.optString("offline_payment_note", "") + " " + notes?.optString("shopNote", "")).lowercase()
 
         return when {
-            explicitValue in setOf("shop", "merchant", "prepaid", "paid_by_shop", "shop_paid") -> "商戶支付"
-            explicitValue in setOf("customer", "cod", "cash", "paid_by_customer", "customer_paid") -> "客人支付"
-            "已線上付款" in noteText || "paid by shop" in noteText || "prepaid" in noteText || "shop paid" in noteText || "商戶支付" in noteText || "店舖支付" in noteText -> "商戶支付"
-            else -> "客人支付"
+            explicitValue in setOf("shop", "merchant", "prepaid", "paid_by_shop", "shop_paid") -> "商家支付運貨"
+            explicitValue in setOf("customer", "cod", "cash", "paid_by_customer", "customer_paid") -> "客人支付運費"
+            "已線上付款" in noteText || "paid by shop" in noteText || "prepaid" in noteText || "shop paid" in noteText || "商戶支付" in noteText || "店舖支付" in noteText -> "商家支付運貨"
+            else -> "客人支付運費"
         }
     }
 

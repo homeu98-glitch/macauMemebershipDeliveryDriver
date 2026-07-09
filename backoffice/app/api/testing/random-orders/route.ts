@@ -103,7 +103,8 @@ function buildRandomOrder(index: number, callbackBaseUrl: string): CreateOrderIn
     items,
     notes: {
       shopNote: "此訂單由後台測試頁建立。",
-      driverNote: "請優先檢查資料流與通知。"
+      driverNote: "請優先檢查資料流與通知。",
+      paymentBy: Math.random() < 0.5 ? "customer" : "shop"
     },
     callback: {
       url: `${callbackBaseUrl}/api/integration/delivery/siteb/callback`,

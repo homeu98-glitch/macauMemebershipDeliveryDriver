@@ -95,11 +95,12 @@ data class Order(
     val etaMinutes: Int,
     val deliveryDeadlineText: String,
     val promisedAt: String? = null,
+    val publishedAt: String? = null,
     val distanceKm: Double,
     val totalAmountMop: Double,
     val items: List<OrderItem>,
     val acceptedAt: String? = null,
-    val paymentTag: String = "客人支付",
+    val paymentTag: String = "客人支付運費",
     val pickedUpAt: String? = null,
     val deliveredAt: String? = null,
     val proofOfDeliveryUri: Uri? = null,
@@ -116,6 +117,19 @@ data class EarningEntry(
     val title: String,
     val amountMop: Double,
     val completedAt: LocalDateTime,
+)
+
+data class DriverAnnouncement(
+    val id: String,
+    val title: String,
+    val content: String,
+    val createdAt: String,
+)
+
+data class AppUpdateInfo(
+    val version: String,
+    val releaseNotes: String,
+    val downloadPageUrl: String,
 )
 
 data class DriverDashboard(
@@ -150,6 +164,8 @@ data class DriverAppState(
     val completedOrdersFilter: HistoryRange = HistoryRange.TODAY,
     val completedOrdersPage: Int = 0,
     val completedOrdersHasMore: Boolean = true,
+    val announcements: List<DriverAnnouncement> = emptyList(),
+    val updateInfo: AppUpdateInfo? = null,
     val registrationSubmitted: Boolean = false,
     val lastCallback: CallbackEnvelope? = null,
     val isLoading: Boolean = false,

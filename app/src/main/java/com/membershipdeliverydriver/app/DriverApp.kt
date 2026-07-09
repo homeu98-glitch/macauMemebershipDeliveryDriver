@@ -153,6 +153,29 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
         }
     }
 
+
+    if (uiState.updateInfo != null) {
+        val info = uiState.updateInfo!!
+        AlertDialog(
+            onDismissRequest = viewModel::dismissUpdateInfo,
+            title = { Text("發現新版本 ${info.version}") },
+            text = { Text(if (info.releaseNotes.isBlank()) "有新版本可更新。" else info.releaseNotes) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        runCatching {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadPageUrl))
+                            context.startActivity(intent)
+                        }
+                    }
+                ) { Text("立即更新") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissUpdateInfo) { Text("稍後") }
+            }
+        )
+    }
+
     LaunchedEffect(uiState.currentDriver, currentRoute) {
         if (uiState.currentDriver != null) {
             if (currentRoute in setOf(Routes.Login, Routes.Register, Routes.PendingApproval)) {
@@ -182,9 +205,8 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
         }
     }
 
-    LaunchedEffect(uiState.currentDriver) {
+    LaunchedEffect(true) {
         if (
-            uiState.currentDriver != null &&
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION
@@ -1028,16 +1050,17 @@ private fun OrdersScreen(
 
 @Composable
 private fun PaymentTagChip(label: String) {
+    val isShopPaid = label.contains("商家") || label.contains("商戶")
     Surface(
         shape = RoundedCornerShape(10.dp),
-        color = if (label == "Paid by Shop") Color(0xFFE9F7EF) else Color(0xFFEAF2FF),
-        border = BorderStroke(1.dp, if (label == "Paid by Shop") Color(0xFFB7DEC4) else Color(0xFFBED2F2))
+        color = if (isShopPaid) Color(0xFFE9F7EF) else Color(0xFFEAF2FF),
+        border = BorderStroke(1.dp, if (isShopPaid) Color(0xFFB7DEC4) else Color(0xFFBED2F2))
     ) {
         Text(
             label,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
-            color = if (label == "Paid by Shop") Color(0xFF22663A) else Color(0xFF234A84),
+            color = if (isShopPaid) Color(0xFF22663A) else Color(0xFF234A84),
             fontWeight = FontWeight.SemiBold,
         )
     }
@@ -1091,6 +1114,14 @@ private fun AvailableOrderCard(
                     )
                     Text(
                         "送達時間 ${order.deliveryDeadlineText}",
+                        color = Color(0xFF6C7F93),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    val publishedAtText = remember(order.publishedAt) {
+                        order.publishedAt?.let { runCatching { DateTimeFormatter.ofPattern("MM/dd HH:mm").format(OffsetDateTime.parse(it)) }.getOrNull() }
+                    }
+                    Text(
+                        "發單日期 ${publishedAtText ?: "-"}",
                         color = Color(0xFF6C7F93),
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -1960,10 +1991,47 @@ private fun ProfileScreen(
                 Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(driver?.fullName ?: "未登入", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     Text("電話：${driver?.phone ?: "-"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("版本：${com.membershipdeliverydriver.app.BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     StatusBadge(
                         label = "審核狀態：${approvalLabel(driver?.approvalStatus ?: ApprovalStatus.PENDING_APPROVAL)}",
                         highlight = driver?.approvalStatus == ApprovalStatus.APPROVED,
                     )
+                }
+            }
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("車手公告", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                if (uiState.announcements.isEmpty()) {
+                    Card(
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Color(0xFFF1E0BE))
+                    ) {
+                        Text(
+                            "暫時沒有公告。",
+                            modifier = Modifier.padding(18.dp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    uiState.announcements.forEach { ann ->
+                        Card(
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFF0DFC0))
+                        ) {
+                            Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(ann.title, fontWeight = FontWeight.SemiBold)
+                                Text(ann.content, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    formatter.format(OffsetDateTime.parse(ann.createdAt)),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

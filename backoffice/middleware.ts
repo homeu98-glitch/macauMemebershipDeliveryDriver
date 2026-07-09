@@ -10,6 +10,7 @@ function isPublicRoute(pathname: string) {
     pathname.startsWith("/apkdownload") ||
     pathname.startsWith("/api/v1/") ||
     pathname.startsWith("/api/mobile/") ||
+    pathname.startsWith("/api/public/") ||
     pathname.startsWith("/_next") ||
     pathname.endsWith(".ico") ||
     pathname.endsWith(".png") ||

@@ -15,6 +15,7 @@ const navItems = [
   { href: "/riders", label: "騎手列表" },
   { href: "/orders", label: "訂單管理" },
   { href: "/apk", label: "安裝設置" },
+  { href: "/announcements", label: "公告發布" },
   { href: "/callbacks", label: "回調紀錄" },
   { href: "/settings", label: "系統設定" }
 ];
