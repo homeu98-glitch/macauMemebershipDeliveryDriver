@@ -25,6 +25,10 @@ type ActivateResponse =
   | { success: true; active: Release }
   | { success: false; message: string };
 
+type DeleteResponse =
+  | { success: true }
+  | { success: false; message: string };
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
   const d = new Date(value);
@@ -136,6 +140,30 @@ export default function ApkManagerPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "設定最新版本失敗。"
       );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeRelease(release: Release) {
+    const confirmed = window.confirm(`確定要刪除版本 ${release.version} 嗎？此操作無法還原。`);
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await fetch(`/api/apk/releases/${release.id}`, { method: "DELETE" });
+      const json = (await res.json()) as DeleteResponse | { message?: string };
+      if (!res.ok) throw new Error((json as any).message || "刪除版本失敗。");
+
+      const payload = json as DeleteResponse;
+      if (!payload.success) throw new Error(payload.message);
+
+      setMessage(`已刪除版本 ${release.version}。`);
+      await loadReleases();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "刪除版本失敗。");
     } finally {
       setSaving(false);
     }
@@ -268,7 +296,7 @@ export default function ApkManagerPage() {
         <div className="card-header">
           <div>
             <h2 className="card-title">版本列表</h2>
-            <p className="muted">你可以隨時把舊版本切換成 Active（rollback）。</p>
+            <p className="muted">你可以切換舊版本成 Active（rollback），也可以刪除不再需要的舊版本。</p>
           </div>
         </div>
 
@@ -297,6 +325,9 @@ export default function ApkManagerPage() {
                       <div className="btn-row">
                         <button className="btn btn-secondary" type="button" disabled={saving || r.isActive} onClick={() => activate(r.id)}>
                           設為最新
+                        </button>
+                        <button className="btn btn-secondary" type="button" disabled={saving || r.isActive} onClick={() => removeRelease(r)}>
+                          刪除
                         </button>
                       </div>
                     </td>

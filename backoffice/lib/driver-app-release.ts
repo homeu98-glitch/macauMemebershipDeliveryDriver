@@ -107,6 +107,15 @@ export async function setActiveDriverAppRelease(releaseId: string) {
 
 export async function deleteDriverAppRelease(releaseId: string) {
   const supabase = createServiceRoleSupabaseClient();
+  const { data: existing, error: fetchError } = await supabase
+    .from("driver_app_releases")
+    .select("id,is_active")
+    .eq("id", releaseId)
+    .maybeSingle();
+  if (fetchError) throw fetchError;
+  if (!existing) throw new Error("找不到版本。");
+  if (existing.is_active) throw new Error("請先把其他版本設為最新，才可以刪除目前 Active 版本。");
+
   const { error } = await supabase
     .from("driver_app_releases")
     .delete()
