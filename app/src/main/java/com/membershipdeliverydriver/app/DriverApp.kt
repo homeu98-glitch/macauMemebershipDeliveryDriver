@@ -2360,12 +2360,31 @@ private fun openNavigation(
     longitude: Double,
     label: String,
 ) {
-    val encodedLabel = Uri.encode(label)
-    val intent = Intent(
-        Intent.ACTION_VIEW,
-        Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude($encodedLabel)"),
+    val safeLabel = label.ifBlank { "目的地" }
+    val encodedLabel = Uri.encode(safeLabel)
+
+    val amapUri = Uri.parse(
+        "androidamap://route?sourceApplication=membership-driver&dlat=$latitude&dlon=$longitude&dname=$encodedLabel&dev=0&t=0"
     )
-    context.startActivity(intent)
+    val amapIntent = Intent(Intent.ACTION_VIEW, amapUri).apply {
+        addCategory(Intent.CATEGORY_DEFAULT)
+        setPackage("com.autonavi.minimap")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    val fallbackIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("geo:$latitude,$longitude?q=$latitude,$longitude"),
+    ).apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+
+    val packageManager = context.packageManager
+    when {
+        amapIntent.resolveActivity(packageManager) != null -> context.startActivity(amapIntent)
+        fallbackIntent.resolveActivity(packageManager) != null -> context.startActivity(fallbackIntent)
+        else -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://uri.amap.com/navigation?to=$longitude,$latitude,$encodedLabel&mode=car&policy=1&src=membership-driver")))
+    }
 }
 
 private fun openExternalUrl(context: android.content.Context, url: String) {
