@@ -15,8 +15,7 @@ async function getActiveDriverAppReleaseDirect() {
     .from("driver_app_releases")
     .select("id,version,apk_url,release_notes,created_at,is_active")
     .eq("is_active", true)
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .order("created_at", { ascending: false });
 
   if (error) throw error;
   if (!data || data.length == 0) return null;
