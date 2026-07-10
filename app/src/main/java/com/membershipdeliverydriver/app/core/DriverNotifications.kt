@@ -24,6 +24,7 @@ object DriverNotifications {
     const val CUSTOMER_HURRY_ALERT_CHANNEL_ID = "driver_customer_hurry_alerts"
     const val ORDER_COMPLETED_CHANNEL_ID = "driver_order_completed_alerts"
     const val ORDER_CANCELLED_CHANNEL_ID = "driver_order_cancelled_alerts_v2"
+    const val DISPATCH_EVENT_CHANNEL_ID = "driver_dispatch_event_alerts_v1"
     const val ORDER_OVERDUE_ALERT_CHANNEL_ID = "driver_order_overdue_alerts"
     const val SOUND_NEW_ORDER = "new_order"
     const val SOUND_URGENT_ORDER = "urgent_order"
@@ -106,6 +107,17 @@ object DriverNotifications {
                 descriptionText = "訂單超過承諾時間 30 分鐘仍未完成時發出提醒。",
                 soundResId = R.raw.sound_order_overdue,
             )
+
+
+val dispatchEventChannel = NotificationChannel(
+    DISPATCH_EVENT_CHANNEL_ID,
+    "即時派單通知",
+    NotificationManager.IMPORTANCE_HIGH,
+).apply {
+    description = "顯示 MQTT / 即時派單通知，由 App 自己控制提示音。"
+    setSound(null, null)
+    enableVibration(true)
+}
 
             notificationManager.createNotificationChannel(dispatchChannel)
             notificationManager.createNotificationChannel(orderAlertChannel)
@@ -210,7 +222,7 @@ object DriverNotifications {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(context, channelIdFor(soundKey))
+        val notification = NotificationCompat.Builder(context, DISPATCH_EVENT_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_driver)
             .setLargeIcon(BitmapFactory.decodeResource(context.resources, R.mipmap.ic_launcher_round))
             .setContentTitle(title)
