@@ -13,16 +13,17 @@ async function getActiveDriverAppReleaseDirect() {
     .select("id,version,apk_url,release_notes,created_at,is_active")
     .eq("is_active", true)
     .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
 
   if (error) throw error;
-  if (!data) return null;
+  if (!data || data.length == 0) return null;
+
+  const row = data[0] as any;
 
   return {
-    version: String(data.version),
-    releaseNotes: String(data.release_notes ?? ""),
-    apkUrl: String(data.apk_url),
+    version: String(row.version),
+    releaseNotes: String(row.release_notes ?? ""),
+    apkUrl: String(row.apk_url),
   };
 }
 
