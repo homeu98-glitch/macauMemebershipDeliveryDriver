@@ -40,7 +40,7 @@ export async function POST(request: Request) {
         accepted_terms_version: config.version,
         accepted_terms_at: new Date().toISOString()
       })
-      .eq('id', verified.authUserId);
+      .eq('auth_user_id', verified.authUserId);
     if (error) throw error;
     return NextResponse.json({ success: true, version: config.version });
   } catch (error) {

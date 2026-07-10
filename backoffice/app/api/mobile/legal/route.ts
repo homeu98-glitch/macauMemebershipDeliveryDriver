@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     const supabase = createServiceRoleSupabaseClient();
     const [config, profileResult] = await Promise.all([
       getLegalConfig(),
-      supabase.from('driver_profiles').select('accepted_terms_version, accepted_terms_at').eq('id', verified.authUserId).maybeSingle()
+      supabase.from('driver_profiles').select('accepted_terms_version, accepted_terms_at').eq('auth_user_id', verified.authUserId).maybeSingle()
     ]);
 
     return NextResponse.json({
