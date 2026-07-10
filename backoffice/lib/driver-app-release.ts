@@ -103,7 +103,15 @@ export async function setActiveDriverAppRelease(releaseId: string) {
     .select("id,version,apk_url,release_notes,created_at,is_active")
     .single();
   if (error) throw error;
-  return mapRow(data);
+
+  const active = mapRow(data);
+  await saveDriverAppDownloadConfig({
+    apkUrl: active.apkUrl,
+    version: active.version,
+    releaseNotes: active.releaseNotes || "最新版",
+  });
+
+  return active;
 }
 
 export async function deleteDriverAppRelease(releaseId: string) {
