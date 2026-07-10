@@ -978,7 +978,7 @@ private fun HomeScreen(
                     isAccepting = uiState.acceptingOrderId == order.id,
                     acceptActionLocked = uiState.acceptingOrderId != null,
                     onNavigateToShop = {
-                        openNavigation(context, order.shop.latitude, order.shop.longitude, order.shop.label)
+                        openNavigation(context, order.shop)
                     },
                     onAcceptOrder = { onAcceptOrder(order.id) },
                 )
@@ -1160,11 +1160,11 @@ private fun OrdersScreen(
                     displayLabel = "訂單 ${index + 1}",
                     order = order,
                     onNavigateToShop = {
-                        openNavigation(context, order.shop.latitude, order.shop.longitude, order.shop.label)
+                        openNavigation(context, order.shop)
                     },
                     onCallShop = { openDialer(context, order.shop.contactPhone) },
                     onNavigateToCustomer = {
-                        openNavigation(context, order.customer.latitude, order.customer.longitude, order.customer.label)
+                        openNavigation(context, order.customer)
                     },
                     onCallCustomer = { openDialer(context, order.customer.contactPhone) },
                     onMarkPickedUp = { onMarkPickedUp(order.id) },
@@ -1934,7 +1934,7 @@ private fun OrderDetailScreen(
                     contactName = order.shop.contactName,
                     contactPhone = order.shop.contactPhone,
                     onCall = { openDialer(context, order.shop.contactPhone) },
-                    onNavigate = { openNavigation(context, order.shop.latitude, order.shop.longitude, order.shop.label) },
+                    onNavigate = { openNavigation(context, order.shop) },
                 )
             }
             item {
@@ -1945,7 +1945,7 @@ private fun OrderDetailScreen(
                     contactName = order.customer.contactName,
                     contactPhone = order.customer.contactPhone,
                     onCall = { openDialer(context, order.customer.contactPhone) },
-                    onNavigate = { openNavigation(context, order.customer.latitude, order.customer.longitude, order.customer.label) },
+                    onNavigate = { openNavigation(context, order.customer) },
                 )
             }
             item {
@@ -2447,6 +2447,7 @@ private fun ProfileScreen(
     onChangePin: (String, () -> Unit) -> Unit,
     onLogout: () -> Unit,
 ) {
+    val context = LocalContext.current
     val driver = uiState.currentDriver
     val formatter = remember { DateTimeFormatter.ofPattern("MM/dd HH:mm") }
     val filteredEarnings = uiState.earnings.filter { entry ->
@@ -2559,6 +2560,23 @@ private fun ProfileScreen(
                             Text("刷新公告")
                         }
                     }
+                    
+                    OutlinedButton(
+                        onClick = {
+                            val fallback = com.membershipdeliverydriver.app.BuildConfig.API_BASE_URL.trimEnd('/') + "/apkdownload/latest"
+                            val url = uiState.updateInfo?.stableDownloadUrl
+                                ?.takeIf { it.isNotBlank() }
+                                ?: uiState.updateInfo?.downloadPageUrl
+                                    ?.takeIf { it.isNotBlank() }
+                                ?: fallback
+                            openExternalUrl(context, url)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("手動下載新版本")
+                    }
+
                     OutlinedButton(
                         onClick = onOpenLeaderboard,
                         modifier = Modifier.fillMaxWidth(),
@@ -2900,49 +2918,53 @@ private fun openDialer(context: android.content.Context, phoneNumber: String) {
     context.startActivity(intent)
 }
 
+
 private fun openNavigation(
     context: android.content.Context,
-    latitude: Double,
-    longitude: Double,
-    label: String,
+    point: com.membershipdeliverydriver.app.core.LocationPoint,
 ) {
     val packageManager = context.packageManager
-    val safeLabel = if (label.isBlank()) "目的地" else label
+    val safeLabel = if (point.label.isBlank()) "目的地" else point.label
+    val safeAddress = point.address.ifBlank { safeLabel }
     val encodedLabel = Uri.encode(safeLabel)
+    val encodedAddress = Uri.encode(safeAddress)
+
+    val wgs = point.navigationCoords?.wgs84
+        ?: com.membershipdeliverydriver.app.core.CoordinatePair(point.latitude, point.longitude)
+    val gcj = point.navigationCoords?.gcj02 ?: wgs
+    val bd = point.navigationCoords?.bd09 ?: gcj
 
     fun candidateIntent(uri: String, packageName: String? = null): Intent? {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (!packageName.isNullOrBlank()) {
-                setPackage(packageName)
-            }
+            if (!packageName.isNullOrBlank()) setPackage(packageName)
         }
         return if (intent.resolveActivity(packageManager) != null) intent else null
     }
 
     val nativeMapIntents = buildList {
         candidateIntent(
-            uri = "google.navigation:q=$latitude,$longitude",
+            uri = "google.navigation:q=${wgs.latitude},${wgs.longitude}",
             packageName = "com.google.android.apps.maps",
         )?.let(::add)
 
         candidateIntent(
-            uri = "androidamap://route?sourceApplication=membership-driver&dlat=$latitude&dlon=$longitude&dname=$encodedLabel&dev=0&t=0",
+            uri = "androidamap://route?sourceApplication=membership-driver&dlat=${gcj.latitude}&dlon=${gcj.longitude}&dname=$encodedLabel&dev=0&t=0",
             packageName = "com.autonavi.minimap",
         )?.let(::add)
 
         candidateIntent(
-            uri = "baidumap://map/direction?destination=latlng:$latitude,$longitude|name:$encodedLabel&mode=driving",
+            uri = "baidumap://map/direction?destination=name:$encodedLabel|latlng:${bd.latitude},${bd.longitude}&coord_type=bd09ll&mode=driving&src=membership-driver",
             packageName = "com.baidu.BaiduMap",
         )?.let(::add)
 
         candidateIntent(
-            uri = "qqmap://map/routeplan?type=drive&tocoord=$latitude,$longitude&to=$encodedLabel",
+            uri = "qqmap://map/routeplan?type=drive&tocoord=${gcj.latitude},${gcj.longitude}&to=$encodedLabel",
             packageName = "com.tencent.map",
         )?.let(::add)
 
         candidateIntent(
-            uri = "petalmaps://navigation?daddr=$latitude,$longitude&dname=$encodedLabel",
+            uri = "petalmaps://navigation?daddr=${gcj.latitude},${gcj.longitude}&dname=$encodedLabel",
             packageName = "com.huawei.maps.app",
         )?.let(::add)
 
@@ -2958,7 +2980,7 @@ private fun openNavigation(
         val keywordPackages = listOf("map", "maps", "minimap", "amap", "baidu", "qqmap", "petal")
         val genericGeoIntent = Intent(
             Intent.ACTION_VIEW,
-            Uri.parse("geo:0,0?q=$latitude,$longitude"),
+            Uri.parse("geo:0,0?q=${wgs.latitude},${wgs.longitude}($encodedAddress)"),
         ).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
@@ -2993,7 +3015,7 @@ private fun openNavigation(
 
     val fallbackIntent = Intent(
         Intent.ACTION_VIEW,
-        Uri.parse("geo:0,0?q=$latitude,$longitude"),
+        Uri.parse("geo:0,0?q=${wgs.latitude},${wgs.longitude}($encodedAddress)"),
     ).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }

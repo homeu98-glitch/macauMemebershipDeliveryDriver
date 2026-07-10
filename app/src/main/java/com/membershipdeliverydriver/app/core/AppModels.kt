@@ -69,6 +69,19 @@ data class LoginForm(
     val password: String = "",
 )
 
+
+data class CoordinatePair(
+    val latitude: Double,
+    val longitude: Double,
+)
+
+data class NavigationCoordinates(
+    val sourceCoordSystem: String? = null,
+    val wgs84: CoordinatePair? = null,
+    val gcj02: CoordinatePair? = null,
+    val bd09: CoordinatePair? = null,
+)
+
 data class LocationPoint(
     val label: String,
     val address: String,
@@ -78,6 +91,7 @@ data class LocationPoint(
     val contactName: String,
     val contactPhone: String,
     val totalSentOrders: Int = 0,
+    val navigationCoords: NavigationCoordinates? = null,
 )
 
 data class OrderItem(
@@ -132,6 +146,7 @@ data class AppUpdateInfo(
     val version: String,
     val releaseNotes: String,
     val downloadPageUrl: String,
+    val stableDownloadUrl: String,
 )
 
 

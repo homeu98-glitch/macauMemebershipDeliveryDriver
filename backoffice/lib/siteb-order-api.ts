@@ -3,12 +3,25 @@ import { dispatchOrderCallback } from "./siteb-callbacks";
 import { createServiceRoleSupabaseClient } from "./supabase";
 import { findMacauDistrict } from "./districts";
 
+
+type CoordSystem = "wgs84" | "gcj02" | "bd09";
+
+type NormalizedCoordSet = {
+  sourceCoordSystem: CoordSystem;
+  sourceLat: number;
+  sourceLng: number;
+  wgs84: { latitude: number; longitude: number };
+  gcj02: { latitude: number; longitude: number };
+  bd09: { latitude: number; longitude: number };
+};
+
 type ShopInput = {
   externalShopId?: string;
   name: string;
   address: string;
   latitude?: number | null;
   longitude?: number | null;
+  coordSystem?: CoordSystem | null;
   contactName?: string | null;
   contactPhone?: string | null;
 };
@@ -20,6 +33,7 @@ type CustomerInput = {
   address: string;
   latitude?: number | null;
   longitude?: number | null;
+  coordSystem?: CoordSystem | null;
   deliveryNote?: string | null;
 };
 
@@ -95,6 +109,111 @@ function normalizeCallback(input: CreateOrderInput["callback"]): CallbackInput |
   };
 }
 
+
+const X_PI = Math.PI * 3000.0 / 180.0;
+const PI = Math.PI;
+const A = 6378245.0;
+const EE = 0.00669342162296594323;
+
+function normalizeCoordSystem(value?: string | null): CoordSystem {
+  const normalized = (value ?? "wgs84").trim().toLowerCase();
+  if (normalized === "gcj02" || normalized === "bd09" || normalized === "wgs84") {
+    return normalized;
+  }
+  return "wgs84";
+}
+
+function outOfChina(lat: number, lng: number) {
+  return lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+}
+
+function transformLat(x: number, y: number) {
+  let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
+  ret += (20.0 * Math.sin(y * PI) + 40.0 * Math.sin(y / 3.0 * PI)) * 2.0 / 3.0;
+  ret += (160.0 * Math.sin(y / 12.0 * PI) + 320 * Math.sin(y * PI / 30.0)) * 2.0 / 3.0;
+  return ret;
+}
+
+function transformLng(x: number, y: number) {
+  let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  ret += (20.0 * Math.sin(6.0 * x * PI) + 20.0 * Math.sin(2.0 * x * PI)) * 2.0 / 3.0;
+  ret += (20.0 * Math.sin(x * PI) + 40.0 * Math.sin(x / 3.0 * PI)) * 2.0 / 3.0;
+  ret += (150.0 * Math.sin(x / 12.0 * PI) + 300.0 * Math.sin(x / 30.0 * PI)) * 2.0 / 3.0;
+  return ret;
+}
+
+function delta(lat: number, lng: number) {
+  const dLat = transformLat(lng - 105.0, lat - 35.0);
+  const dLng = transformLng(lng - 105.0, lat - 35.0);
+  const radLat = lat / 180.0 * PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - EE * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  return {
+    lat: (dLat * 180.0) / ((A * (1 - EE)) / (magic * sqrtMagic) * PI),
+    lng: (dLng * 180.0) / (A / sqrtMagic * Math.cos(radLat) * PI),
+  };
+}
+
+function wgs84ToGcj02(lat: number, lng: number) {
+  if (outOfChina(lat, lng)) return { latitude: lat, longitude: lng };
+  const d = delta(lat, lng);
+  return { latitude: lat + d.lat, longitude: lng + d.lng };
+}
+
+function gcj02ToWgs84(lat: number, lng: number) {
+  if (outOfChina(lat, lng)) return { latitude: lat, longitude: lng };
+  const d = delta(lat, lng);
+  return { latitude: lat - d.lat, longitude: lng - d.lng };
+}
+
+function gcj02ToBd09(lat: number, lng: number) {
+  const z = Math.sqrt(lng * lng + lat * lat) + 0.00002 * Math.sin(lat * X_PI);
+  const theta = Math.atan2(lat, lng) + 0.000003 * Math.cos(lng * X_PI);
+  return {
+    latitude: z * Math.sin(theta) + 0.006,
+    longitude: z * Math.cos(theta) + 0.0065,
+  };
+}
+
+function bd09ToGcj02(lat: number, lng: number) {
+  const x = lng - 0.0065;
+  const y = lat - 0.006;
+  const z = Math.sqrt(x * x + y * y) - 0.00002 * Math.sin(y * X_PI);
+  const theta = Math.atan2(y, x) - 0.000003 * Math.cos(x * X_PI);
+  return {
+    latitude: z * Math.sin(theta),
+    longitude: z * Math.cos(theta),
+  };
+}
+
+function normalizeCoordSet(latitude: number, longitude: number, coordSystem?: string | null): NormalizedCoordSet {
+  const sourceCoordSystem = normalizeCoordSystem(coordSystem);
+  const sourceLat = Number(latitude);
+  const sourceLng = Number(longitude);
+
+  let wgs84;
+  let gcj02;
+  let bd09;
+
+  if (sourceCoordSystem === "wgs84") {
+    wgs84 = { latitude: sourceLat, longitude: sourceLng };
+    gcj02 = wgs84ToGcj02(sourceLat, sourceLng);
+    bd09 = gcj02ToBd09(gcj02.latitude, gcj02.longitude);
+  } else if (sourceCoordSystem === "gcj02") {
+    gcj02 = { latitude: sourceLat, longitude: sourceLng };
+    wgs84 = gcj02ToWgs84(sourceLat, sourceLng);
+    bd09 = gcj02ToBd09(sourceLat, sourceLng);
+  } else {
+    bd09 = { latitude: sourceLat, longitude: sourceLng };
+    gcj02 = bd09ToGcj02(sourceLat, sourceLng);
+    wgs84 = gcj02ToWgs84(gcj02.latitude, gcj02.longitude);
+  }
+
+  return { sourceCoordSystem, sourceLat, sourceLng, wgs84, gcj02, bd09 };
+}
+
 function validateRequiredString(value: string | undefined | null, field: string) {
   if (!value?.trim()) {
     throw new Error(`${field} is required`);
@@ -130,8 +249,10 @@ export function validateCreateOrderInput(input: CreateOrderInput) {
   if (normalizeDeliveryMode(input.deliveryMode) === "scheduled" && !input.deliveryDeadline?.trim()) {
     throw new Error("deliveryDeadline is required when deliveryMode is scheduled");
   }
-  requireResolvedDistrict(input.shop?.latitude ?? null, input.shop?.longitude ?? null, "shop");
-  requireResolvedDistrict(input.customer?.latitude ?? null, input.customer?.longitude ?? null, "customer");
+  const shopCoords = normalizeCoordSet(Number(input.shop?.latitude), Number(input.shop?.longitude), input.shop?.coordSystem);
+  const customerCoords = normalizeCoordSet(Number(input.customer?.latitude), Number(input.customer?.longitude), input.customer?.coordSystem);
+  requireResolvedDistrict(shopCoords.wgs84.latitude, shopCoords.wgs84.longitude, "shop");
+  requireResolvedDistrict(customerCoords.wgs84.latitude, customerCoords.wgs84.longitude, "customer");
   if (normalizeDeliveryMode(input.deliveryMode) !== "scheduled") {
     return;
   }
@@ -140,9 +261,11 @@ export function validateCreateOrderInput(input: CreateOrderInput) {
   }
 }
 
+
 async function upsertShop(shop: ShopInput) {
   const supabase = createServiceRoleSupabaseClient();
   const externalShopId = shop.externalShopId?.trim() || `shop:${shop.name}:${shop.address}`;
+  const coords = normalizeCoordSet(Number(shop.latitude), Number(shop.longitude), shop.coordSystem);
 
   const { data, error } = await supabase
     .from("shops")
@@ -151,11 +274,11 @@ async function upsertShop(shop: ShopInput) {
         external_shop_id: externalShopId,
         name: shop.name,
         address: shop.address,
-        latitude: shop.latitude ?? null,
-        longitude: shop.longitude ?? null,
+        latitude: coords.wgs84.latitude,
+        longitude: coords.wgs84.longitude,
         contact_name: shop.contactName ?? null,
         contact_phone: shop.contactPhone ?? null,
-        district: findMacauDistrict(shop.latitude ?? null, shop.longitude ?? null),
+        district: findMacauDistrict(coords.wgs84.latitude, coords.wgs84.longitude),
         updated_at: nowIso()
       },
       { onConflict: "external_shop_id" }
@@ -167,10 +290,13 @@ async function upsertShop(shop: ShopInput) {
   return data.id as string;
 }
 
+
+
 async function upsertCustomer(customer: CustomerInput) {
   const supabase = createServiceRoleSupabaseClient();
   const externalCustomerId =
     customer.externalCustomerId?.trim() || `customer:${customer.phone ?? "unknown"}:${customer.address}`;
+  const coords = normalizeCoordSet(Number(customer.latitude), Number(customer.longitude), customer.coordSystem);
 
   const { data, error } = await supabase
     .from("customers")
@@ -180,10 +306,10 @@ async function upsertCustomer(customer: CustomerInput) {
         name: customer.name ?? null,
         phone: customer.phone ?? null,
         address: customer.address,
-        latitude: customer.latitude ?? null,
-        longitude: customer.longitude ?? null,
+        latitude: coords.wgs84.latitude,
+        longitude: coords.wgs84.longitude,
         delivery_note: customer.deliveryNote ?? null,
-        district: findMacauDistrict(customer.latitude ?? null, customer.longitude ?? null),
+        district: findMacauDistrict(coords.wgs84.latitude, coords.wgs84.longitude),
         updated_at: nowIso()
       },
       { onConflict: "external_customer_id" }
@@ -194,6 +320,7 @@ async function upsertCustomer(customer: CustomerInput) {
   if (error) throw error;
   return data.id as string;
 }
+
 
 async function replaceItems(orderId: string, items: ItemInput[]) {
   const supabase = createServiceRoleSupabaseClient();
@@ -269,6 +396,9 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
     };
   }
 
+  const shopCoords = normalizeCoordSet(Number(input.shop.latitude), Number(input.shop.longitude), input.shop.coordSystem);
+  const customerCoords = normalizeCoordSet(Number(input.customer.latitude), Number(input.customer.longitude), input.customer.coordSystem);
+
   const [shopId, customerId] = await Promise.all([
     upsertShop(input.shop),
     upsertCustomer(input.customer)
@@ -291,7 +421,11 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       urgent: false,
       currency: input.currency ?? "MOP",
       notes: input.notes ?? {},
-      callback: normalizedCallback
+      callback: normalizedCallback,
+      navigation: {
+        shop: shopCoords,
+        customer: customerCoords
+      }
     }
   };
 

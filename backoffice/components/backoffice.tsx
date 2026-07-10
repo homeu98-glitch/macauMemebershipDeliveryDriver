@@ -110,12 +110,14 @@ function ManualTestOrderForm({
   const [shopAddress, setShopAddress] = useState("");
   const [shopLatitude, setShopLatitude] = useState("");
   const [shopLongitude, setShopLongitude] = useState("");
+  const [shopCoordSystem, setShopCoordSystem] = useState<"wgs84" | "gcj02" | "bd09">("wgs84");
   const [shopContactName, setShopContactName] = useState("店員");
   const [shopContactPhone, setShopContactPhone] = useState("+85328990000");
   const [customerName, setCustomerName] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerLatitude, setCustomerLatitude] = useState("");
   const [customerLongitude, setCustomerLongitude] = useState("");
+  const [customerCoordSystem, setCustomerCoordSystem] = useState<"wgs84" | "gcj02" | "bd09">("wgs84");
   const [customerPhone, setCustomerPhone] = useState("+85366110000");
   const [deliveryNote, setDeliveryNote] = useState("到達後請致電。");
 
@@ -140,6 +142,7 @@ function ManualTestOrderForm({
             longitude: Number(shopLongitude),
             contactName: shopContactName.trim(),
             contactPhone: shopContactPhone.trim(),
+            coordSystem: shopCoordSystem,
           },
           customer: {
             name: customerName.trim(),
@@ -148,6 +151,7 @@ function ManualTestOrderForm({
             longitude: Number(customerLongitude),
             phone: customerPhone.trim(),
             deliveryNote: deliveryNote.trim(),
+            coordSystem: customerCoordSystem,
           },
         })
       });
@@ -221,6 +225,15 @@ function ManualTestOrderForm({
             <input value={shopLongitude} onChange={(event) => setShopLongitude(event.target.value)} placeholder="113.5523000" />
           </div>
         </div>
+
+<div className="field">
+  <label>店舖座標系</label>
+  <select value={shopCoordSystem} onChange={(event) => setShopCoordSystem(event.target.value as "wgs84" | "gcj02" | "bd09")}>
+    <option value="wgs84">Google / WGS84</option>
+    <option value="gcj02">高德 / GCJ02</option>
+    <option value="bd09">百度 / BD09</option>
+  </select>
+</div>
         <div className="grid two-column">
           <div className="field">
             <label>店舖聯絡人</label>
@@ -255,6 +268,15 @@ function ManualTestOrderForm({
             <input value={customerLongitude} onChange={(event) => setCustomerLongitude(event.target.value)} placeholder="113.55519339747916" />
           </div>
         </div>
+
+<div className="field">
+  <label>客戶座標系</label>
+  <select value={customerCoordSystem} onChange={(event) => setCustomerCoordSystem(event.target.value as "wgs84" | "gcj02" | "bd09")}>
+    <option value="wgs84">Google / WGS84</option>
+    <option value="gcj02">高德 / GCJ02</option>
+    <option value="bd09">百度 / BD09</option>
+  </select>
+</div>
         <div className="grid two-column">
           <div className="field">
             <label>客戶電話</label>
@@ -274,7 +296,7 @@ function ManualTestOrderForm({
       </div>
 
       <div className="muted" style={{ marginTop: 14 }}>
-        店舖名稱、客戶地址、雙方經緯度都以你輸入為準，不再使用隨機地址 sample。
+        店舖名稱、客戶地址、雙方經緯度與座標系都以你輸入為準；後端會自動換算成 WGS84 / GCJ02 / BD09 三套座標。
       </div>
 
       {message ? (

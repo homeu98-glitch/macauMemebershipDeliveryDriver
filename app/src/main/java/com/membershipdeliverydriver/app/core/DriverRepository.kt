@@ -5,6 +5,8 @@ import androidx.core.content.ContextCompat
 import android.Manifest
 import android.location.LocationManager
 import com.membershipdeliverydriver.app.BuildConfig
+import com.membershipdeliverydriver.app.core.NavigationCoordinates
+import com.membershipdeliverydriver.app.core.CoordinatePair
 import android.graphics.BitmapFactory
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -839,7 +841,7 @@ override suspend fun fetchLatestAppRelease(): AppUpdateInfo? = withContext(Dispa
     return@withContext try {
         val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
         val request = Request.Builder()
-            .url("$baseUrl/api/public/driver-app/latest")
+            .url("$baseUrl/api/public/driver-app/latest?t=${System.currentTimeMillis()}")
             .get()
             .build()
 
@@ -856,6 +858,7 @@ override suspend fun fetchLatestAppRelease(): AppUpdateInfo? = withContext(Dispa
                 version = version,
                 releaseNotes = json.optString("releaseNotes").trim(),
                 downloadPageUrl = json.optString("landingPageUrl").trim(),
+                stableDownloadUrl = json.optString("stableDownloadUrl").trim(),
             )
         }
     } catch (_: Exception) {
@@ -1146,6 +1149,26 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
         }
         return map
     }
+
+
+private fun parseCoordinatePair(obj: JSONObject?, key: String): CoordinatePair? {
+    val point = obj?.optJSONObject(key) ?: return null
+    if (!point.has("latitude") || !point.has("longitude")) return null
+    return CoordinatePair(
+        latitude = point.optDouble("latitude", Double.NaN),
+        longitude = point.optDouble("longitude", Double.NaN),
+    ).takeUnless { it.latitude.isNaN() || it.longitude.isNaN() }
+}
+
+private fun parseNavigationCoordinates(sourcePayload: JSONObject?, key: String): NavigationCoordinates? {
+    val nav = sourcePayload?.optJSONObject("navigation")?.optJSONObject(key) ?: return null
+    return NavigationCoordinates(
+        sourceCoordSystem = nav.optString("sourceCoordSystem").ifBlank { null },
+        wgs84 = parseCoordinatePair(nav, "wgs84"),
+        gcj02 = parseCoordinatePair(nav, "gcj02"),
+        bd09 = parseCoordinatePair(nav, "bd09"),
+    )
+}
 
     private fun calculateEtaMinutes(promisedAt: String): Int {
         if (promisedAt.isBlank()) return 0
@@ -1441,8 +1464,9 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                 val json = ordersArray.getJSONObject(index)
                 val shop = shops[json.getString("shop_id")] ?: continue
                 val customer = customers[json.getString("customer_id")] ?: continue
-                val isUrgentOrder = json.optJSONObject("source_payload")?.optString("priceRaisedAt")?.isNotBlank() == true
-                val canceledFrom = json.optJSONObject("source_payload")?.optString("canceledFrom", "")?.lowercase().orEmpty()
+                val sourcePayload = json.optJSONObject("source_payload")
+                val isUrgentOrder = sourcePayload?.optString("priceRaisedAt")?.isNotBlank() == true
+                val canceledFrom = sourcePayload?.optString("canceledFrom", "")?.lowercase().orEmpty()
                 val mappedStatus = mapOrderStatus(
                     rawStatus = json.optString("status"),
                     isUrgent = isUrgentOrder,
@@ -1456,6 +1480,8 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                 } ?: 0.0
                 val customerLat = customer.optDouble("latitude", 0.0)
                 val customerLng = customer.optDouble("longitude", 0.0)
+                val shopNavigation = parseNavigationCoordinates(sourcePayload, "shop")
+                val customerNavigation = parseNavigationCoordinates(sourcePayload, "customer")
                 val distanceToCustomer = latestDriverLocation?.let { (driverLat, driverLng) ->
                     haversineKm(driverLat, driverLng, customerLat, customerLng)
                 } ?: 0.0
@@ -1482,6 +1508,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                             contactName = shop.optString("contact_name", "店舖"),
                             contactPhone = shop.optString("contact_phone", ""),
                             totalSentOrders = shopSentCountById[json.getString("shop_id")] ?: 0,
+                            navigationCoords = shopNavigation,
                         ),
                         customer = LocationPoint(
                             label = customer.optString("name", "客戶"),
@@ -1491,6 +1518,7 @@ override suspend fun logout() = withContext(Dispatchers.IO) {
                             longitude = customer.optDouble("longitude", 0.0),
                             contactName = customer.optString("name", "客戶"),
                             contactPhone = customer.optString("phone", ""),
+                            navigationCoords = customerNavigation,
                         ),
                         customerNote = customer.optString("delivery_note", "請先聯絡客戶。"),
                         etaMinutes = calculateEtaMinutes(json.optString("promised_at", "")),
