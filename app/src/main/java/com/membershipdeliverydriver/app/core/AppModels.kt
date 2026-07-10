@@ -134,6 +134,21 @@ data class AppUpdateInfo(
     val downloadPageUrl: String,
 )
 
+
+data class LeaderboardEntry(
+    val rank: Int?,
+    val name: String,
+    val completedCount: Int,
+)
+
+data class WeeklyLeaderboard(
+    val weekStart: String,
+    val generatedAt: String,
+    val top: List<LeaderboardEntry>,
+    val me: LeaderboardEntry,
+)
+
+
 data class DriverDashboard(
     val todayEarningsMop: Double,
     val weekEarningsMop: Double,
@@ -171,6 +186,8 @@ data class DriverAppState(
     val destinationDistrictFilter: Set<String> = emptySet(),
     val announcements: List<DriverAnnouncement> = emptyList(),
     val updateInfo: AppUpdateInfo? = null,
+    val weeklyLeaderboard: WeeklyLeaderboard? = null,
+    val isLoadingWeeklyLeaderboard: Boolean = false,
     val registrationSubmitted: Boolean = false,
     val lastCallback: CallbackEnvelope? = null,
     val isLoading: Boolean = false,

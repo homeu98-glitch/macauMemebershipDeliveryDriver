@@ -122,6 +122,11 @@ class DriverViewModel(
 
     fun login() {
         val form = _uiState.value.loginForm
+        val localPhone = normalizeMacauMobile(form.phone)
+        if (!isValidMacauMobile(localPhone)) {
+            _uiState.update { it.copy(errorMessage = "電話號碼必須為澳門 8 位數並以 6 開頭。") }
+            return
+        }
         if (!isValidPin(form.password)) {
             _uiState.update { it.copy(errorMessage = "請輸入 4 位數字密碼。") }
             return
@@ -547,6 +552,25 @@ class DriverViewModel(
         }
     }
 
+
+
+    fun loadWeeklyLeaderboard() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingWeeklyLeaderboard = true, errorMessage = null) }
+            runCatching { repository.loadWeeklyLeaderboard() }
+            .onSuccess { leaderboard ->
+                _uiState.update { it.copy(weeklyLeaderboard = leaderboard, isLoadingWeeklyLeaderboard = false) }
+            }
+            .onFailure { error ->
+                _uiState.update {
+                    it.copy(
+                        isLoadingWeeklyLeaderboard = false,
+                        errorMessage = error.message ?: "讀取排名失敗。",
+                    )
+                }
+            }
+        }
+    }
     fun refreshDashboard(playArrivalSound: Boolean = true) {
         if (_uiState.value.currentDriver == null) return
         viewModelScope.launch {
@@ -672,8 +696,8 @@ class DriverViewModel(
         SELFIE,
         MACAU_ID,
         DRIVING_LICENCE,
+        }
     }
-}
 
 private fun List<Order>.replaceOrder(order: Order): List<Order> {
     return map { current -> if (current.id == order.id) order else current }
@@ -692,3 +716,10 @@ private fun isOverdueOrder(order: Order): Boolean {
 private fun isValidPin(value: String): Boolean {
     return value.length == 4 && value.all { it.isDigit() }
 }
+
+private fun normalizeMacauMobile(input: String): String {
+    val digits = input.replace("\\D".toRegex(), "")
+    return if (digits.startsWith("853")) digits.drop(3) else digits
+}
+
+private fun isValidMacauMobile(local: String): Boolean = local.matches("^6\\d{7}$".toRegex())

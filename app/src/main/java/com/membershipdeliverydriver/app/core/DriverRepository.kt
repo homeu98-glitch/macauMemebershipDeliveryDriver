@@ -52,6 +52,7 @@ interface DriverRepository {
     suspend fun reportIssue(orderId: String, note: String): ApiResult<Order>
     suspend fun loadAnnouncements(): List<DriverAnnouncement>
     suspend fun fetchLatestAppRelease(): AppUpdateInfo?
+    suspend fun loadWeeklyLeaderboard(): WeeklyLeaderboard
     suspend fun logout()
 }
 
@@ -860,6 +861,57 @@ override suspend fun fetchLatestAppRelease(): AppUpdateInfo? = withContext(Dispa
         null
     }
 }
+
+
+override suspend fun loadWeeklyLeaderboard(): WeeklyLeaderboard = withContext(Dispatchers.IO) {
+    val token = ensureActiveAccessToken() ?: throw IllegalStateException("請先登入。")
+    val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+    val request = Request.Builder()
+        .url("$baseUrl/api/mobile/leaderboard/weekly")
+        .get()
+        .addHeader("x-supabase-access-token", token)
+        .build()
+
+    client.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) {
+            throw IllegalStateException("讀取排名失敗。")
+        }
+        val body = response.body?.string().orEmpty()
+        val json = runCatching { JSONObject(body) }.getOrNull()
+            ?: throw IllegalStateException("讀取排名失敗。")
+        if (!json.optBoolean("success", false)) {
+            throw IllegalStateException(json.optString("message", "讀取排名失敗。"))
+        }
+
+        fun parseEntry(obj: JSONObject): LeaderboardEntry {
+            return LeaderboardEntry(
+                rank = if (obj.isNull("rank")) null else obj.optInt("rank"),
+                name = obj.optString("name", "車手"),
+                completedCount = obj.optInt("completedCount", 0),
+            )
+        }
+
+        val topArray = json.optJSONArray("top")
+        val top = buildList {
+            if (topArray != null) {
+                for (i in 0 until topArray.length()) {
+                    add(parseEntry(topArray.getJSONObject(i)))
+                }
+            }
+        }
+
+        val meObj = json.optJSONObject("me")
+        val me = if (meObj != null) parseEntry(meObj) else LeaderboardEntry(rank = null, name = "我", completedCount = 0)
+
+        WeeklyLeaderboard(
+            weekStart = json.optString("weekStart", ""),
+            generatedAt = json.optString("generatedAt", ""),
+            top = top,
+            me = me,
+        )
+    }
+}
+
 override suspend fun logout() = withContext(Dispatchers.IO) {
         session = null
         currentDriver = null

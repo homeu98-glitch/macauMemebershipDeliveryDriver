@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { CallbackLog, IncomingCallbackReceipt, Metric, Order, PushTokenRegistration, Rider, RiderApplication, SettingRow } from "../lib/data";
 import type { SessionUser } from "../lib/auth";
@@ -107,6 +107,30 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+
+const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadPending() {
+    try {
+      const res = await fetch("/api/riders/applications/pending-count");
+      const json = (await res.json()) as { success?: boolean; pending?: number };
+      if (!cancelled && res.ok && json && json.success) {
+        setPendingApprovalCount(Number(json.pending ?? 0));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  void loadPending();
+  const timer = window.setInterval(loadPending, 30_000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+}, []);
   const [quickCreateBusy, setQuickCreateBusy] = useState<number | null>(null);
   const [quickCreateMessage, setQuickCreateMessage] = useState("");
   const initials = useMemo(
@@ -177,7 +201,19 @@ export function AppShell({
                 className={`nav-link${active ? " active" : ""}`}
                 href={item.href}
               >
-                <span>{item.label}</span>
+                <span>{item.label}{item.href === "/riders/applications" && pendingApprovalCount > 0 ? (
+                    <span
+                      title={"有新申請等待審核"}
+                      style={{
+                        display: "inline-block",
+                        width: 8,
+                        height: 8,
+                        marginLeft: 8,
+                        borderRadius: 999,
+                        background: "#ef4444"
+                      }}
+                    />
+                  ) : null}</span>
                 <span className="muted">›</span>
               </Link>
             );
@@ -244,6 +280,30 @@ export function AppShell({
 
 export function LoginForm() {
   const router = useRouter();
+
+const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadPending() {
+    try {
+      const res = await fetch("/api/riders/applications/pending-count");
+      const json = (await res.json()) as { success?: boolean; pending?: number };
+      if (!cancelled && res.ok && json && json.success) {
+        setPendingApprovalCount(Number(json.pending ?? 0));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  void loadPending();
+  const timer = window.setInterval(loadPending, 30_000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+}, []);
   const searchParams = useSearchParams();
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
@@ -335,6 +395,30 @@ export function RiderApplicationsBoard({
   applications: RiderApplication[];
 }) {
   const router = useRouter();
+
+const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadPending() {
+    try {
+      const res = await fetch("/api/riders/applications/pending-count");
+      const json = (await res.json()) as { success?: boolean; pending?: number };
+      if (!cancelled && res.ok && json && json.success) {
+        setPendingApprovalCount(Number(json.pending ?? 0));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  void loadPending();
+  const timer = window.setInterval(loadPending, 30_000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+}, []);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function updateStatus(id: string, status: "approved" | "rejected") {
@@ -528,6 +612,30 @@ export function RidersTable({ riders }: { riders: Rider[] }) {
 
 export function OrdersTable({ orders }: { orders: Order[] }) {
   const router = useRouter();
+
+const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadPending() {
+    try {
+      const res = await fetch("/api/riders/applications/pending-count");
+      const json = (await res.json()) as { success?: boolean; pending?: number };
+      if (!cancelled && res.ok && json && json.success) {
+        setPendingApprovalCount(Number(json.pending ?? 0));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  void loadPending();
+  const timer = window.setInterval(loadPending, 30_000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+}, []);
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
   async function runOrderAction(orderId: string, action: "shop-confirm" | "cancel" | "shop-owner-cancel-confirm") {
@@ -684,6 +792,30 @@ export function OrderDetailActions({
   currentAmountMop: number;
 }) {
   const router = useRouter();
+
+const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadPending() {
+    try {
+      const res = await fetch("/api/riders/applications/pending-count");
+      const json = (await res.json()) as { success?: boolean; pending?: number };
+      if (!cancelled && res.ok && json && json.success) {
+        setPendingApprovalCount(Number(json.pending ?? 0));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  void loadPending();
+  const timer = window.setInterval(loadPending, 30_000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+}, []);
   const [busyAction, setBusyAction] = useState<"shop-confirm" | "cancel" | "shop-owner-cancel-confirm" | "raise-price" | null>(null);
 
   async function runOrderAction(action: "shop-confirm" | "cancel" | "shop-owner-cancel-confirm") {
@@ -800,6 +932,30 @@ export function OrderDetailActions({
 
 export function CallbackLogsTable({ logs }: { logs: CallbackLog[] }) {
   const router = useRouter();
+
+const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadPending() {
+    try {
+      const res = await fetch("/api/riders/applications/pending-count");
+      const json = (await res.json()) as { success?: boolean; pending?: number };
+      if (!cancelled && res.ok && json && json.success) {
+        setPendingApprovalCount(Number(json.pending ?? 0));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  void loadPending();
+  const timer = window.setInterval(loadPending, 30_000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+}, []);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function retryCallback(id: string) {
@@ -1003,6 +1159,30 @@ export function PushTokensBoard({
 
 export function DashboardCreateOrderPanel() {
   const router = useRouter();
+
+const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadPending() {
+    try {
+      const res = await fetch("/api/riders/applications/pending-count");
+      const json = (await res.json()) as { success?: boolean; pending?: number };
+      if (!cancelled && res.ok && json && json.success) {
+        setPendingApprovalCount(Number(json.pending ?? 0));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  void loadPending();
+  const timer = window.setInterval(loadPending, 30_000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+}, []);
   const [busy, setBusy] = useState<number | null>(null);
   const [message, setMessage] = useState("");
 
@@ -1085,6 +1265,30 @@ export function DashboardCreateOrderPanel() {
 
 export function BackofficeTestingPanel({ receipts = [] }: { receipts?: IncomingCallbackReceipt[] }) {
   const router = useRouter();
+
+const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
+
+useEffect(() => {
+  let cancelled = false;
+  async function loadPending() {
+    try {
+      const res = await fetch("/api/riders/applications/pending-count");
+      const json = (await res.json()) as { success?: boolean; pending?: number };
+      if (!cancelled && res.ok && json && json.success) {
+        setPendingApprovalCount(Number(json.pending ?? 0));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  void loadPending();
+  const timer = window.setInterval(loadPending, 30_000);
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+  };
+}, []);
   const [busy, setBusy] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [pushBusy, setPushBusy] = useState(false);

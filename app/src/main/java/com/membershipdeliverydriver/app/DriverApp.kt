@@ -56,6 +56,7 @@ import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Directions
@@ -141,6 +142,7 @@ import com.membershipdeliverydriver.app.core.isCanceledLike
 import com.membershipdeliverydriver.app.core.isDriverCanceled
 import com.membershipdeliverydriver.app.core.isShopOwnerCanceled
 import com.membershipdeliverydriver.app.core.isUrgentNew
+import com.membershipdeliverydriver.app.core.LeaderboardEntry
 import java.time.format.DateTimeFormatter
 import java.time.Duration
 import java.time.OffsetDateTime
@@ -155,6 +157,7 @@ private object Routes {
     const val Completed = "completed"
     const val OrderDetail = "orderDetail"
     const val Profile = "profile"
+    const val Leaderboard = "leaderboard"
 }
 
 @Composable
@@ -368,9 +371,19 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onEarningsFilterSelected = viewModel::updateEarningsFilter,
                     onCheckForUpdates = { viewModel.checkForUpdates(manual = true) },
                     onRefreshAnnouncements = { viewModel.refreshAnnouncements(showMessage = true) },
+                    onOpenLeaderboard = { navController.navigate(Routes.Leaderboard) },
                     onLogout = viewModel::logout,
                 )
             }
+
+
+composable(Routes.Leaderboard) {
+    LeaderboardScreen(
+        uiState = uiState,
+        onBack = { navController.popBackStack() },
+        onRefresh = viewModel::loadWeeklyLeaderboard,
+    )
+}
         }
     }
 }
@@ -2286,12 +2299,149 @@ private fun formatGraceCountdown(secondsLeft: Int): String {
     return "%d:%02d".format(minutes, seconds)
 }
 
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+private fun LeaderboardScreen(
+    uiState: com.membershipdeliverydriver.app.core.DriverAppState,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+) {
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = uiState.isLoadingWeeklyLeaderboard,
+        onRefresh = onRefresh,
+    )
+
+    LaunchedEffect(Unit) {
+        if (uiState.weeklyLeaderboard == null) {
+            onRefresh()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFFFF8EE))
+            .pullRefresh(pullRefreshState)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = null)
+                    }
+                    Text("車手排名", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
+                TextButton(onClick = onRefresh) { Text("刷新") }
+            }
+
+            uiState.weeklyLeaderboard?.let { lb ->
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, Color(0xFFF0DFC0))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("本週完成單數", fontWeight = FontWeight.SemiBold, color = Color(0xFF2E4765))
+                        LeaderboardRow(title = "我的名次", entry = lb.me, highlight = true)
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = Color.White,
+                    border = BorderStroke(1.dp, Color(0xFFF0DFC0))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("排行榜（前 20）", fontWeight = FontWeight.SemiBold, color = Color(0xFF2E4765))
+                        if (lb.top.isEmpty()) {
+                            Text("本週暫時沒有完成紀錄。", color = Color(0xFF6C7F93), style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            lb.top.forEach { entry ->
+                                LeaderboardRow(title = null, entry = entry, highlight = entry.name == lb.me.name)
+                            }
+                        }
+                        Text(
+                            "提示：排名每次刷新會重新計算。",
+                            color = Color(0xFF6C7F93),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            } ?: run {
+                FriendlyEmptyState(
+                    title = "暫時未有排名資料",
+                    subtitle = "下拉或按刷新以載入本週完成單數排名。",
+                )
+            }
+        }
+
+        CuteDriverPullRefreshIndicator(
+            refreshing = uiState.isLoadingWeeklyLeaderboard,
+            progress = pullRefreshState.progress,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
+    }
+}
+
+@Composable
+private fun LeaderboardRow(
+    title: String?,
+    entry: LeaderboardEntry,
+    highlight: Boolean,
+) {
+    val bg = if (highlight) Color(0xFFFFF2CB) else Color.Transparent
+    Surface(shape = RoundedCornerShape(12.dp), color = bg) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (title != null) {
+                    Text(title, color = Color(0xFF6C7F93), style = MaterialTheme.typography.bodySmall)
+                }
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = Color(0xFFFFE9A6),
+                    border = BorderStroke(1.dp, Color(0xFFF6D56A))
+                ) {
+                    Text(
+                        text = entry.rank?.let { "#${it}" } ?: "-",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        color = Color(0xFF6E4A00),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                Text(entry.name, fontWeight = FontWeight.SemiBold, color = Color(0xFF2E4765))
+            }
+            Text(
+                "${entry.completedCount} 單",
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF8A5A00),
+            )
+        }
+    }
+}
 @Composable
 private fun ProfileScreen(
     uiState: com.membershipdeliverydriver.app.core.DriverAppState,
     onEarningsFilterSelected: (com.membershipdeliverydriver.app.core.HistoryRange) -> Unit,
     onCheckForUpdates: () -> Unit,
     onRefreshAnnouncements: () -> Unit,
+    onOpenLeaderboard: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val driver = uiState.currentDriver
@@ -2333,6 +2483,14 @@ private fun ProfileScreen(
                             Text("刷新公告")
                         }
                     }
+
+OutlinedButton(
+    onClick = onOpenLeaderboard,
+    modifier = Modifier.fillMaxWidth(),
+    shape = RoundedCornerShape(14.dp)
+) {
+    Text("車手排名")
+}
                     StatusBadge(
                         label = "審核狀態：${approvalLabel(driver?.approvalStatus ?: ApprovalStatus.PENDING_APPROVAL)}",
                         highlight = driver?.approvalStatus == ApprovalStatus.APPROVED,
