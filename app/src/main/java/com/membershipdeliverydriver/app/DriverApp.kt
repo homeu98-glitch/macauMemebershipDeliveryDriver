@@ -2919,6 +2919,12 @@ private fun openDialer(context: android.content.Context, phoneNumber: String) {
 }
 
 
+
+private data class MapNavigationOption(
+    val label: String,
+    val intent: Intent,
+)
+
 private fun openNavigation(
     context: android.content.Context,
     point: com.membershipdeliverydriver.app.core.LocationPoint,
@@ -2942,74 +2948,43 @@ private fun openNavigation(
         return if (intent.resolveActivity(packageManager) != null) intent else null
     }
 
-    val nativeMapIntents = buildList {
+    val options = buildList {
         candidateIntent(
             uri = "google.navigation:q=${wgs.latitude},${wgs.longitude}",
             packageName = "com.google.android.apps.maps",
-        )?.let(::add)
+        )?.let { add(MapNavigationOption("Google 地圖 (WGS84)", it)) }
 
         candidateIntent(
             uri = "androidamap://route?sourceApplication=membership-driver&dlat=${gcj.latitude}&dlon=${gcj.longitude}&dname=$encodedLabel&dev=0&t=0",
             packageName = "com.autonavi.minimap",
-        )?.let(::add)
+        )?.let { add(MapNavigationOption("高德地圖 (GCJ02)", it)) }
 
         candidateIntent(
             uri = "baidumap://map/direction?destination=name:$encodedLabel|latlng:${bd.latitude},${bd.longitude}&coord_type=bd09ll&mode=driving&src=membership-driver",
             packageName = "com.baidu.BaiduMap",
-        )?.let(::add)
+        )?.let { add(MapNavigationOption("百度地圖 (BD09)", it)) }
 
         candidateIntent(
             uri = "qqmap://map/routeplan?type=drive&tocoord=${gcj.latitude},${gcj.longitude}&to=$encodedLabel",
             packageName = "com.tencent.map",
-        )?.let(::add)
+        )?.let { add(MapNavigationOption("騰訊地圖 (GCJ02)", it)) }
 
         candidateIntent(
             uri = "petalmaps://navigation?daddr=${gcj.latitude},${gcj.longitude}&dname=$encodedLabel",
             packageName = "com.huawei.maps.app",
-        )?.let(::add)
+        )?.let { add(MapNavigationOption("Petal Maps (GCJ02)", it)) }
+    }
 
-        val browserPackages = setOf(
-            "com.android.chrome",
-            "org.mozilla.firefox",
-            "com.microsoft.emmx",
-            "com.sec.android.app.sbrowser",
-            "com.opera.browser",
-            "com.brave.browser",
-            "com.UCMobile",
-        )
-        val keywordPackages = listOf("map", "maps", "minimap", "amap", "baidu", "qqmap", "petal")
-        val genericGeoIntent = Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse("geo:0,0?q=${wgs.latitude},${wgs.longitude}($encodedAddress)"),
-        ).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        packageManager.queryIntentActivities(genericGeoIntent, PackageManager.MATCH_DEFAULT_ONLY)
-            .mapNotNull { resolveInfo ->
-                val packageName = resolveInfo.activityInfo?.packageName ?: return@mapNotNull null
-                val appLabel = runCatching { resolveInfo.loadLabel(packageManager)?.toString().orEmpty() }.getOrDefault("")
-                val looksLikeMap = keywordPackages.any { keyword ->
-                    packageName.contains(keyword, ignoreCase = true) ||
-                        appLabel.contains("地圖") ||
-                        appLabel.contains("地图") ||
-                        appLabel.contains("map", ignoreCase = true)
-                }
-                if (packageName in browserPackages || !looksLikeMap) return@mapNotNull null
-                Intent(genericGeoIntent).setPackage(packageName)
+    if (options.isNotEmpty()) {
+        val labels = options.map { it.label }.toTypedArray()
+        android.app.AlertDialog.Builder(context)
+            .setTitle("選擇導航地圖")
+            .setMessage("系統會按你選擇的地圖，自動使用對應座標系導航。")
+            .setItems(labels) { _, which ->
+                runCatching { context.startActivity(options[which].intent) }
             }
-            .forEach(::add)
-    }.distinctBy { it.`package` ?: it.component?.packageName ?: it.dataString.orEmpty() }
-
-    if (nativeMapIntents.isNotEmpty()) {
-        val primaryIntent = nativeMapIntents.first()
-        val extraIntents = nativeMapIntents.drop(1).toTypedArray()
-        val chooser = Intent.createChooser(primaryIntent, "選擇導航 App").apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (extraIntents.isNotEmpty()) {
-                putExtra(Intent.EXTRA_INITIAL_INTENTS, extraIntents)
-            }
-        }
-        context.startActivity(chooser)
+            .setNegativeButton("取消", null)
+            .show()
         return
     }
 
