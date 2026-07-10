@@ -6,6 +6,8 @@ import { getActiveDriverAppRelease } from "../../../../../lib/driver-app-release
 export const dynamic = "force-dynamic";
 
 type DebugInfo = {
+  supabaseUrl: string | null;
+  serviceRoleKeyPresent: boolean;
   vercelRegion: string | null;
   gitCommitSha: string | null;
   deploymentId: string | null;
@@ -58,6 +60,8 @@ export async function GET(request: Request) {
 
   const debug: DebugInfo | undefined = debugEnabled
     ? {
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? null,
+        serviceRoleKeyPresent: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
         vercelRegion: process.env.VERCEL_REGION ?? null,
         gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
         deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
