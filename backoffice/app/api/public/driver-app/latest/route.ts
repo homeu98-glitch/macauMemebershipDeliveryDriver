@@ -116,6 +116,7 @@ export async function GET(request: Request) {
       success: true,
       version: legacyConfig.version,
       releaseNotes: legacyConfig.releaseNotes,
+      apkUrl: legacyConfig.apkUrl,
       landingPageUrl: `${origin}/apkdownload`,
       stableDownloadUrl: `${origin}/apkdownload/latest`,
       ...(debug ? { debug } : {}),

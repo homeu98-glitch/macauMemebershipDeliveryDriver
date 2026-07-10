@@ -12,5 +12,11 @@ export async function GET() {
     return NextResponse.json({ message: "No APK configured yet." }, { status: 404 });
   }
 
-  return NextResponse.redirect(apkUrl, 307);
+  return NextResponse.redirect(apkUrl, {
+    status: 307,
+    headers: {
+      "Cache-Control": "no-store"
+    }
+  });
 }
+
