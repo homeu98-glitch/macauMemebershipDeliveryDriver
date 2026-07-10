@@ -848,6 +848,38 @@ private fun HomeScreen(
                     }
                 }
             }
+
+item {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = Color(0xFFFFE7A3),
+        border = BorderStroke(1.dp, Color(0xFFE6B800)),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                "DEBUG BUILD 標記",
+                color = Color(0xFF7A4E00),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "Forced Map Choice + Sound Fix",
+                color = Color(0xFF2A1A00),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                "見到這條黃色標記，代表你安裝的是要求先選地圖、並修正新單提示音的測試包。",
+                color = Color(0xFF6D4B0B),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
