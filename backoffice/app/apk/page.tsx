@@ -238,7 +238,7 @@ async function savePublicConfig() {
   }
 }
 
-async function useReleaseAsPublic(release: Release) {
+async function setReleaseAsPublic(release: Release) {
   setPublicVersion(release.version);
   setPublicApkUrl(release.apkUrl);
   setPublicReleaseNotes(release.releaseNotes || '最新版');
@@ -479,7 +479,7 @@ async function useReleaseAsPublic(release: Release) {
                         <button className="btn btn-secondary" type="button" disabled={saving || r.isActive} onClick={() => activate(r.id)}>
                           設為最新
                         </button>
-                        <button className="btn btn-secondary" type="button" disabled={saving} onClick={() => useReleaseAsPublic(r)}>
+                        <button className="btn btn-secondary" type="button" disabled={saving} onClick={() => setReleaseAsPublic(r)}>
                           用此連結公開
                         </button>
                         <button className="btn btn-secondary" type="button" disabled={saving || r.isActive} onClick={() => removeRelease(r)}>
