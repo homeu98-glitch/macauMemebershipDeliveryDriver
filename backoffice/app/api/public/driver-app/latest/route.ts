@@ -13,7 +13,7 @@ type DebugInfo = {
   vercelRegion: string | null;
   gitCommitSha: string | null;
   deploymentId: string | null;
-  used: "active" | "legacy" | "none";
+  used: "legacy" | "none";
   activeVersion: string | null;
   legacyVersion: string | null;
   activeError: string | null;
@@ -26,107 +26,57 @@ function toErrString(error: unknown) {
   return String(error);
 }
 
-
-async function getActiveDriverAppReleaseDirect() {
-  const supabase = createServiceRoleSupabaseClient();
-  const { data, error } = await supabase
-    .from("driver_app_releases")
-    .select("id,version,apk_url,release_notes,created_at,is_active")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  if (!data || data.length == 0) return null;
-
-  const row = data[0] as any;
-
-  return {
-    id: String(row.id),
-    version: String(row.version),
-    apkUrl: String(row.apk_url),
-    releaseNotes: String(row.release_notes ?? ""),
-    createdAt: String(row.created_at),
-    isActive: Boolean(row.is_active),
-  };
-}
-
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const origin = url.origin;
   const debugLevel = url.searchParams.get("debug");
   const debugEnabled = debugLevel === "1" || debugLevel === "2";
 
-  let activeError: unknown = null;
   let legacyError: unknown = null;
-
-  const active = await getActiveDriverAppReleaseDirect().catch((e) => {
-    activeError = e;
+  const legacyConfig = await getDriverAppDownloadConfig().catch((e) => {
+    legacyError = e;
     return null;
   });
 
-  const legacyConfig = active
-    ? null
-    : await getDriverAppDownloadConfig().catch((e) => {
-        legacyError = e;
-        return null;
-      });
+  let activeRows:
+    | Array<{ id: string; version: string; createdAt: string; isActive: boolean }>
+    | undefined;
+  let topRows:
+    | Array<{ id: string; version: string; createdAt: string; isActive: boolean }>
+    | undefined;
 
+  if (debugLevel === "2") {
+    try {
+      const supabase = createServiceRoleSupabaseClient();
+      const { data: actives } = await supabase
+        .from("driver_app_releases")
+        .select("id,version,created_at,is_active")
+        .eq("is_active", true)
+        .order("created_at", { ascending: false });
 
+      activeRows = (actives ?? []).map((row: any) => ({
+        id: String(row.id),
+        version: String(row.version),
+        createdAt: String(row.created_at),
+        isActive: Boolean(row.is_active),
+      }));
 
-let activeRows:
-  | Array<{ id: string; version: string; createdAt: string; isActive: boolean }>
-  | undefined;
-let topRows:
-  | Array<{ id: string; version: string; createdAt: string; isActive: boolean }>
-  | undefined;
+      const { data: tops } = await supabase
+        .from("driver_app_releases")
+        .select("id,version,created_at,is_active")
+        .order("created_at", { ascending: false })
+        .limit(5);
 
-// Deep debug mode: show what the backend actually sees in DB
-if (debugLevel === "2") {
-  try {
-    const supabase = createServiceRoleSupabaseClient();
-    const { data: actives } = await supabase
-      .from("driver_app_releases")
-      .select("id,version,created_at,is_active")
-      .eq("is_active", true)
-      .order("created_at", { ascending: false });
-
-    activeRows = (actives ?? []).map((row: any) => ({
-      id: String(row.id),
-      version: String(row.version),
-      createdAt: String(row.created_at),
-      isActive: Boolean(row.is_active),
-    }));
-
-    const { data: tops } = await supabase
-      .from("driver_app_releases")
-      .select("id,version,created_at,is_active")
-      .order("created_at", { ascending: false })
-      .limit(5);
-
-    topRows = (tops ?? []).map((row: any) => ({
-      id: String(row.id),
-      version: String(row.version),
-      createdAt: String(row.created_at),
-      isActive: Boolean(row.is_active),
-    }));
-  } catch {
-    // ignore deep debug failure
+      topRows = (tops ?? []).map((row: any) => ({
+        id: String(row.id),
+        version: String(row.version),
+        createdAt: String(row.created_at),
+        isActive: Boolean(row.is_active),
+      }));
+    } catch {
+      // ignore
+    }
   }
-}
-
-  const current = active
-    ? {
-        version: active.version,
-        releaseNotes: active.releaseNotes,
-        apkUrl: active.apkUrl
-      }
-    : legacyConfig
-      ? {
-          version: legacyConfig.version,
-          releaseNotes: legacyConfig.releaseNotes,
-          apkUrl: legacyConfig.apkUrl
-        }
-      : null;
 
   const debug: DebugInfo | undefined = debugEnabled
     ? {
@@ -135,28 +85,28 @@ if (debugLevel === "2") {
         vercelRegion: process.env.VERCEL_REGION ?? null,
         gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
         deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
-        used: active ? "active" : legacyConfig ? "legacy" : "none",
-        activeVersion: active?.version ?? null,
+        used: legacyConfig ? "legacy" : "none",
+        activeVersion: activeRows?.[0]?.version ?? null,
         legacyVersion: legacyConfig?.version ?? null,
-        activeError: toErrString(activeError),
+        activeError: null,
         legacyError: toErrString(legacyError),
-        ...(debugLevel === "2" ? { activeRows, topRows } : {})
+        ...(debugLevel === "2" ? { activeRows, topRows } : {}),
       }
     : undefined;
 
-  if (!current) {
+  if (!legacyConfig) {
     return NextResponse.json(
       {
         success: false,
         message: "No active release configured.",
         landingPageUrl: `${origin}/apkdownload`,
         stableDownloadUrl: `${origin}/apkdownload/latest`,
-        ...(debug ? { debug } : {})
+        ...(debug ? { debug } : {}),
       },
       {
         headers: {
-          "Cache-Control": "no-store"
-        }
+          "Cache-Control": "no-store",
+        },
       }
     );
   }
@@ -164,16 +114,16 @@ if (debugLevel === "2") {
   return NextResponse.json(
     {
       success: true,
-      version: current.version,
-      releaseNotes: current.releaseNotes,
+      version: legacyConfig.version,
+      releaseNotes: legacyConfig.releaseNotes,
       landingPageUrl: `${origin}/apkdownload`,
       stableDownloadUrl: `${origin}/apkdownload/latest`,
-      ...(debug ? { debug } : {})
+      ...(debug ? { debug } : {}),
     },
     {
       headers: {
-        "Cache-Control": "no-store"
-      }
+        "Cache-Control": "no-store",
+      },
     }
   );
 }

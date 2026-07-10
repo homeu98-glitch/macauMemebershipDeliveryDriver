@@ -1,5 +1,4 @@
 import { getDriverAppDownloadConfig } from "../../lib/app-release-config";
-import { createServiceRoleSupabaseClient } from "../../lib/supabase";
 
 export const metadata = {
   title: "澳門會員車手 下載",
@@ -8,39 +7,8 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-async function getActiveDriverAppReleaseDirect() {
-  const supabase = createServiceRoleSupabaseClient();
-  const { data, error } = await supabase
-    .from("driver_app_releases")
-    .select("id,version,apk_url,release_notes,created_at,is_active")
-    .eq("is_active", true)
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  if (!data || data.length === 0) return null;
-
-  const row = data[0] as any;
-  return {
-    version: String(row.version),
-    releaseNotes: String(row.release_notes ?? ""),
-    apkUrl: String(row.apk_url),
-  };
-}
-
 export default async function ApkDownloadPage() {
-  const active = await getActiveDriverAppReleaseDirect().catch(() => null);
-  const legacyConfig = active ? null : await getDriverAppDownloadConfig().catch(() => null);
-  const current = active
-    ? {
-        version: active.version,
-        releaseNotes: active.releaseNotes,
-      }
-    : legacyConfig
-      ? {
-          version: legacyConfig.version,
-          releaseNotes: legacyConfig.releaseNotes,
-        }
-      : null;
+  const current = await getDriverAppDownloadConfig().catch(() => null);
 
   return (
     <main
