@@ -81,6 +81,219 @@ function EmptyState({ text }: { text: string }) {
   return <div className="muted" style={{ padding: "14px 4px" }}>{text}</div>;
 }
 
+
+type CreatedTestOrderSummary = {
+  externalOrderId: string;
+  siteBOrderId: string;
+  status: string;
+};
+
+function buildDefaultDeadlineValue() {
+  const date = new Date(Date.now() + 30 * 60 * 1000);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function ManualTestOrderForm({
+  onCreated
+}: {
+  onCreated?: (created: CreatedTestOrderSummary[]) => void;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [externalOrderId, setExternalOrderId] = useState("");
+  const [deliveryFeeMop, setDeliveryFeeMop] = useState("28");
+  const [deliveryDeadline, setDeliveryDeadline] = useState(buildDefaultDeadlineValue());
+  const [paymentBy, setPaymentBy] = useState<"customer" | "shop">("customer");
+  const [shopName, setShopName] = useState("");
+  const [shopAddress, setShopAddress] = useState("");
+  const [shopLatitude, setShopLatitude] = useState("");
+  const [shopLongitude, setShopLongitude] = useState("");
+  const [shopContactName, setShopContactName] = useState("店員");
+  const [shopContactPhone, setShopContactPhone] = useState("+85328990000");
+  const [customerName, setCustomerName] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
+  const [customerLatitude, setCustomerLatitude] = useState("");
+  const [customerLongitude, setCustomerLongitude] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("+85366110000");
+  const [deliveryNote, setDeliveryNote] = useState("到達後請致電。");
+
+  async function submitManualOrder() {
+    setBusy(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/testing/random-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "manual",
+          externalOrderId: externalOrderId.trim() || undefined,
+          deliveryFeeMop: Number(deliveryFeeMop || 28),
+          paymentBy,
+          deliveryDeadline: deliveryDeadline ? new Date(deliveryDeadline).toISOString() : undefined,
+          shop: {
+            name: shopName.trim(),
+            address: shopAddress.trim(),
+            latitude: Number(shopLatitude),
+            longitude: Number(shopLongitude),
+            contactName: shopContactName.trim(),
+            contactPhone: shopContactPhone.trim(),
+          },
+          customer: {
+            name: customerName.trim(),
+            address: customerAddress.trim(),
+            latitude: Number(customerLatitude),
+            longitude: Number(customerLongitude),
+            phone: customerPhone.trim(),
+            deliveryNote: deliveryNote.trim(),
+          },
+        })
+      });
+
+      const payload = (await response.json()) as {
+        message?: string;
+        created?: CreatedTestOrderSummary[];
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.message ?? "建立手動測試訂單失敗。");
+      }
+
+      const created = payload.created ?? [];
+      onCreated?.(created);
+      setMessage(`已成功建立 ${created.length} 筆測試訂單。`);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "建立手動測試訂單失敗。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <div className="grid two-column">
+        <div className="field">
+          <label>外部訂單編號</label>
+          <input value={externalOrderId} onChange={(event) => setExternalOrderId(event.target.value)} placeholder="可留空，自動生成" />
+        </div>
+        <div className="field">
+          <label>配送費（MOP）</label>
+          <input value={deliveryFeeMop} onChange={(event) => setDeliveryFeeMop(event.target.value)} placeholder="28" />
+        </div>
+      </div>
+
+      <div className="grid two-column">
+        <div className="field">
+          <label>送達時間</label>
+          <input type="datetime-local" value={deliveryDeadline} onChange={(event) => setDeliveryDeadline(event.target.value)} />
+        </div>
+        <div className="field">
+          <label>運費由誰支付</label>
+          <select value={paymentBy} onChange={(event) => setPaymentBy(event.target.value as "customer" | "shop")}>
+            <option value="customer">客人支付</option>
+            <option value="shop">商戶支付</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16, padding: 16 }}>
+        <h3 style={{ marginTop: 0 }}>店舖資料</h3>
+        <div className="grid two-column">
+          <div className="field">
+            <label>店舖名稱</label>
+            <input value={shopName} onChange={(event) => setShopName(event.target.value)} placeholder="例如：海景粉麵店" />
+          </div>
+          <div className="field">
+            <label>店舖地址</label>
+            <input value={shopAddress} onChange={(event) => setShopAddress(event.target.value)} placeholder="例如：澳門新口岸友誼大馬路 82 號" />
+          </div>
+        </div>
+        <div className="grid two-column">
+          <div className="field">
+            <label>店舖緯度</label>
+            <input value={shopLatitude} onChange={(event) => setShopLatitude(event.target.value)} placeholder="22.1924000" />
+          </div>
+          <div className="field">
+            <label>店舖經度</label>
+            <input value={shopLongitude} onChange={(event) => setShopLongitude(event.target.value)} placeholder="113.5523000" />
+          </div>
+        </div>
+        <div className="grid two-column">
+          <div className="field">
+            <label>店舖聯絡人</label>
+            <input value={shopContactName} onChange={(event) => setShopContactName(event.target.value)} placeholder="店員" />
+          </div>
+          <div className="field">
+            <label>店舖電話</label>
+            <input value={shopContactPhone} onChange={(event) => setShopContactPhone(event.target.value)} placeholder="+85328990000" />
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 16, padding: 16 }}>
+        <h3 style={{ marginTop: 0 }}>客戶資料</h3>
+        <div className="grid two-column">
+          <div className="field">
+            <label>客戶名稱</label>
+            <input value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="例如：李小姐" />
+          </div>
+          <div className="field">
+            <label>客戶地址</label>
+            <input value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} placeholder="例如：黑沙環海濱花園 2 座" />
+          </div>
+        </div>
+        <div className="grid two-column">
+          <div className="field">
+            <label>客戶緯度</label>
+            <input value={customerLatitude} onChange={(event) => setCustomerLatitude(event.target.value)} placeholder="22.207269173860297" />
+          </div>
+          <div className="field">
+            <label>客戶經度</label>
+            <input value={customerLongitude} onChange={(event) => setCustomerLongitude(event.target.value)} placeholder="113.55519339747916" />
+          </div>
+        </div>
+        <div className="grid two-column">
+          <div className="field">
+            <label>客戶電話</label>
+            <input value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="+85366110000" />
+          </div>
+          <div className="field">
+            <label>送達備註</label>
+            <input value={deliveryNote} onChange={(event) => setDeliveryNote(event.target.value)} placeholder="到達後請致電。" />
+          </div>
+        </div>
+      </div>
+
+      <div className="btn-row" style={{ marginTop: 16 }}>
+        <button className="btn btn-primary" disabled={busy} onClick={submitManualOrder} type="button">
+          {busy ? "建立中..." : "按輸入資料建立訂單"}
+        </button>
+      </div>
+
+      <div className="muted" style={{ marginTop: 14 }}>
+        店舖名稱、客戶地址、雙方經緯度都以你輸入為準，不再使用隨機地址 sample。
+      </div>
+
+      {message ? (
+        <div
+          style={{
+            marginTop: 16,
+            padding: "12px 14px",
+            borderRadius: 14,
+            background: "rgba(96, 165, 250, 0.10)",
+            color: "#dbeafe"
+          }}
+        >
+          {message}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function canShopConfirm(rawStatus: string) {
   return !["delivered", "canceled", "failed"].includes(rawStatus);
 }
@@ -1158,108 +1371,24 @@ export function PushTokensBoard({
   );
 }
 
+
 export function DashboardCreateOrderPanel() {
-  const router = useRouter();
-
-const [pendingApprovalCount, setPendingApprovalCount] = useState<number>(0);
-
-useEffect(() => {
-  let cancelled = false;
-  async function loadPending() {
-    try {
-      const res = await fetch("/api/riders/applications/pending-count");
-      const json = (await res.json()) as { success?: boolean; pending?: number };
-      if (!cancelled && res.ok && json && json.success) {
-        setPendingApprovalCount(Number(json.pending ?? 0));
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  void loadPending();
-  const timer = window.setInterval(loadPending, 30_000);
-  return () => {
-    cancelled = true;
-    window.clearInterval(timer);
-  };
-}, []);
-  const [busy, setBusy] = useState<number | null>(null);
-  const [message, setMessage] = useState("");
-
-  async function generateRandomOrders(count: number) {
-    setBusy(count);
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/testing/random-orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count })
-      });
-
-      const payload = (await response.json()) as {
-        message?: string;
-        created?: Array<{ externalOrderId: string; siteBOrderId: string; status: string }>;
-      };
-
-      if (!response.ok) {
-        throw new Error(payload.message ?? "建立測試訂單失敗。");
-      }
-
-      setMessage(`已成功建立 ${payload.created?.length ?? 0} 筆測試訂單。`);
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "建立測試訂單失敗。");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   return (
     <section className="card">
       <div className="card-header">
         <div>
-          <h2 className="card-title">建立測試訂單</h2>
-          <p className="muted">直接在首頁建立測試工單，立即驗證接單、推播與 callback 流程。</p>
+          <h2 className="card-title">手動建立測試訂單</h2>
+          <p className="muted">由你自己輸入店舖名、客戶地址與經緯度，再生成單子。</p>
         </div>
       </div>
 
-      <div className="btn-row">
-        <button
-          className="btn btn-primary"
-          disabled={busy !== null}
-          onClick={() => generateRandomOrders(1)}
-          type="button"
-        >
-          {busy === 1 ? "建立中..." : "建立 1 筆測試訂單"}
-        </button>
-        <button
-          className="btn btn-secondary"
-          disabled={busy !== null}
-          onClick={() => generateRandomOrders(5)}
-          type="button"
-        >
-          {busy === 5 ? "建立中..." : "建立 5 筆測試訂單"}
-        </button>
+      <ManualTestOrderForm />
+
+      <div className="btn-row" style={{ marginTop: 16 }}>
         <Link className="btn btn-secondary" href="/testing">
           打開完整測試頁
         </Link>
       </div>
-
-      {message ? (
-        <div
-          style={{
-            marginTop: 16,
-            padding: "12px 14px",
-            borderRadius: 14,
-            background: "rgba(96, 165, 250, 0.10)",
-            color: "#dbeafe"
-          }}
-        >
-          {message}
-        </div>
-      ) : null}
     </section>
   );
 }
@@ -1290,7 +1419,6 @@ useEffect(() => {
     window.clearInterval(timer);
   };
 }, []);
-  const [busy, setBusy] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [pushBusy, setPushBusy] = useState(false);
   const [pushPhone, setPushPhone] = useState("63936541");
@@ -1299,36 +1427,6 @@ useEffect(() => {
   const [createdOrders, setCreatedOrders] = useState<
     Array<{ externalOrderId: string; siteBOrderId: string; status: string }>
   >([]);
-
-  async function generateRandomOrders(count: number) {
-    setBusy(count);
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/testing/random-orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ count })
-      });
-
-      const payload = (await response.json()) as {
-        message?: string;
-        created?: Array<{ externalOrderId: string; siteBOrderId: string; status: string }>;
-      };
-
-      if (!response.ok) {
-        throw new Error(payload.message ?? "建立測試訂單失敗。");
-      }
-
-      setCreatedOrders(payload.created ?? []);
-      setMessage(`已成功建立 ${payload.created?.length ?? 0} 筆測試訂單。`);
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "建立測試訂單失敗。");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   async function sendTestPush() {
     setPushBusy(true);
@@ -1368,54 +1466,19 @@ useEffect(() => {
 
   return (
     <div className="section-stack">
-      <section className="card">
-        <div className="card-header">
-          <div>
-            <h2 className="card-title">快速建立測試訂單</h2>
-            <p className="muted">
-              直接寫入真實資料表，模擬 SiteA 傳入的新工單，方便先測試騎手 app、後台與 callback 流程。
-            </p>
-          </div>
-        </div>
 
-        <div className="btn-row">
-          <button
-            className="btn btn-primary"
-            disabled={busy !== null}
-            onClick={() => generateRandomOrders(1)}
-            type="button"
-          >
-            {busy === 1 ? "建立中..." : "建立 1 筆"}
-          </button>
-          <button
-            className="btn btn-secondary"
-            disabled={busy !== null}
-            onClick={() => generateRandomOrders(5)}
-            type="button"
-          >
-            {busy === 5 ? "建立中..." : "建立 5 筆"}
-          </button>
-        </div>
+<section className="card">
+  <div className="card-header">
+    <div>
+      <h2 className="card-title">手動建立測試訂單</h2>
+      <p className="muted">
+        由你自己輸入店舖、客戶、地址與經緯度，直接寫入真實資料表。
+      </p>
+    </div>
+  </div>
 
-        <div className="muted" style={{ marginTop: 14 }}>
-          這些工單會帶入隨機商戶、客戶、金額、送達時間，並把 callback 指向目前後台的
-          <code style={{ marginLeft: 6 }}>/api/integration/delivery/siteb/callback</code>，刷新後可在訂單管理、rider app 與下方接收紀錄中看到。
-        </div>
-
-        {message ? (
-          <div
-            style={{
-              marginTop: 16,
-              padding: "12px 14px",
-              borderRadius: 14,
-              background: "rgba(96, 165, 250, 0.10)",
-              color: "#dbeafe"
-            }}
-          >
-            {message}
-          </div>
-        ) : null}
-      </section>
+  <ManualTestOrderForm onCreated={setCreatedOrders} />
+</section>
 
       <section className="card">
         <div className="card-header">

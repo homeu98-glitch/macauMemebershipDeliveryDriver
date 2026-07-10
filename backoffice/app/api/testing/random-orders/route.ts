@@ -3,6 +3,32 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "../../../../lib/auth";
 import { createOrSyncOrder, type CreateOrderInput } from "../../../../lib/siteb-order-api";
 
+
+type ManualCreateOrderBody = {
+  mode?: "manual";
+  externalOrderId?: string;
+  deliveryFeeMop?: number;
+  urgent?: boolean;
+  paymentBy?: "customer" | "shop";
+  deliveryDeadline?: string;
+  shop: {
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    contactName?: string;
+    contactPhone?: string;
+  };
+  customer: {
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    phone?: string;
+    deliveryNote?: string;
+  };
+};
+
 const shopSamples = [
   {
     name: "議事亭前地",
@@ -387,6 +413,53 @@ function buildRandomOrder(index: number, callbackBaseUrl: string): CreateOrderIn
   };
 }
 
+
+function buildManualOrder(input: ManualCreateOrderBody, callbackBaseUrl: string): CreateOrderInput {
+  const suffix = Date.now();
+  const externalOrderId = input.externalOrderId?.trim() || `MANUAL-${suffix}`;
+  const deadline = input.deliveryDeadline?.trim() || new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+  return {
+    externalOrderId,
+    pickupMode: "now",
+    deliveryMode: "scheduled",
+    deliveryDeadline: deadline,
+    deliveryFeeMop: Number(input.deliveryFeeMop ?? 28),
+    urgent: Boolean(input.urgent),
+    currency: "MOP",
+    shop: {
+      externalShopId: `MANUAL-SHOP-${suffix}`,
+      name: input.shop.name,
+      address: input.shop.address,
+      latitude: Number(input.shop.latitude),
+      longitude: Number(input.shop.longitude),
+      contactName: input.shop.contactName?.trim() || "店員",
+      contactPhone: input.shop.contactPhone?.trim() || "+85328990000"
+    },
+    customer: {
+      externalCustomerId: `MANUAL-CUSTOMER-${suffix}`,
+      name: input.customer.name?.trim() || "客戶",
+      phone: input.customer.phone?.trim() || "+85366110000",
+      address: input.customer.address,
+      latitude: Number(input.customer.latitude),
+      longitude: Number(input.customer.longitude),
+      deliveryNote: input.customer.deliveryNote?.trim() || "到達後請致電。"
+    },
+    items: [{ name: "手動測試商品", quantity: 1 }],
+    notes: {
+      shopNote: "此訂單由後台手動建立。",
+      driverNote: "請依照手動輸入地址與座標導航。",
+      paymentBy: input.paymentBy ?? "customer"
+    },
+    callback: {
+      url: `${callbackBaseUrl}/api/integration/delivery/siteb/callback`,
+      headers: {
+        "X-SiteA-Key": "sitea-demo-key"
+      }
+    }
+  };
+}
+
 export async function POST(request: Request) {
   const sessionUser = getSessionUser();
   if (!sessionUser) {
@@ -394,9 +467,18 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as { count?: number };
-    const count = Math.max(1, Math.min(10, Number(body.count ?? 1)));
+    const body = (await request.json()) as ({ count?: number } | ManualCreateOrderBody);
+    const count = Math.max(1, Math.min(10, Number((body as { count?: number }).count ?? 1)));
     const callbackBaseUrl = new URL(request.url).origin;
+
+    if ("mode" in body && body.mode === "manual") {
+      const result = await createOrSyncOrder(buildManualOrder(body, callbackBaseUrl));
+      return NextResponse.json({
+        success: true,
+        callbackBaseUrl,
+        created: [result]
+      });
+    }
 
     const created = [];
     for (let index = 0; index < count; index += 1) {
