@@ -16,19 +16,19 @@ async function readConfigValue(key: string, fallback = '') {
   const supabase = createServiceRoleSupabaseClient();
   const { data } = await supabase
     .from('app_configs')
-    .select('config_value')
-    .eq('config_key', key)
+    .select('value')
+    .eq('key', key)
     .maybeSingle();
-  return typeof data?.config_value === 'string' ? data.config_value : fallback;
+  return typeof data?.value === 'string' ? data.value : fallback;
 }
 
 async function writeConfigValue(key: string, value: string) {
   const supabase = createServiceRoleSupabaseClient();
   const { error } = await supabase.from('app_configs').upsert({
-    config_key: key,
-    config_value: value,
+    key,
+    value,
     updated_at: new Date().toISOString()
-  }, { onConflict: 'config_key' });
+  }, { onConflict: 'key' });
   if (error) throw error;
 }
 
