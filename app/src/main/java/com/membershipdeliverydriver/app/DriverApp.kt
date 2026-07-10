@@ -2720,15 +2720,7 @@ private fun ProfileScreen(
                     
                     OutlinedButton(
                         onClick = {
-                            val fallback = com.membershipdeliverydriver.app.BuildConfig.API_BASE_URL.trimEnd('/') + "/apkdownload/latest"
-                            val url = uiState.updateInfo?.apkUrl
-                                ?.takeIf { it.isNotBlank() }
-                                ?: uiState.updateInfo?.downloadPageUrl
-                                    ?.takeIf { it.isNotBlank() }
-                                ?: uiState.updateInfo?.stableDownloadUrl
-                                    ?.takeIf { it.isNotBlank() }
-                                ?: fallback
-                            openExternalUrl(context, url)
+                            openExternalUrl(context, "https://macau-delivery.vercel.app/apkdownload")
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(14.dp)
