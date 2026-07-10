@@ -1029,9 +1029,10 @@ item {
             MapPickerDialog(
                 point = point,
                 onDismiss = { pendingNavigationPoint = null },
-                onNavigate = { intent ->
+                onNavigate = { intent, errorMessage ->
                     pendingNavigationPoint = null
                     runCatching { context.startActivity(intent) }
+                        .onFailure { Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show() }
                 },
             )
         }
@@ -1321,9 +1322,10 @@ private fun OrdersScreen(
             MapPickerDialog(
                 point = point,
                 onDismiss = { pendingNavigationPoint = null },
-                onNavigate = { intent ->
+                onNavigate = { intent, errorMessage ->
                     pendingNavigationPoint = null
                     runCatching { context.startActivity(intent) }
+                        .onFailure { Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show() }
                 },
             )
         }
@@ -2086,9 +2088,10 @@ private fun OrderDetailScreen(
             MapPickerDialog(
                 point = point,
                 onDismiss = { pendingNavigationPoint = null },
-                onNavigate = { intent ->
+                onNavigate = { intent, errorMessage ->
                     pendingNavigationPoint = null
                     runCatching { context.startActivity(intent) }
+                        .onFailure { Toast.makeText(context, errorMessage, Toast.LENGTH_SHORT).show() }
                 },
             )
         }
@@ -2993,74 +2996,183 @@ private fun openDialer(context: android.content.Context, phoneNumber: String) {
 
 
 
+
 private data class MapNavigationOption(
     val label: String,
-    val packageName: String,
+    val helperText: String,
+    val errorMessage: String,
     val intent: Intent,
-    val unavailableMessage: String,
-    val installed: Boolean,
+    val provider: String,
 )
 
-
 private fun buildMapNavigationOptions(
-    context: android.content.Context,
     point: com.membershipdeliverydriver.app.core.LocationPoint,
 ): List<MapNavigationOption> {
-    val packageManager = context.packageManager
     val safeLabel = if (point.label.isBlank()) "目的地" else point.label
-    val encodedLabel = Uri.encode(safeLabel)
+    val safeAddress = point.address.ifBlank { safeLabel }
 
     val wgs = point.navigationCoords?.wgs84
         ?: com.membershipdeliverydriver.app.core.CoordinatePair(point.latitude, point.longitude)
-    val gcj = point.navigationCoords?.gcj02 ?: wgs
-    val bd = point.navigationCoords?.bd09 ?: gcj
 
-    fun isPackageInstalled(packageName: String): Boolean {
-        return runCatching {
-            @Suppress("DEPRECATION")
-            packageManager.getPackageInfo(packageName, 0)
-        }.isSuccess
-    }
+    val googleUrl = "https://www.google.com/maps/search/?api=1&query=${wgs.latitude},${wgs.longitude}"
+    val amapParams = Uri.Builder()
+        .scheme("https")
+        .authority("uri.amap.com")
+        .path("marker")
+        .appendQueryParameter("position", "${wgs.longitude},${wgs.latitude}")
+        .appendQueryParameter("src", "membership-driver")
+        .appendQueryParameter("coordinate", "wgs84")
+        .appendQueryParameter("callnative", "1")
+        .appendQueryParameter("name", safeLabel)
+        .build()
+        .toString()
 
-    fun packageIntent(uri: String, packageName: String): Intent {
-        return Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+    fun browserIntent(url: String): Intent {
+        return Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            setPackage(packageName)
         }
     }
 
     return listOf(
         MapNavigationOption(
             label = "Google Maps",
-            packageName = "com.google.android.apps.maps",
-            intent = packageIntent(
-                uri = "google.navigation:q=${wgs.latitude},${wgs.longitude}",
-                packageName = "com.google.android.apps.maps",
-            ),
-            unavailableMessage = "未安裝 Google Maps",
-            installed = isPackageInstalled("com.google.android.apps.maps"),
+            helperText = "使用 WGS84 直接導航",
+            errorMessage = "無法開啟 Google Maps",
+            intent = browserIntent(googleUrl),
+            provider = "google",
         ),
         MapNavigationOption(
             label = "高德地圖",
-            packageName = "com.autonavi.minimap",
-            intent = packageIntent(
-                uri = "androidamap://route?sourceApplication=membership-driver&dlat=${gcj.latitude}&dlon=${gcj.longitude}&dname=$encodedLabel&dev=0&t=0",
-                packageName = "com.autonavi.minimap",
-            ),
-            unavailableMessage = "未安裝高德地圖",
-            installed = isPackageInstalled("com.autonavi.minimap"),
-        ),
-        MapNavigationOption(
-            label = "百度地圖",
-            packageName = "com.baidu.BaiduMap",
-            intent = packageIntent(
-                uri = "baidumap://map/direction?destination=name:$encodedLabel|latlng:${bd.latitude},${bd.longitude}&coord_type=bd09ll&mode=driving&src=membership-driver",
-                packageName = "com.baidu.BaiduMap",
-            ),
-            unavailableMessage = "未安裝百度地圖",
-            installed = isPackageInstalled("com.baidu.BaiduMap"),
+            helperText = "使用高德 URI（WGS84）",
+            errorMessage = "無法開啟高德地圖",
+            intent = browserIntent(amapParams),
+            provider = "amap",
         ),
     )
+}
+
+@Composable
+private fun GoogleMapsButtonIcon() {
+    Box(
+        modifier = Modifier
+            .size(58.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.White)
+            .padding(8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            drawRoundRect(
+                color = Color(0xFFE8F0FE),
+                cornerRadius = CornerRadius(18f, 18f),
+                size = size,
+            )
+            drawRoundRect(
+                color = Color(0xFF34A853),
+                topLeft = Offset(w * 0.06f, h * 0.62f),
+                size = Size(w * 0.26f, h * 0.26f),
+                cornerRadius = CornerRadius(8f, 8f),
+            )
+            drawRoundRect(
+                color = Color(0xFF4285F4),
+                topLeft = Offset(w * 0.35f, h * 0.62f),
+                size = Size(w * 0.26f, h * 0.26f),
+                cornerRadius = CornerRadius(8f, 8f),
+            )
+            drawRoundRect(
+                color = Color(0xFFFBBC05),
+                topLeft = Offset(w * 0.64f, h * 0.62f),
+                size = Size(w * 0.22f, h * 0.26f),
+                cornerRadius = CornerRadius(8f, 8f),
+            )
+            drawCircle(color = Color(0xFFEA4335), radius = w * 0.18f, center = Offset(w * 0.5f, h * 0.36f))
+            drawCircle(color = Color.White, radius = w * 0.08f, center = Offset(w * 0.5f, h * 0.36f))
+            drawRoundRect(
+                color = Color(0xFFEA4335),
+                topLeft = Offset(w * 0.44f, h * 0.34f),
+                size = Size(w * 0.12f, h * 0.26f),
+                cornerRadius = CornerRadius(20f, 20f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AmapButtonIcon() {
+    Box(
+        modifier = Modifier
+            .size(58.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.White)
+            .padding(8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            drawRoundRect(
+                color = Color(0xFFEAF6FF),
+                cornerRadius = CornerRadius(18f, 18f),
+                size = size,
+            )
+            drawRoundRect(
+                color = Color(0xFFD9F3E8),
+                topLeft = Offset(w * 0.05f, h * 0.1f),
+                size = Size(w * 0.38f, h * 0.8f),
+                cornerRadius = CornerRadius(14f, 14f),
+            )
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(w * 0.25f, h * 0.65f)
+                lineTo(w * 0.78f, h * 0.25f)
+                lineTo(w * 0.55f, h * 0.8f)
+                lineTo(w * 0.48f, h * 0.56f)
+                close()
+            }
+            drawPath(path = path, color = Color(0xFF2E86FF))
+        }
+    }
+}
+
+@Composable
+private fun MapProviderButtonCard(
+    option: MapNavigationOption,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(22.dp),
+        color = Color(0xFFF8F7FB),
+        border = BorderStroke(1.dp, Color(0xFFE6E0EF)),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            when (option.provider) {
+                "google" -> GoogleMapsButtonIcon()
+                else -> AmapButtonIcon()
+            }
+            Text(
+                text = option.label,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = option.helperText,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF6C7F93),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -3068,10 +3180,9 @@ private fun buildMapNavigationOptions(
 private fun MapPickerDialog(
     point: com.membershipdeliverydriver.app.core.LocationPoint,
     onDismiss: () -> Unit,
-    onNavigate: (Intent) -> Unit,
+    onNavigate: (Intent, String) -> Unit,
 ) {
-    val context = LocalContext.current
-    val options = remember(point) { buildMapNavigationOptions(context, point) }
+    val options = remember(point) { buildMapNavigationOptions(point) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -3103,58 +3214,24 @@ private fun MapPickerDialog(
                 fontWeight = FontWeight.Bold,
             )
 
+            Text(
+                "請選擇要使用的地圖，系統會按對應方式直接開啟導航。",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF6C7F93),
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 options.forEach { option ->
-                    Surface(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable {
-                                if (option.installed) {
-                                    onNavigate(option.intent)
-                                } else {
-                                    Toast.makeText(context, option.unavailableMessage, Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                        shape = RoundedCornerShape(20.dp),
-                        color = Color(0xFFF8F5FB),
-                        border = BorderStroke(1.dp, Color(0xFFE4DAEF)),
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 18.dp, horizontal = 8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(18.dp),
-                                color = Color.White,
-                                border = BorderStroke(1.dp, Color(0xFFEAE3F3)),
-                            ) {
-                                Text(
-                                    text = option.label.take(1),
-                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
-                                    color = Color(0xFF5B3F7A),
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            Text(
-                                option.label,
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                if (option.installed) "已安裝" else "未安裝",
-                                color = if (option.installed) Color(0xFF2E7D32) else Color(0xFFB3261E),
-                                style = MaterialTheme.typography.labelSmall,
-                            )
-                        }
-                    }
+                    MapProviderButtonCard(
+                        option = option,
+                        modifier = Modifier.weight(1f),
+                        onClick = { onNavigate(option.intent, option.errorMessage) },
+                    )
                 }
             }
 
@@ -3168,13 +3245,11 @@ private fun MapPickerDialog(
     }
 }
 
-
-
 private fun openNavigation(
     context: android.content.Context,
     point: com.membershipdeliverydriver.app.core.LocationPoint,
 ) {
-    val options = buildMapNavigationOptions(context, point)
+    val options = buildMapNavigationOptions(point)
     if (options.isNotEmpty()) {
         runCatching { context.startActivity(options.first().intent) }
         return
