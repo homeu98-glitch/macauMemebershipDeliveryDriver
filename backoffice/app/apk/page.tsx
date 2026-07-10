@@ -29,7 +29,16 @@ type DeleteResponse =
   | { success: true }
   | { success: false; message: string };
 
+type PublicConfig = {
+  apkUrl: string;
+  version: string;
+  releaseNotes: string;
+  updatedAt: string | null;
+};
 
+type ConfigResponse =
+  | { success: true; config: PublicConfig | null; landingPageUrl: string; stableDownloadUrl: string }
+  | { success: false; message: string };
 
 type DiagnosticsResponse =
   | {
@@ -65,6 +74,10 @@ export default function ApkManagerPage() {
   const [releases, setReleases] = useState<Release[]>([]);
   const [diagnostics, setDiagnostics] = useState<Extract<DiagnosticsResponse, { success: true }> | null>(null);
 
+  const [publicVersion, setPublicVersion] = useState("");
+  const [publicApkUrl, setPublicApkUrl] = useState("");
+  const [publicReleaseNotes, setPublicReleaseNotes] = useState("");
+
   const [version, setVersion] = useState("");
   const [apkUrl, setApkUrl] = useState("");
   const [releaseNotes, setReleaseNotes] = useState("");
@@ -86,6 +99,24 @@ async function loadDiagnostics() {
   }
 }
 
+
+async function loadConfig() {
+  try {
+    const res = await fetch('/api/apk/config', { cache: 'no-store' });
+    const json = (await res.json()) as ConfigResponse | { message?: string };
+    if (!res.ok) throw new Error((json as any).message || '載入公開下載設定失敗。');
+    const payload = json as ConfigResponse;
+    if (!payload.success) throw new Error(payload.message);
+    setPublicVersion(payload.config?.version || '');
+    setPublicApkUrl(payload.config?.apkUrl || '');
+    setPublicReleaseNotes(payload.config?.releaseNotes || '');
+  } catch {
+    setPublicVersion('');
+    setPublicApkUrl('');
+    setPublicReleaseNotes('');
+  }
+}
+
   async function loadReleases() {
     setLoading(true);
     setError(null);
@@ -98,7 +129,7 @@ async function loadDiagnostics() {
       if (!payload.success) throw new Error(payload.message);
 
       setReleases(payload.releases);
-      await loadDiagnostics();
+      await Promise.all([loadDiagnostics(), loadConfig()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "載入失敗。"
       );
@@ -175,6 +206,71 @@ async function loadDiagnostics() {
       setSaving(false);
     }
   }
+
+
+async function savePublicConfig() {
+  setSaving(true);
+  setError(null);
+  setMessage(null);
+  try {
+    const res = await fetch('/api/apk/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        version: publicVersion,
+        apkUrl: publicApkUrl,
+        releaseNotes: publicReleaseNotes,
+      }),
+    });
+    const json = (await res.json()) as ConfigResponse | { message?: string };
+    if (!res.ok) throw new Error((json as any).message || '儲存公開下載設定失敗。');
+    const payload = json as ConfigResponse;
+    if (!payload.success) throw new Error(payload.message);
+    setPublicVersion(payload.config?.version || '');
+    setPublicApkUrl(payload.config?.apkUrl || '');
+    setPublicReleaseNotes(payload.config?.releaseNotes || '');
+    setMessage('已更新目前公開下載連結。');
+    await loadReleases();
+  } catch (e) {
+    setError(e instanceof Error ? e.message : '儲存公開下載設定失敗。');
+  } finally {
+    setSaving(false);
+  }
+}
+
+async function useReleaseAsPublic(release: Release) {
+  setPublicVersion(release.version);
+  setPublicApkUrl(release.apkUrl);
+  setPublicReleaseNotes(release.releaseNotes || '最新版');
+
+  setSaving(true);
+  setError(null);
+  setMessage(null);
+  try {
+    const res = await fetch('/api/apk/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        version: release.version,
+        apkUrl: release.apkUrl,
+        releaseNotes: release.releaseNotes,
+      }),
+    });
+    const json = (await res.json()) as ConfigResponse | { message?: string };
+    if (!res.ok) throw new Error((json as any).message || '設定公開下載連結失敗。');
+    const payload = json as ConfigResponse;
+    if (!payload.success) throw new Error(payload.message);
+    setPublicVersion(payload.config?.version || '');
+    setPublicApkUrl(payload.config?.apkUrl || '');
+    setPublicReleaseNotes(payload.config?.releaseNotes || '');
+    setMessage(`已把 ${release.version} 的 APK 連結設為目前公開下載連結。`);
+    await loadReleases();
+  } catch (e) {
+    setError(e instanceof Error ? e.message : '設定公開下載連結失敗。');
+  } finally {
+    setSaving(false);
+  }
+}
 
   async function removeRelease(release: Release) {
     const confirmed = window.confirm(`確定要刪除版本 ${release.version} 嗎？此操作無法還原。`);
@@ -343,7 +439,7 @@ async function loadDiagnostics() {
         <div className="card-header">
           <div>
             <h2 className="card-title">版本列表</h2>
-            <p className="muted">你可以切換舊版本成 Active（rollback），也可以刪除不再需要的舊版本。</p>
+            <p className="muted">你可以切換版本成 Active，也可以直接把某一列的 APK 連結設成目前公開下載連結。</p>
           </div>
         </div>
 
@@ -382,6 +478,9 @@ async function loadDiagnostics() {
                       <div className="btn-row">
                         <button className="btn btn-secondary" type="button" disabled={saving || r.isActive} onClick={() => activate(r.id)}>
                           設為最新
+                        </button>
+                        <button className="btn btn-secondary" type="button" disabled={saving} onClick={() => useReleaseAsPublic(r)}>
+                          用此連結公開
                         </button>
                         <button className="btn btn-secondary" type="button" disabled={saving || r.isActive} onClick={() => removeRelease(r)}>
                           刪除
