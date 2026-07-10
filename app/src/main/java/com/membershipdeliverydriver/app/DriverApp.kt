@@ -3009,39 +3009,80 @@ private fun buildMapNavigationOptions(
     val gcj = point.navigationCoords?.gcj02 ?: wgs
     val bd = point.navigationCoords?.bd09 ?: gcj
 
-    fun candidateIntent(uri: String, packageName: String? = null): Intent? {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+    fun isPackageInstalled(packageName: String): Boolean {
+        return runCatching {
+            @Suppress("DEPRECATION")
+            packageManager.getPackageInfo(packageName, 0)
+        }.isSuccess
+    }
+
+    fun packageIntent(uri: String, packageName: String): Intent {
+        return Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (!packageName.isNullOrBlank()) setPackage(packageName)
+            setPackage(packageName)
         }
-        return if (intent.resolveActivity(packageManager) != null) intent else null
     }
 
     return buildList {
-        candidateIntent(
-            uri = "google.navigation:q=${wgs.latitude},${wgs.longitude}",
-            packageName = "com.google.android.apps.maps",
-        )?.let { add(MapNavigationOption("Google 地圖 (WGS84)", it)) }
+        if (isPackageInstalled("com.google.android.apps.maps")) {
+            add(
+                MapNavigationOption(
+                    "Google 地圖 (WGS84)",
+                    packageIntent(
+                        uri = "google.navigation:q=${wgs.latitude},${wgs.longitude}",
+                        packageName = "com.google.android.apps.maps",
+                    ),
+                )
+            )
+        }
 
-        candidateIntent(
-            uri = "androidamap://route?sourceApplication=membership-driver&dlat=${gcj.latitude}&dlon=${gcj.longitude}&dname=$encodedLabel&dev=0&t=0",
-            packageName = "com.autonavi.minimap",
-        )?.let { add(MapNavigationOption("高德地圖 (GCJ02)", it)) }
+        if (isPackageInstalled("com.autonavi.minimap")) {
+            add(
+                MapNavigationOption(
+                    "高德地圖 (GCJ02)",
+                    packageIntent(
+                        uri = "androidamap://route?sourceApplication=membership-driver&dlat=${gcj.latitude}&dlon=${gcj.longitude}&dname=$encodedLabel&dev=0&t=0",
+                        packageName = "com.autonavi.minimap",
+                    ),
+                )
+            )
+        }
 
-        candidateIntent(
-            uri = "baidumap://map/direction?destination=name:$encodedLabel|latlng:${bd.latitude},${bd.longitude}&coord_type=bd09ll&mode=driving&src=membership-driver",
-            packageName = "com.baidu.BaiduMap",
-        )?.let { add(MapNavigationOption("百度地圖 (BD09)", it)) }
+        if (isPackageInstalled("com.baidu.BaiduMap")) {
+            add(
+                MapNavigationOption(
+                    "百度地圖 (BD09)",
+                    packageIntent(
+                        uri = "baidumap://map/direction?destination=name:$encodedLabel|latlng:${bd.latitude},${bd.longitude}&coord_type=bd09ll&mode=driving&src=membership-driver",
+                        packageName = "com.baidu.BaiduMap",
+                    ),
+                )
+            )
+        }
 
-        candidateIntent(
-            uri = "qqmap://map/routeplan?type=drive&tocoord=${gcj.latitude},${gcj.longitude}&to=$encodedLabel",
-            packageName = "com.tencent.map",
-        )?.let { add(MapNavigationOption("騰訊地圖 (GCJ02)", it)) }
+        if (isPackageInstalled("com.tencent.map")) {
+            add(
+                MapNavigationOption(
+                    "騰訊地圖 (GCJ02)",
+                    packageIntent(
+                        uri = "qqmap://map/routeplan?type=drive&tocoord=${gcj.latitude},${gcj.longitude}&to=$encodedLabel",
+                        packageName = "com.tencent.map",
+                    ),
+                )
+            )
+        }
 
-        candidateIntent(
-            uri = "petalmaps://navigation?daddr=${gcj.latitude},${gcj.longitude}&dname=$encodedLabel",
-            packageName = "com.huawei.maps.app",
-        )?.let { add(MapNavigationOption("Petal Maps (GCJ02)", it)) }
+        if (isPackageInstalled("com.huawei.maps.app")) {
+            add(
+                MapNavigationOption(
+                    "Petal Maps (GCJ02)",
+                    packageIntent(
+                        uri = "petalmaps://navigation?daddr=${gcj.latitude},${gcj.longitude}&dname=$encodedLabel",
+                        packageName = "com.huawei.maps.app",
+                    ),
+                )
+            )
+        }
     }
 }
 
