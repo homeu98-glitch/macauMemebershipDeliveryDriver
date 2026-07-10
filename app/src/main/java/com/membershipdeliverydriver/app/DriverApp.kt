@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -83,6 +84,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
@@ -95,6 +97,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -2992,7 +2995,10 @@ private fun openDialer(context: android.content.Context, phoneNumber: String) {
 
 private data class MapNavigationOption(
     val label: String,
+    val packageName: String,
     val intent: Intent,
+    val unavailableMessage: String,
+    val installed: Boolean,
 )
 
 
@@ -3023,69 +3029,41 @@ private fun buildMapNavigationOptions(
         }
     }
 
-    return buildList {
-        if (isPackageInstalled("com.google.android.apps.maps")) {
-            add(
-                MapNavigationOption(
-                    "Google 地圖 (WGS84)",
-                    packageIntent(
-                        uri = "google.navigation:q=${wgs.latitude},${wgs.longitude}",
-                        packageName = "com.google.android.apps.maps",
-                    ),
-                )
-            )
-        }
-
-        if (isPackageInstalled("com.autonavi.minimap")) {
-            add(
-                MapNavigationOption(
-                    "高德地圖 (GCJ02)",
-                    packageIntent(
-                        uri = "androidamap://route?sourceApplication=membership-driver&dlat=${gcj.latitude}&dlon=${gcj.longitude}&dname=$encodedLabel&dev=0&t=0",
-                        packageName = "com.autonavi.minimap",
-                    ),
-                )
-            )
-        }
-
-        if (isPackageInstalled("com.baidu.BaiduMap")) {
-            add(
-                MapNavigationOption(
-                    "百度地圖 (BD09)",
-                    packageIntent(
-                        uri = "baidumap://map/direction?destination=name:$encodedLabel|latlng:${bd.latitude},${bd.longitude}&coord_type=bd09ll&mode=driving&src=membership-driver",
-                        packageName = "com.baidu.BaiduMap",
-                    ),
-                )
-            )
-        }
-
-        if (isPackageInstalled("com.tencent.map")) {
-            add(
-                MapNavigationOption(
-                    "騰訊地圖 (GCJ02)",
-                    packageIntent(
-                        uri = "qqmap://map/routeplan?type=drive&tocoord=${gcj.latitude},${gcj.longitude}&to=$encodedLabel",
-                        packageName = "com.tencent.map",
-                    ),
-                )
-            )
-        }
-
-        if (isPackageInstalled("com.huawei.maps.app")) {
-            add(
-                MapNavigationOption(
-                    "Petal Maps (GCJ02)",
-                    packageIntent(
-                        uri = "petalmaps://navigation?daddr=${gcj.latitude},${gcj.longitude}&dname=$encodedLabel",
-                        packageName = "com.huawei.maps.app",
-                    ),
-                )
-            )
-        }
-    }
+    return listOf(
+        MapNavigationOption(
+            label = "Google Maps",
+            packageName = "com.google.android.apps.maps",
+            intent = packageIntent(
+                uri = "google.navigation:q=${wgs.latitude},${wgs.longitude}",
+                packageName = "com.google.android.apps.maps",
+            ),
+            unavailableMessage = "未安裝 Google Maps",
+            installed = isPackageInstalled("com.google.android.apps.maps"),
+        ),
+        MapNavigationOption(
+            label = "高德地圖",
+            packageName = "com.autonavi.minimap",
+            intent = packageIntent(
+                uri = "androidamap://route?sourceApplication=membership-driver&dlat=${gcj.latitude}&dlon=${gcj.longitude}&dname=$encodedLabel&dev=0&t=0",
+                packageName = "com.autonavi.minimap",
+            ),
+            unavailableMessage = "未安裝高德地圖",
+            installed = isPackageInstalled("com.autonavi.minimap"),
+        ),
+        MapNavigationOption(
+            label = "百度地圖",
+            packageName = "com.baidu.BaiduMap",
+            intent = packageIntent(
+                uri = "baidumap://map/direction?destination=name:$encodedLabel|latlng:${bd.latitude},${bd.longitude}&coord_type=bd09ll&mode=driving&src=membership-driver",
+                packageName = "com.baidu.BaiduMap",
+            ),
+            unavailableMessage = "未安裝百度地圖",
+            installed = isPackageInstalled("com.baidu.BaiduMap"),
+        ),
+    )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MapPickerDialog(
     point: com.membershipdeliverydriver.app.core.LocationPoint,
@@ -3094,36 +3072,102 @@ private fun MapPickerDialog(
 ) {
     val context = LocalContext.current
     val options = remember(point) { buildMapNavigationOptions(context, point) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = { Text("選擇導航地圖") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("系統會按你選擇的地圖，自動使用對應座標系導航。")
-                if (options.isEmpty()) {
-                    Text("手機上暫時未找到支援的導航 App。")
-                } else {
-                    options.forEach { option ->
-                        OutlinedButton(
-                            onClick = { onNavigate(option.intent) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
+        sheetState = sheetState,
+        containerColor = Color.White,
+        tonalElevation = 8.dp,
+        dragHandle = null,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Surface(
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                shape = RoundedCornerShape(999.dp),
+                color = Color(0xFFE7E0EC),
+            ) {
+                Spacer(modifier = Modifier.width(44.dp).height(4.dp))
+            }
+
+            Text(
+                "開啟方式",
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                options.forEach { option ->
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                if (option.installed) {
+                                    onNavigate(option.intent)
+                                } else {
+                                    Toast.makeText(context, option.unavailableMessage, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                        shape = RoundedCornerShape(20.dp),
+                        color = Color(0xFFF8F5FB),
+                        border = BorderStroke(1.dp, Color(0xFFE4DAEF)),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 18.dp, horizontal = 8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Text(option.label)
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = Color.White,
+                                border = BorderStroke(1.dp, Color(0xFFEAE3F3)),
+                            ) {
+                                Text(
+                                    text = option.label.take(1),
+                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+                                    color = Color(0xFF5B3F7A),
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            Text(
+                                option.label,
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                if (option.installed) "已安裝" else "未安裝",
+                                color = if (option.installed) Color(0xFF2E7D32) else Color(0xFFB3261E),
+                                style = MaterialTheme.typography.labelSmall,
+                            )
                         }
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("取消")
+
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("取消", color = Color(0xFF2F6FDB), fontWeight = FontWeight.SemiBold)
             }
-        },
-    )
+        }
+    }
 }
+
 
 
 private fun openNavigation(
