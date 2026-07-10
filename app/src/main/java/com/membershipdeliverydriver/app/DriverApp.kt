@@ -3007,18 +3007,19 @@ private fun openNavigation(
         )?.let { add(MapNavigationOption("Petal Maps (GCJ02)", it)) }
     }
 
-    if (options.isNotEmpty()) {
-        val labels = options.map { it.label }.toTypedArray()
-        android.app.AlertDialog.Builder(context)
-            .setTitle("選擇導航地圖")
-            .setMessage("系統會按你選擇的地圖，自動使用對應座標系導航。")
-            .setItems(labels) { _, which ->
-                runCatching { context.startActivity(options[which].intent) }
-            }
-            .setNegativeButton("取消", null)
-            .show()
-        return
+
+if (options.isNotEmpty()) {
+    val primaryIntent = options.first().intent
+    val extraIntents = options.drop(1).map { it.intent }.toTypedArray()
+    val chooser = Intent.createChooser(primaryIntent, "選擇導航地圖").apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (extraIntents.isNotEmpty()) {
+            putExtra(Intent.EXTRA_INITIAL_INTENTS, extraIntents)
+        }
     }
+    runCatching { context.startActivity(chooser) }
+    return
+}
 
     val fallbackIntent = Intent(
         Intent.ACTION_VIEW,
