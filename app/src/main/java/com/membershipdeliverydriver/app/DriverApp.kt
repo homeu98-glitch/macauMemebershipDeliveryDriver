@@ -2824,27 +2824,98 @@ private fun openNavigation(
     longitude: Double,
     label: String,
 ) {
-    val geoIntent = Intent(
+    val packageManager = context.packageManager
+    val safeLabel = if (label.isBlank()) "目的地" else label
+    val encodedLabel = Uri.encode(safeLabel)
+
+    fun candidateIntent(uri: String, packageName: String? = null): Intent? {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (!packageName.isNullOrBlank()) {
+                setPackage(packageName)
+            }
+        }
+        return if (intent.resolveActivity(packageManager) != null) intent else null
+    }
+
+    val nativeMapIntents = buildList {
+        candidateIntent(
+            uri = "google.navigation:q=$latitude,$longitude",
+            packageName = "com.google.android.apps.maps",
+        )?.let(::add)
+
+        candidateIntent(
+            uri = "androidamap://route?sourceApplication=membership-driver&dlat=$latitude&dlon=$longitude&dname=$encodedLabel&dev=0&t=0",
+            packageName = "com.autonavi.minimap",
+        )?.let(::add)
+
+        candidateIntent(
+            uri = "baidumap://map/direction?destination=latlng:$latitude,$longitude|name:$encodedLabel&mode=driving",
+            packageName = "com.baidu.BaiduMap",
+        )?.let(::add)
+
+        candidateIntent(
+            uri = "qqmap://map/routeplan?type=drive&tocoord=$latitude,$longitude&to=$encodedLabel",
+            packageName = "com.tencent.map",
+        )?.let(::add)
+
+        candidateIntent(
+            uri = "petalmaps://navigation?daddr=$latitude,$longitude&dname=$encodedLabel",
+            packageName = "com.huawei.maps.app",
+        )?.let(::add)
+
+        val browserPackages = setOf(
+            "com.android.chrome",
+            "org.mozilla.firefox",
+            "com.microsoft.emmx",
+            "com.sec.android.app.sbrowser",
+            "com.opera.browser",
+            "com.brave.browser",
+            "com.UCMobile",
+        )
+        val keywordPackages = listOf("map", "maps", "minimap", "amap", "baidu", "qqmap", "petal")
+        val genericGeoIntent = Intent(
+            Intent.ACTION_VIEW,
+            Uri.parse("geo:0,0?q=$latitude,$longitude"),
+        ).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        packageManager.queryIntentActivities(genericGeoIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            .mapNotNull { resolveInfo ->
+                val packageName = resolveInfo.activityInfo?.packageName ?: return@mapNotNull null
+                val appLabel = runCatching { resolveInfo.loadLabel(packageManager)?.toString().orEmpty() }.getOrDefault("")
+                val looksLikeMap = keywordPackages.any { keyword ->
+                    packageName.contains(keyword, ignoreCase = true) ||
+                        appLabel.contains("地圖") ||
+                        appLabel.contains("地图") ||
+                        appLabel.contains("map", ignoreCase = true)
+                }
+                if (packageName in browserPackages || !looksLikeMap) return@mapNotNull null
+                Intent(genericGeoIntent).setPackage(packageName)
+            }
+            .forEach(::add)
+    }.distinctBy { it.`package` ?: it.component?.packageName ?: it.dataString.orEmpty() }
+
+    if (nativeMapIntents.isNotEmpty()) {
+        val primaryIntent = nativeMapIntents.first()
+        val extraIntents = nativeMapIntents.drop(1).toTypedArray()
+        val chooser = Intent.createChooser(primaryIntent, "選擇導航 App").apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (extraIntents.isNotEmpty()) {
+                putExtra(Intent.EXTRA_INITIAL_INTENTS, extraIntents)
+            }
+        }
+        context.startActivity(chooser)
+        return
+    }
+
+    val fallbackIntent = Intent(
         Intent.ACTION_VIEW,
         Uri.parse("geo:0,0?q=$latitude,$longitude"),
     ).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-
-    val chooserIntent = Intent.createChooser(geoIntent, if (label.isBlank()) "選擇導航 App" else "選擇導航 App：$label").apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
-
-    val packageManager = context.packageManager
-    when {
-        geoIntent.resolveActivity(packageManager) != null -> context.startActivity(chooserIntent)
-        else -> context.startActivity(
-            Intent(
-                Intent.ACTION_VIEW,
-                Uri.parse("https://www.google.com/maps/search/?api=1&query=$latitude,$longitude")
-            ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-        )
-    }
+    runCatching { context.startActivity(fallbackIntent) }
 }
 
 private fun openExternalUrl(context: android.content.Context, url: String) {
