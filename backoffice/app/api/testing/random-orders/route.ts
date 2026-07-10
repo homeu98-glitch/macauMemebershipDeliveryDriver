@@ -43,8 +43,8 @@ const customerSamples = [
     name: "李小姐",
     phone: "+85366110002",
     address: "黑沙環海濱花園 2 座",
-    latitude: 22.2112,
-    longitude: 113.5521,
+    latitude: 22.207269173860297,
+    longitude: 113.55519339747916,
     deliveryNote: "放管理處。"
   },
   {
