@@ -59,15 +59,15 @@ export async function GET(request: Request) {
   let activeError: unknown = null;
   let legacyError: unknown = null;
 
-  const active = await getActiveDriverAppReleaseDirect().catch((e) => {
-    activeError = e;
+  const legacyConfig = await getDriverAppDownloadConfig().catch((e) => {
+    legacyError = e;
     return null;
   });
 
-  const legacyConfig = active
+  const active = legacyConfig
     ? null
-    : await getDriverAppDownloadConfig().catch((e) => {
-        legacyError = e;
+    : await getActiveDriverAppReleaseDirect().catch((e) => {
+        activeError = e;
         return null;
       });
 
@@ -114,17 +114,17 @@ if (debugLevel === "2") {
   }
 }
 
-  const current = active
+  const current = legacyConfig
     ? {
-        version: active.version,
-        releaseNotes: active.releaseNotes,
-        apkUrl: active.apkUrl
+        version: legacyConfig.version,
+        releaseNotes: legacyConfig.releaseNotes,
+        apkUrl: legacyConfig.apkUrl
       }
-    : legacyConfig
+    : active
       ? {
-          version: legacyConfig.version,
-          releaseNotes: legacyConfig.releaseNotes,
-          apkUrl: legacyConfig.apkUrl
+          version: active.version,
+          releaseNotes: active.releaseNotes,
+          apkUrl: active.apkUrl
         }
       : null;
 
@@ -135,7 +135,7 @@ if (debugLevel === "2") {
         vercelRegion: process.env.VERCEL_REGION ?? null,
         gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
         deploymentId: process.env.VERCEL_DEPLOYMENT_ID ?? null,
-        used: active ? "active" : legacyConfig ? "legacy" : "none",
+        used: legacyConfig ? "legacy" : active ? "active" : "none",
         activeVersion: active?.version ?? null,
         legacyVersion: legacyConfig?.version ?? null,
         activeError: toErrString(activeError),

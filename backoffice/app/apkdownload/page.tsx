@@ -8,7 +8,6 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-
 async function getActiveDriverAppReleaseDirect() {
   const supabase = createServiceRoleSupabaseClient();
   const { data, error } = await supabase
@@ -18,10 +17,9 @@ async function getActiveDriverAppReleaseDirect() {
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  if (!data || data.length == 0) return null;
+  if (!data || data.length === 0) return null;
 
   const row = data[0] as any;
-
   return {
     version: String(row.version),
     releaseNotes: String(row.release_notes ?? ""),
@@ -29,19 +27,18 @@ async function getActiveDriverAppReleaseDirect() {
   };
 }
 
-
 export default async function ApkDownloadPage() {
-  const active = await getActiveDriverAppReleaseDirect().catch(() => null);
-  const legacyConfig = active ? null : await getDriverAppDownloadConfig().catch(() => null);
-  const current = active
+  const legacyConfig = await getDriverAppDownloadConfig().catch(() => null);
+  const active = legacyConfig ? null : await getActiveDriverAppReleaseDirect().catch(() => null);
+  const current = legacyConfig
     ? {
-        version: active.version,
-        releaseNotes: active.releaseNotes
+        version: legacyConfig.version,
+        releaseNotes: legacyConfig.releaseNotes,
       }
-    : legacyConfig
+    : active
       ? {
-          version: legacyConfig.version,
-          releaseNotes: legacyConfig.releaseNotes
+          version: active.version,
+          releaseNotes: active.releaseNotes,
         }
       : null;
 
