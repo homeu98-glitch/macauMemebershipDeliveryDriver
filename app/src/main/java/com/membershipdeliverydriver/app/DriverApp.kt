@@ -750,6 +750,7 @@ private fun HomeScreen(
         onRefresh = onRefresh,
     )
     var expandedFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingNavigationPoint by remember { mutableStateOf<com.membershipdeliverydriver.app.core.LocationPoint?>(null) }
 
     val destinationOptions = remember(uiState.availableOrders, uiState.pickupDistrictFilter) {
         uiState.availableOrders
@@ -1010,7 +1011,7 @@ item {
                     isAccepting = uiState.acceptingOrderId == order.id,
                     acceptActionLocked = uiState.acceptingOrderId != null,
                     onNavigateToShop = {
-                        openNavigation(context, order.shop)
+                        pendingNavigationPoint = order.shop
                     },
                     onAcceptOrder = { onAcceptOrder(order.id) },
                 )
@@ -1021,6 +1022,16 @@ item {
             progress = pullRefreshState.progress,
             modifier = Modifier.align(Alignment.TopCenter),
         )
+        pendingNavigationPoint?.let { point ->
+            MapPickerDialog(
+                point = point,
+                onDismiss = { pendingNavigationPoint = null },
+                onNavigate = { intent ->
+                    pendingNavigationPoint = null
+                    runCatching { context.startActivity(intent) }
+                },
+            )
+        }
     }
 }
 
@@ -1117,6 +1128,7 @@ private fun OrdersScreen(
     var cancelReason by rememberSaveable { mutableStateOf("臨時有事無法配送") }
     var cancelOtherReason by rememberSaveable { mutableStateOf("") }
     var cancelHandling by rememberSaveable { mutableStateOf(com.membershipdeliverydriver.app.core.CancelHandling.RETURN_TO_SHOP) }
+    var pendingNavigationPoint by remember { mutableStateOf<com.membershipdeliverydriver.app.core.LocationPoint?>(null) }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val orderId = completionOrderId
         completionOrderId = null
@@ -1192,11 +1204,11 @@ private fun OrdersScreen(
                     displayLabel = "訂單 ${index + 1}",
                     order = order,
                     onNavigateToShop = {
-                        openNavigation(context, order.shop)
+                        pendingNavigationPoint = order.shop
                     },
                     onCallShop = { openDialer(context, order.shop.contactPhone) },
                     onNavigateToCustomer = {
-                        openNavigation(context, order.customer)
+                        pendingNavigationPoint = order.customer
                     },
                     onCallCustomer = { openDialer(context, order.customer.contactPhone) },
                     onMarkPickedUp = { onMarkPickedUp(order.id) },
@@ -1302,6 +1314,16 @@ private fun OrdersScreen(
             progress = pullRefreshState.progress,
             modifier = Modifier.align(Alignment.TopCenter),
         )
+        pendingNavigationPoint?.let { point ->
+            MapPickerDialog(
+                point = point,
+                onDismiss = { pendingNavigationPoint = null },
+                onNavigate = { intent ->
+                    pendingNavigationPoint = null
+                    runCatching { context.startActivity(intent) }
+                },
+            )
+        }
     }
 }
 
@@ -1909,6 +1931,7 @@ private fun OrderDetailScreen(
 ) {
     val context = LocalContext.current
     var issueNote by rememberSaveable { mutableStateOf("") }
+    var pendingNavigationPoint by remember { mutableStateOf<com.membershipdeliverydriver.app.core.LocationPoint?>(null) }
     val proofLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) onProofSelected(uri)
     }
@@ -1937,11 +1960,15 @@ private fun OrderDetailScreen(
             return@Scaffold
         }
 
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFFFFF8EE))
                 .padding(innerPadding),
+        ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -1966,7 +1993,7 @@ private fun OrderDetailScreen(
                     contactName = order.shop.contactName,
                     contactPhone = order.shop.contactPhone,
                     onCall = { openDialer(context, order.shop.contactPhone) },
-                    onNavigate = { openNavigation(context, order.shop) },
+                    onNavigate = { pendingNavigationPoint = order.shop },
                 )
             }
             item {
@@ -1977,7 +2004,7 @@ private fun OrderDetailScreen(
                     contactName = order.customer.contactName,
                     contactPhone = order.customer.contactPhone,
                     onCall = { openDialer(context, order.customer.contactPhone) },
-                    onNavigate = { openNavigation(context, order.customer) },
+                    onNavigate = { pendingNavigationPoint = order.customer },
                 )
             }
             item {
@@ -2052,6 +2079,17 @@ private fun OrderDetailScreen(
                 }
             }
         }
+        pendingNavigationPoint?.let { point ->
+            MapPickerDialog(
+                point = point,
+                onDismiss = { pendingNavigationPoint = null },
+                onNavigate = { intent ->
+                    pendingNavigationPoint = null
+                    runCatching { context.startActivity(intent) }
+                },
+            )
+        }
+    }
     }
 }
 
@@ -2957,15 +2995,14 @@ private data class MapNavigationOption(
     val intent: Intent,
 )
 
-private fun openNavigation(
+
+private fun buildMapNavigationOptions(
     context: android.content.Context,
     point: com.membershipdeliverydriver.app.core.LocationPoint,
-) {
+): List<MapNavigationOption> {
     val packageManager = context.packageManager
     val safeLabel = if (point.label.isBlank()) "目的地" else point.label
-    val safeAddress = point.address.ifBlank { safeLabel }
     val encodedLabel = Uri.encode(safeLabel)
-    val encodedAddress = Uri.encode(safeAddress)
 
     val wgs = point.navigationCoords?.wgs84
         ?: com.membershipdeliverydriver.app.core.CoordinatePair(point.latitude, point.longitude)
@@ -2980,7 +3017,7 @@ private fun openNavigation(
         return if (intent.resolveActivity(packageManager) != null) intent else null
     }
 
-    val options = buildList {
+    return buildList {
         candidateIntent(
             uri = "google.navigation:q=${wgs.latitude},${wgs.longitude}",
             packageName = "com.google.android.apps.maps",
@@ -3006,24 +3043,63 @@ private fun openNavigation(
             packageName = "com.huawei.maps.app",
         )?.let { add(MapNavigationOption("Petal Maps (GCJ02)", it)) }
     }
-
-
-if (options.isNotEmpty()) {
-    val primaryIntent = options.first().intent
-    val extraIntents = options.drop(1).map { it.intent }.toTypedArray()
-    val chooser = Intent.createChooser(primaryIntent, "選擇導航地圖").apply {
-        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (extraIntents.isNotEmpty()) {
-            putExtra(Intent.EXTRA_INITIAL_INTENTS, extraIntents)
-        }
-    }
-    runCatching { context.startActivity(chooser) }
-    return
 }
 
+@Composable
+private fun MapPickerDialog(
+    point: com.membershipdeliverydriver.app.core.LocationPoint,
+    onDismiss: () -> Unit,
+    onNavigate: (Intent) -> Unit,
+) {
+    val context = LocalContext.current
+    val options = remember(point) { buildMapNavigationOptions(context, point) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("選擇導航地圖") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("系統會按你選擇的地圖，自動使用對應座標系導航。")
+                if (options.isEmpty()) {
+                    Text("手機上暫時未找到支援的導航 App。")
+                } else {
+                    options.forEach { option ->
+                        OutlinedButton(
+                            onClick = { onNavigate(option.intent) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Text(option.label)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
+}
+
+
+private fun openNavigation(
+    context: android.content.Context,
+    point: com.membershipdeliverydriver.app.core.LocationPoint,
+) {
+    val options = buildMapNavigationOptions(context, point)
+    if (options.isNotEmpty()) {
+        runCatching { context.startActivity(options.first().intent) }
+        return
+    }
+
+    val safeLabel = if (point.label.isBlank()) "目的地" else point.label
+    val safeAddress = point.address.ifBlank { safeLabel }
     val fallbackIntent = Intent(
         Intent.ACTION_VIEW,
-        Uri.parse("geo:0,0?q=${wgs.latitude},${wgs.longitude}($encodedAddress)"),
+        Uri.parse("geo:0,0?q=${point.latitude},${point.longitude}(${Uri.encode(safeAddress)})"),
     ).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
