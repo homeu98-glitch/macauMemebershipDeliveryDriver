@@ -10,6 +10,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.OffsetDateTime
 
+private fun sanitizeMacauPhoneInput(input: String): String {
+    val digits = input.replace("\\D".toRegex(), "")
+    val local = if (digits.startsWith("853")) digits.drop(3) else digits
+    return local.take(8)
+}
+
+private fun sanitizePinInput(input: String): String {
+    return input.replace("\\D".toRegex(), "").take(4)
+}
+
 private fun isNewerVersion(current: String, latest: String): Boolean {
     fun parse(v: String): List<Int> {
         return Regex("""\d+""")
@@ -83,11 +93,13 @@ class DriverViewModel(
 
 
     fun updateLoginPhone(value: String) {
-        _uiState.update { it.copy(loginForm = it.loginForm.copy(phone = value), errorMessage = null) }
+        val sanitized = sanitizeMacauPhoneInput(value)
+        _uiState.update { it.copy(loginForm = it.loginForm.copy(phone = sanitized), errorMessage = null) }
     }
 
     fun updateLoginPassword(value: String) {
-        _uiState.update { it.copy(loginForm = it.loginForm.copy(password = value), errorMessage = null) }
+        val sanitized = sanitizePinInput(value)
+        _uiState.update { it.copy(loginForm = it.loginForm.copy(password = sanitized), errorMessage = null) }
     }
 
     fun updateRegistrationName(value: String) {
@@ -97,14 +109,16 @@ class DriverViewModel(
     }
 
     fun updateRegistrationPhone(value: String) {
+        val sanitized = sanitizeMacauPhoneInput(value)
         _uiState.update {
-            it.copy(registrationForm = it.registrationForm.copy(phone = value), errorMessage = null)
+            it.copy(registrationForm = it.registrationForm.copy(phone = sanitized), errorMessage = null)
         }
     }
 
     fun updateRegistrationPassword(value: String) {
+        val sanitized = sanitizePinInput(value)
         _uiState.update {
-            it.copy(registrationForm = it.registrationForm.copy(password = value), errorMessage = null)
+            it.copy(registrationForm = it.registrationForm.copy(password = sanitized), errorMessage = null)
         }
     }
 
@@ -185,6 +199,12 @@ class DriverViewModel(
             return
         }
 
+        val localPhone = normalizeMacauMobile(form.phone)
+        if (!isValidMacauMobile(localPhone)) {
+            _uiState.update { it.copy(errorMessage = "電話號碼必須為澳門 8 位數並以 6 開頭。") }
+            return
+        }
+
         if (!isValidPin(form.password)) {
             _uiState.update { it.copy(errorMessage = "請使用 4 位數字作為登入密碼。") }
             return
@@ -192,7 +212,8 @@ class DriverViewModel(
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = repository.submitRegistration(form)) {
+            val normalizedForm = form.copy(phone = localPhone, password = sanitizePinInput(form.password))
+            when (val result = repository.submitRegistration(normalizedForm)) {
                 is ApiResult.Success -> {
                     _uiState.update { state ->
                         state.copy(
@@ -571,7 +592,28 @@ class DriverViewModel(
             }
         }
     }
-    fun refreshDashboard(playArrivalSound: Boolean = true) {
+    
+
+fun changePin(newPin: String, onSuccess: () -> Unit) {
+    val pin = sanitizePinInput(newPin)
+    if (!isValidPin(pin)) {
+        _uiState.update { it.copy(errorMessage = "新密碼必須為 4 位數字。") }
+        return
+    }
+    viewModelScope.launch {
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        when (val result = repository.changePin(pin)) {
+            is ApiResult.Success -> {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "密碼已更新，請使用新密碼登入。") }
+                onSuccess()
+            }
+            is ApiResult.Failure -> {
+                _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
+            }
+        }
+    }
+}
+fun refreshDashboard(playArrivalSound: Boolean = true) {
         if (_uiState.value.currentDriver == null) return
         viewModelScope.launch {
             val previousOrders = _uiState.value.availableOrders

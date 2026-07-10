@@ -2,9 +2,19 @@ import { NextResponse } from "next/server";
 
 import { createServiceRoleSupabaseClient } from "../../../../../lib/supabase";
 
-function normalizePhone(phone: string) {
+function normalizeLocalPhone(phone: string) {
   const digits = (phone ?? "").replace(/\D/g, "");
-  return digits.startsWith("853") ? digits : `853${digits}`;
+  const local = digits.startsWith("853") ? digits.slice(3) : digits;
+  return local;
+}
+
+function normalizePhone(phone: string) {
+  const local = normalizeLocalPhone(phone);
+  return local.startsWith("853") ? local : `853${local}`;
+}
+
+function isValidMacauMobile(local: string) {
+  return /^6\d{7}$/.test(local);
 }
 
 function emailFromPhone(phone: string) {
@@ -25,9 +35,10 @@ export async function POST(request: Request) {
 
     const fullName = body.fullName?.trim() ?? "";
     const phone = body.phone?.trim() ?? "";
+    const localPhone = normalizeLocalPhone(phone);
     const pin = body.pin?.trim() ?? "";
 
-    if (!fullName || !phone || pin.length !== 4) {
+    if (!fullName || !phone || pin.length !== 4 || !isValidMacauMobile(localPhone)) {
       return NextResponse.json(
         { message: "Invalid payload." },
         { status: 400 }
@@ -35,14 +46,14 @@ export async function POST(request: Request) {
     }
 
     const supabase = createServiceRoleSupabaseClient();
-    const email = emailFromPhone(phone);
+    const email = emailFromPhone(localPhone);
     const password = passwordFromPin(pin);
 
     const created = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, phone }
+      user_metadata: { full_name: fullName, phone: localPhone }
     });
 
     if (created.error && !String(created.error.message).toLowerCase().includes("already")) {

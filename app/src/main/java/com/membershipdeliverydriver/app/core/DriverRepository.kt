@@ -53,6 +53,7 @@ interface DriverRepository {
     suspend fun loadAnnouncements(): List<DriverAnnouncement>
     suspend fun fetchLatestAppRelease(): AppUpdateInfo?
     suspend fun loadWeeklyLeaderboard(): WeeklyLeaderboard
+    suspend fun changePin(newPin: String): ApiResult<Unit>
     suspend fun logout()
 }
 
@@ -912,6 +913,37 @@ override suspend fun loadWeeklyLeaderboard(): WeeklyLeaderboard = withContext(Di
     }
 }
 
+
+
+override suspend fun changePin(newPin: String): ApiResult<Unit> = withContext(Dispatchers.IO) {
+    val token = ensureActiveAccessToken() ?: return@withContext ApiResult.Failure("請先登入。")
+    return@withContext try {
+        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+        val payload = JSONObject().put("pin", newPin).toString()
+        val request = Request.Builder()
+            .url("$baseUrl/api/mobile/drivers/change-pin")
+            .post(payload.toRequestBody("application/json".toMediaType()))
+            .addHeader("Content-Type", "application/json")
+            .addHeader("x-supabase-access-token", token)
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(body) }.getOrNull()
+            if (!response.isSuccessful) {
+                val msg = json?.optString("message")?.takeIf { it.isNotBlank() } ?: "更改密碼失敗。"
+                return@withContext ApiResult.Failure(msg)
+            }
+            if (json != null && json.optBoolean("success", false)) {
+                ApiResult.Success(Unit)
+            } else {
+                ApiResult.Failure(json?.optString("message") ?: "更改密碼失敗。")
+            }
+        }
+    } catch (e: Exception) {
+        ApiResult.Failure(e.message ?: "更改密碼失敗。")
+    }
+}
 override suspend fun logout() = withContext(Dispatchers.IO) {
         session = null
         currentDriver = null

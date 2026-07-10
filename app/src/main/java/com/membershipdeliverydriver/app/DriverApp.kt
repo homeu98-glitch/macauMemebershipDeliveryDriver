@@ -372,6 +372,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onCheckForUpdates = { viewModel.checkForUpdates(manual = true) },
                     onRefreshAnnouncements = { viewModel.refreshAnnouncements(showMessage = true) },
                     onOpenLeaderboard = { navController.navigate(Routes.Leaderboard) },
+                    onChangePin = viewModel::changePin,
                     onLogout = viewModel::logout,
                 )
             }
@@ -484,7 +485,7 @@ private fun LoginScreen(
                 OutlinedTextField(
                     value = password,
                     onValueChange = onPasswordChanged,
-                    label = { Text("密碼") },
+                    label = { Text("密碼（4 位數字）") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = PasswordVisualTransformation(),
@@ -603,7 +604,7 @@ private fun RegistrationScreen(
                     OutlinedTextField(
                         value = registration.password,
                         onValueChange = viewModel::updateRegistrationPassword,
-                        label = { Text("密碼") },
+                        label = { Text("密碼（4 位數字）") },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                         visualTransformation = PasswordVisualTransformation(),
@@ -2435,6 +2436,7 @@ private fun LeaderboardRow(
         }
     }
 }
+
 @Composable
 private fun ProfileScreen(
     uiState: com.membershipdeliverydriver.app.core.DriverAppState,
@@ -2442,6 +2444,7 @@ private fun ProfileScreen(
     onCheckForUpdates: () -> Unit,
     onRefreshAnnouncements: () -> Unit,
     onOpenLeaderboard: () -> Unit,
+    onChangePin: (String, () -> Unit) -> Unit,
     onLogout: () -> Unit,
 ) {
     val driver = uiState.currentDriver
@@ -2450,6 +2453,79 @@ private fun ProfileScreen(
         matchesHistoryRange(entry.completedAt.toLocalDate(), uiState.earningsFilter)
     }
     val filteredTotal = filteredEarnings.sumOf { it.amountMop }
+
+    var showChangePin by remember { mutableStateOf(false) }
+    var newPin by remember { mutableStateOf("") }
+    var confirmPin by remember { mutableStateOf("") }
+    var localPinError by remember { mutableStateOf<String?>(null) }
+
+    if (showChangePin) {
+        AlertDialog(
+            onDismissRequest = { showChangePin = false },
+            title = { Text("更改密碼") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newPin,
+                        onValueChange = {
+                            newPin = it.filter(Char::isDigit).take(4)
+                            localPinError = null
+                        },
+                        label = { Text("新密碼（4 位數字）") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                    )
+                    OutlinedTextField(
+                        value = confirmPin,
+                        onValueChange = {
+                            confirmPin = it.filter(Char::isDigit).take(4)
+                            localPinError = null
+                        },
+                        label = { Text("再次輸入") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                    )
+                    localPinError?.let { msg ->
+                        Text(msg, color = Color(0xFFB3261E), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        when {
+                            newPin.length != 4 -> localPinError = "新密碼必須為 4 位數字。"
+                            confirmPin.length != 4 -> localPinError = "請再次輸入 4 位數字密碼。"
+                            newPin != confirmPin -> localPinError = "兩次輸入的密碼不一致。"
+                            else -> onChangePin(newPin) {
+                                newPin = ""
+                                confirmPin = ""
+                                localPinError = null
+                                showChangePin = false
+                            }
+                        }
+                    }
+                ) {
+                    Text("確定")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showChangePin = false
+                        newPin = ""
+                        confirmPin = ""
+                        localPinError = null
+                    }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -2483,14 +2559,20 @@ private fun ProfileScreen(
                             Text("刷新公告")
                         }
                     }
-
-OutlinedButton(
-    onClick = onOpenLeaderboard,
-    modifier = Modifier.fillMaxWidth(),
-    shape = RoundedCornerShape(14.dp)
-) {
-    Text("車手排名")
-}
+                    OutlinedButton(
+                        onClick = onOpenLeaderboard,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("車手排名")
+                    }
+                    OutlinedButton(
+                        onClick = { showChangePin = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("更改密碼")
+                    }
                     StatusBadge(
                         label = "審核狀態：${approvalLabel(driver?.approvalStatus ?: ApprovalStatus.PENDING_APPROVAL)}",
                         highlight = driver?.approvalStatus == ApprovalStatus.APPROVED,
