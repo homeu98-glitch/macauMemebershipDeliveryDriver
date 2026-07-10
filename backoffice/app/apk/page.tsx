@@ -307,7 +307,7 @@ async function setReleaseAsPublic(release: Release) {
         <div className="card-header">
           <div>
             <h2 className="card-title">安裝設置（版本管理）</h2>
-            <p className="muted">新增多個 APK 版本，並選擇哪一個是最新版本（可回滾）。</p>
+            <p className="muted">對外真正使用的是「目前公開下載連結」。版本列表只是方便你保存歷史 APK。</p>
           </div>
         </div>
 
@@ -329,7 +329,7 @@ async function setReleaseAsPublic(release: Release) {
           <div className="list-item">
             <div>
               <strong>固定直接下載連結</strong>
-              <div className="muted">永遠指向你設定的 Active 版本。</div>
+              <div className="muted">永遠指向你現在設定的公開下載連結。</div>
             </div>
             <div className="btn-row">
               <a className="btn btn-primary" href={stableDownloadUrl} target="_blank" rel="noreferrer">下載</a>
@@ -388,7 +388,9 @@ async function setReleaseAsPublic(release: Release) {
       <br />
       Active 版本：<span className="code">{diagnostics?.active?.version || '-'}</span>
       <br />
-      Legacy config 版本：<span className="code">{diagnostics?.legacyConfig?.version || '-'}</span>
+      目前公開版本：<span className="code">{diagnostics?.legacyConfig?.version || '-'}</span>
+      <br />
+      目前公開 APK 連結：<span className="code">{publicApkUrl || '-'}</span>
     </div>
   </div>
 </section>
@@ -439,7 +441,7 @@ async function setReleaseAsPublic(release: Release) {
         <div className="card-header">
           <div>
             <h2 className="card-title">版本列表</h2>
-            <p className="muted">你可以切換版本成 Active，也可以直接把某一列的 APK 連結設成目前公開下載連結。</p>
+            <p className="muted">如果你只是想把 `/apkdownload` 換成某一條 APK，直接按「把 /apkdownload 換成此連結」即可。</p>
           </div>
         </div>
 
@@ -480,7 +482,7 @@ async function setReleaseAsPublic(release: Release) {
                           設為最新
                         </button>
                         <button className="btn btn-secondary" type="button" disabled={saving} onClick={() => setReleaseAsPublic(r)}>
-                          用此連結公開
+                          把 /apkdownload 換成此連結
                         </button>
                         <button className="btn btn-secondary" type="button" disabled={saving || r.isActive} onClick={() => removeRelease(r)}>
                           刪除
