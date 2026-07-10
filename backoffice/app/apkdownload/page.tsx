@@ -40,7 +40,7 @@ export default async function ApkDownloadPage() {
             </div>
 
             <div className="btn-row" style={{ marginTop: 24 }}>
-              <a className="btn btn-primary" href="/apkdownload/latest">下載 APK</a>
+              <a className="btn btn-primary" href={current.apkUrl} target="_blank" rel="noreferrer">下載 APK</a>
             </div>
           </>
         ) : (
