@@ -64,7 +64,7 @@ export async function listRiderApplications(): Promise<RiderApplication[]> {
   const supabase = createServiceRoleSupabaseClient();
   const { data: applications, error } = await supabase
     .from("driver_applications")
-    .select("id,driver_id,submitted_at,review_status")
+    .select("id,driver_id,submitted_at,review_status,review_note,reviewed_at")
     .order("submitted_at", { ascending: false });
 
   if (error) {

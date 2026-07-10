@@ -28,6 +28,8 @@ export type RiderApplication = {
   }>;
   vehicleType: string;
   status: "pending" | "approved" | "rejected";
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
 };
 
 export type Rider = {

@@ -147,7 +147,27 @@ data class AppUpdateInfo(
     val releaseNotes: String,
     val downloadPageUrl: String,
     val stableDownloadUrl: String,
+    val apkUrl: String,
 )
+
+data class DriverReviewStatus(
+    val status: ApprovalStatus,
+    val note: String,
+    val reviewedAt: String?,
+)
+
+data class LegalDocuments(
+    val disclaimer: String,
+    val serviceTerms: String,
+    val version: String,
+    val acceptedVersion: String?,
+    val mustAccept: Boolean,
+)
+
+enum class LegalDocumentType {
+    DISCLAIMER,
+    SERVICE_TERMS,
+}
 
 
 data class LeaderboardEntry(
@@ -201,6 +221,9 @@ data class DriverAppState(
     val destinationDistrictFilter: Set<String> = emptySet(),
     val announcements: List<DriverAnnouncement> = emptyList(),
     val updateInfo: AppUpdateInfo? = null,
+    val reviewStatus: DriverReviewStatus? = null,
+    val legalDocuments: LegalDocuments? = null,
+    val activeLegalDocument: LegalDocumentType? = null,
     val weeklyLeaderboard: WeeklyLeaderboard? = null,
     val isLoadingWeeklyLeaderboard: Boolean = false,
     val registrationSubmitted: Boolean = false,

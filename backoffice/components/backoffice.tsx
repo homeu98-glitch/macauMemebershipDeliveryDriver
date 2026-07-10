@@ -426,6 +426,7 @@ useEffect(() => {
           </div>
         </div>
 
+        <div className="sidebar-scroll">
         <nav>
           {navItems.map((item) => {
             const active =
@@ -455,6 +456,7 @@ useEffect(() => {
             );
           })}
         </nav>
+        </div>
 
         <div className="sidebar-footer card">
           <div className="muted">目前角色</div>
@@ -658,12 +660,14 @@ useEffect(() => {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function updateStatus(id: string, status: "approved" | "rejected") {
+    const note = window.prompt(status === "approved" ? "審核備註（可留空）" : "請輸入退回原因", "")?.trim() ?? "";
+    if (status === "rejected" && !note) return;
     setBusyId(id);
     try {
       const response = await fetch(`/api/riders/applications/${id}/decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, note })
       });
 
       if (!response.ok) {
@@ -701,6 +705,7 @@ useEffect(() => {
                 <th>文件</th>
                 <th>送出時間</th>
                 <th>狀態</th>
+                <th>審核說明</th>
                 <th>操作</th>
               </tr>
             </thead>

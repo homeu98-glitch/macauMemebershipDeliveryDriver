@@ -116,6 +116,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -196,7 +197,8 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                 TextButton(
                     onClick = {
                         runCatching {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.downloadPageUrl))
+                            val targetUrl = info.apkUrl.ifBlank { info.downloadPageUrl }
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl))
                             context.startActivity(intent)
                         }
                     }
@@ -208,11 +210,68 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
         )
     }
 
+
+val mandatoryLegal = uiState.currentDriver != null && (uiState.legalDocuments?.mustAccept == true)
+val visibleLegalDoc = when {
+    mandatoryLegal -> com.membershipdeliverydriver.app.core.LegalDocumentType.SERVICE_TERMS
+    else -> uiState.activeLegalDocument
+}
+
+if (visibleLegalDoc != null && uiState.legalDocuments != null) {
+    val title = if (visibleLegalDoc == com.membershipdeliverydriver.app.core.LegalDocumentType.DISCLAIMER) "免責條款" else "服務條款與隱私政策"
+    val content = if (visibleLegalDoc == com.membershipdeliverydriver.app.core.LegalDocumentType.DISCLAIMER) uiState.legalDocuments!!.disclaimer else uiState.legalDocuments!!.serviceTerms
+    AlertDialog(
+        onDismissRequest = {
+            if (!mandatoryLegal) {
+                viewModel.dismissLegalDocument()
+            }
+        },
+        title = { Text(title) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(content.ifBlank { "目前尚未設定內容。" })
+                if (mandatoryLegal) {
+                    Text(
+                        "你必須先閱讀並同意以上內容，才可以開始接單。",
+                        color = Color(0xFFB3261E),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            if (mandatoryLegal) {
+                TextButton(onClick = viewModel::acceptLatestLegalTerms) { Text("同意並繼續") }
+            } else {
+                TextButton(onClick = viewModel::dismissLegalDocument) { Text("知道了") }
+            }
+        },
+        dismissButton = {
+            if (!mandatoryLegal) {
+                TextButton(onClick = viewModel::dismissLegalDocument) { Text("關閉") }
+            }
+        }
+    )
+}
+
     LaunchedEffect(uiState.currentDriver, currentRoute) {
         if (uiState.currentDriver != null) {
             if (currentRoute in setOf(Routes.Login, Routes.Register, Routes.PendingApproval)) {
                 navController.navigate(Routes.Home) {
                     popUpTo(Routes.Login) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        } else if (uiState.reviewStatus != null) {
+            if (currentRoute != Routes.PendingApproval) {
+                navController.navigate(Routes.PendingApproval) {
+                    popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
                     launchSingleTop = true
                 }
             }
@@ -271,7 +330,11 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
         }
     }
 
-    val startDestination = if (uiState.currentDriver == null) Routes.Login else Routes.Home
+    val startDestination = when {
+        uiState.currentDriver != null -> Routes.Home
+        uiState.reviewStatus != null || uiState.registrationSubmitted -> Routes.PendingApproval
+        else -> Routes.Login
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -314,9 +377,16 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
             }
             composable(Routes.PendingApproval) {
                 PendingApprovalScreen(
+                    reviewStatus = uiState.reviewStatus,
                     onBackToLogin = {
                         navController.navigate(Routes.Login) {
                             popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
+                    onResubmit = {
+                        navController.navigate(Routes.Register) {
+                            popUpTo(Routes.PendingApproval) { inclusive = true }
                             launchSingleTop = true
                         }
                     },
@@ -332,6 +402,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onClearPickupDistrict = viewModel::clearPickupDistrictFilter,
                     onSelectDestinationDistrict = viewModel::selectDestinationDistrictFilter,
                     onClearDestinationDistrict = viewModel::clearDestinationDistrictFilter,
+                    onShowDisclaimer = { viewModel.showLegalDocument(com.membershipdeliverydriver.app.core.LegalDocumentType.DISCLAIMER) },
                 )
             }
             composable(Routes.Orders) {
@@ -376,6 +447,7 @@ fun DriverApp(viewModel: DriverViewModel = viewModel()) {
                     onRefreshAnnouncements = { viewModel.refreshAnnouncements(showMessage = true) },
                     onOpenLeaderboard = { navController.navigate(Routes.Leaderboard) },
                     onChangePin = viewModel::changePin,
+                    onShowDisclaimer = { viewModel.showLegalDocument(com.membershipdeliverydriver.app.core.LegalDocumentType.DISCLAIMER) },
                     onLogout = viewModel::logout,
                 )
             }
@@ -692,7 +764,9 @@ private fun UploadTile(
 
 @Composable
 private fun PendingApprovalScreen(
+    reviewStatus: com.membershipdeliverydriver.app.core.DriverReviewStatus?,
     onBackToLogin: () -> Unit,
+    onResubmit: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -711,16 +785,42 @@ private fun PendingApprovalScreen(
                 modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("申請已送出，等待審核", style = MaterialTheme.typography.headlineSmall)
+                Text(if (reviewStatus?.status == ApprovalStatus.REJECTED) "審核未通過" else "申請已送出，等待審核", style = MaterialTheme.typography.headlineSmall)
                 Text(
-                    "後台會審核你的自拍照、澳門身份證與駕駛執照。審核通過後，你就可以正式登入並接收訂單。",
+                    when (reviewStatus?.status) {
+                        ApprovalStatus.REJECTED -> "後台已退回你的資料，請按原因修正後重新提交。"
+                        ApprovalStatus.APPROVED -> "資料已審核通過，請重新登入開始接單。"
+                        else -> "後台會審核你的自拍照、澳門身份證與駕駛執照。審核通過後，你就可以正式登入並接收訂單。"
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (!reviewStatus?.note.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color(0xFFFFFBF1),
+                        border = BorderStroke(1.dp, Color(0xFFF3E6CA)),
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("審核說明", fontWeight = FontWeight.SemiBold)
+                            Text(reviewStatus?.note.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            reviewStatus?.reviewedAt?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                    }
+                }
                 Text(
-                    "如果審核還未完成，請稍後再登入查看。",
+                    if (reviewStatus?.status == ApprovalStatus.REJECTED) "修正後可直接重新提交審核資料。" else "如果審核還未完成，請稍後再登入查看。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (reviewStatus?.status == ApprovalStatus.REJECTED) {
+                    Button(
+                        onClick = onResubmit,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Text("重新提交資料")
+                    }
+                }
                 Button(
                     onClick = onBackToLogin,
                     modifier = Modifier.fillMaxWidth(),
@@ -745,6 +845,7 @@ private fun HomeScreen(
     onClearPickupDistrict: () -> Unit,
     onSelectDestinationDistrict: (String) -> Unit,
     onClearDestinationDistrict: () -> Unit,
+    onShowDisclaimer: () -> Unit,
 ) {
     val context = LocalContext.current
     val driver = uiState.currentDriver
@@ -853,37 +954,6 @@ private fun HomeScreen(
                 }
             }
 
-item {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = Color(0xFFFFE7A3),
-        border = BorderStroke(1.dp, Color(0xFFE6B800)),
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                "DEBUG BUILD 標記",
-                color = Color(0xFF7A4E00),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                "Forced Map Choice + Sound Fix",
-                color = Color(0xFF2A1A00),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                "見到這條黃色標記，代表你安裝的是要求先選地圖、並修正新單提示音的測試包。",
-                color = Color(0xFF6D4B0B),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
-}
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -901,6 +971,9 @@ item {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            TextButton(onClick = onShowDisclaimer, contentPadding = PaddingValues(0.dp)) {
+                                Text("免責條款", style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                     Surface(
@@ -1214,7 +1287,7 @@ private fun OrdersScreen(
                     onNavigateToCustomer = {
                         pendingNavigationPoint = order.customer
                     },
-                    onCallCustomer = { openDialer(context, order.customer.contactPhone) },
+                    onCallCustomer = null,
                     onMarkPickedUp = { onMarkPickedUp(order.id) },
                     onCompleteOrder = {
                         completionOrderId = order.id
@@ -1565,7 +1638,7 @@ private fun ActiveOrderCard(
     onNavigateToShop: () -> Unit,
     onCallShop: () -> Unit,
     onNavigateToCustomer: () -> Unit,
-    onCallCustomer: () -> Unit,
+    onCallCustomer: (() -> Unit)?,
     onMarkPickedUp: () -> Unit,
     onCompleteOrder: () -> Unit,
     onGraceCancel: () -> Unit,
@@ -1758,7 +1831,7 @@ private fun ActiveOrderCard(
 private fun ContactLocationRow(
     title: String,
     subtitle: String,
-    onCall: () -> Unit,
+    onCall: (() -> Unit)?,
     onNavigate: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1773,8 +1846,10 @@ private fun ContactLocationRow(
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = onCall) {
-                Icon(Icons.Default.Call, contentDescription = "致電")
+            if (onCall != null) {
+                IconButton(onClick = onCall) {
+                    Icon(Icons.Default.Call, contentDescription = "致電")
+                }
             }
         }
         Row(
@@ -2007,8 +2082,8 @@ private fun OrderDetailScreen(
                     locationLabel = order.customer.label,
                     address = order.customer.address,
                     contactName = order.customer.contactName,
-                    contactPhone = order.customer.contactPhone,
-                    onCall = { openDialer(context, order.customer.contactPhone) },
+                    contactPhone = "",
+                    onCall = null,
                     onNavigate = { pendingNavigationPoint = order.customer },
                 )
             }
@@ -2106,7 +2181,7 @@ private fun LocationCard(
     address: String,
     contactName: String,
     contactPhone: String,
-    onCall: () -> Unit,
+    onCall: (() -> Unit)?,
     onNavigate: () -> Unit,
 ) {
     Card(
@@ -2118,7 +2193,10 @@ private fun LocationCard(
             Text(title, fontWeight = FontWeight.SemiBold)
             Text(locationLabel, style = MaterialTheme.typography.titleMedium)
             Text(address, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("聯絡人：$contactName · $contactPhone", style = MaterialTheme.typography.bodySmall)
+            Text(
+                if (contactPhone.isBlank()) "聯絡人：$contactName" else "聯絡人：$contactName · $contactPhone",
+                style = MaterialTheme.typography.bodySmall
+            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -2133,15 +2211,17 @@ private fun LocationCard(
                     Spacer(modifier = Modifier.size(8.dp))
                     Text("導航")
                 }
-                OutlinedButton(
-                    onClick = onCall,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, Color(0xFFF1D99A))
-                ) {
-                    Icon(Icons.Default.Call, contentDescription = null)
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text("致電")
+                if (onCall != null) {
+                    OutlinedButton(
+                        onClick = onCall,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0xFFF1D99A))
+                    ) {
+                        Icon(Icons.Default.Call, contentDescription = null)
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Text("致電")
+                    }
                 }
             }
         }
@@ -2521,6 +2601,7 @@ private fun ProfileScreen(
     onRefreshAnnouncements: () -> Unit,
     onOpenLeaderboard: () -> Unit,
     onChangePin: (String, () -> Unit) -> Unit,
+    onShowDisclaimer: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -2622,7 +2703,7 @@ private fun ProfileScreen(
             ) {
                 Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(driver?.fullName ?: "未登入", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                    Text("電話：${driver?.phone ?: "-"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("電話：${maskPhoneFrontFour(driver?.phone ?: "-")}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("版本：${com.membershipdeliverydriver.app.BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("若未收到更新推送，可手動檢查更新。", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     Row(
@@ -2640,9 +2721,11 @@ private fun ProfileScreen(
                     OutlinedButton(
                         onClick = {
                             val fallback = com.membershipdeliverydriver.app.BuildConfig.API_BASE_URL.trimEnd('/') + "/apkdownload/latest"
-                            val url = uiState.updateInfo?.stableDownloadUrl
+                            val url = uiState.updateInfo?.apkUrl
                                 ?.takeIf { it.isNotBlank() }
                                 ?: uiState.updateInfo?.downloadPageUrl
+                                    ?.takeIf { it.isNotBlank() }
+                                ?: uiState.updateInfo?.stableDownloadUrl
                                     ?.takeIf { it.isNotBlank() }
                                 ?: fallback
                             openExternalUrl(context, url)
@@ -2653,6 +2736,13 @@ private fun ProfileScreen(
                         Text("手動下載新版本")
                     }
 
+                    OutlinedButton(
+                        onClick = onShowDisclaimer,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text("免責條款")
+                    }
                     OutlinedButton(
                         onClick = onOpenLeaderboard,
                         modifier = Modifier.fillMaxWidth(),
@@ -2843,16 +2933,16 @@ private fun CuteDriverPullRefreshIndicator(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 coil.compose.AsyncImage(
-                    model = R.drawable.refresh_driver_pull,
+                    model = R.drawable.refresh_driver_pull_small,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(width = 124.dp, height = 56.dp)
+                        .size(30.dp)
                         .graphicsLayer {
                             alpha = 0.55f + (clamped.coerceAtMost(1f) * 0.45f)
                         },
                 )
                 Text(
-                    if (refreshing) "Driver is riding over..." else "Pull to send the rider out",
+                    if (refreshing) "小心開車" else "小心開車",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF6C7F93),
                 )
@@ -2944,6 +3034,11 @@ private fun AnimatedSummaryValue(value: String) {
         }
         else -> Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
     }
+}
+
+private fun maskPhoneFrontFour(phone: String): String {
+    val digits = phone.filter { it.isDigit() }
+    return if (digits.length >= 8) "****" + digits.takeLast(4) else phone
 }
 
 private fun approvalLabel(status: ApprovalStatus): String {

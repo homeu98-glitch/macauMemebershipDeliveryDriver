@@ -72,6 +72,9 @@ class DriverViewModel(
                         _uiState.update { it.copy(errorMessage = warning) }
                     }
                     refreshDashboard()
+                    runCatching { repository.loadLegalDocuments() }.getOrNull()?.let { docs ->
+                        _uiState.update { it.copy(legalDocuments = docs) }
+                    }
                     // Load announcements
                     runCatching {
                         val ann = repository.loadAnnouncements()
@@ -79,7 +82,9 @@ class DriverViewModel(
                     }
                 }
                 is ApiResult.Failure -> {
-                    _uiState.update { it.copy(errorMessage = restored.message) }
+                    val review = runCatching { repository.loadLatestReviewStatus() }.getOrNull()
+                    val docs = runCatching { repository.loadLegalDocuments() }.getOrNull()
+                    _uiState.update { it.copy(errorMessage = restored.message, reviewStatus = review, legalDocuments = docs) }
                 }
                 null -> Unit
             }
@@ -170,6 +175,9 @@ class DriverViewModel(
                         _uiState.update { it.copy(errorMessage = warning) }
                     }
                     refreshDashboard()
+                    runCatching { repository.loadLegalDocuments() }.getOrNull()?.let { docs ->
+                        _uiState.update { it.copy(legalDocuments = docs) }
+                    }
                     // Load announcements
                     runCatching {
                         val ann = repository.loadAnnouncements()
@@ -177,7 +185,9 @@ class DriverViewModel(
                     }
                 }
                 is ApiResult.Failure -> {
-                    _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
+                    val review = runCatching { repository.loadLatestReviewStatus() }.getOrNull()
+                    val docs = runCatching { repository.loadLegalDocuments() }.getOrNull()
+                    _uiState.update { it.copy(isLoading = false, errorMessage = result.message, reviewStatus = review, legalDocuments = docs) }
                 }
             }
         }
@@ -215,10 +225,12 @@ class DriverViewModel(
             val normalizedForm = form.copy(phone = localPhone, password = sanitizePinInput(form.password))
             when (val result = repository.submitRegistration(normalizedForm)) {
                 is ApiResult.Success -> {
+                    val review = runCatching { repository.loadLatestReviewStatus() }.getOrNull()
                     _uiState.update { state ->
                         state.copy(
                             isLoading = false,
                             registrationSubmitted = true,
+                            reviewStatus = review,
                             lastCallback = CallbackEnvelope(
                                 type = "driver.registration",
                                 success = true,
@@ -265,6 +277,29 @@ class DriverViewModel(
     fun selectOrder(orderId: String) {
         _uiState.update { it.copy(activeOrderId = orderId) }
     }
+
+
+fun showLegalDocument(type: LegalDocumentType) {
+    _uiState.update { it.copy(activeLegalDocument = type) }
+}
+
+fun dismissLegalDocument() {
+    _uiState.update { it.copy(activeLegalDocument = null) }
+}
+
+fun acceptLatestLegalTerms() {
+    viewModelScope.launch {
+        when (repository.acceptLegalTerms()) {
+            is ApiResult.Success -> {
+                val docs = runCatching { repository.loadLegalDocuments() }.getOrNull()
+                _uiState.update { it.copy(legalDocuments = docs, activeLegalDocument = null) }
+            }
+            is ApiResult.Failure -> {
+                _uiState.update { it.copy(errorMessage = "同意條款失敗，請稍後再試。") }
+            }
+        }
+    }
+}
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
@@ -433,6 +468,9 @@ class DriverViewModel(
                         _uiState.update { it.copy(errorMessage = warning) }
                     }
                     refreshDashboard()
+                    runCatching { repository.loadLegalDocuments() }.getOrNull()?.let { docs ->
+                        _uiState.update { it.copy(legalDocuments = docs) }
+                    }
                     // Load announcements
                     runCatching {
                         val ann = repository.loadAnnouncements()
@@ -465,6 +503,9 @@ class DriverViewModel(
                         )
                     }
                     refreshDashboard()
+                    runCatching { repository.loadLegalDocuments() }.getOrNull()?.let { docs ->
+                        _uiState.update { it.copy(legalDocuments = docs) }
+                    }
                     // Load announcements
                     runCatching {
                         val ann = repository.loadAnnouncements()
@@ -474,6 +515,9 @@ class DriverViewModel(
                 is ApiResult.Failure -> {
                     _uiState.update { it.copy(errorMessage = result.message) }
                     refreshDashboard()
+                    runCatching { repository.loadLegalDocuments() }.getOrNull()?.let { docs ->
+                        _uiState.update { it.copy(legalDocuments = docs) }
+                    }
                     // Load announcements
                     runCatching {
                         val ann = repository.loadAnnouncements()
@@ -496,6 +540,9 @@ class DriverViewModel(
                         )
                     }
                     refreshDashboard()
+                    runCatching { repository.loadLegalDocuments() }.getOrNull()?.let { docs ->
+                        _uiState.update { it.copy(legalDocuments = docs) }
+                    }
                     // Load announcements
                     runCatching {
                         val ann = repository.loadAnnouncements()
@@ -505,6 +552,9 @@ class DriverViewModel(
                 is ApiResult.Failure -> {
                     _uiState.update { it.copy(errorMessage = result.message) }
                     refreshDashboard()
+                    runCatching { repository.loadLegalDocuments() }.getOrNull()?.let { docs ->
+                        _uiState.update { it.copy(legalDocuments = docs) }
+                    }
                     // Load announcements
                     runCatching {
                         val ann = repository.loadAnnouncements()

@@ -56,6 +56,9 @@ interface DriverRepository {
     suspend fun fetchLatestAppRelease(): AppUpdateInfo?
     suspend fun loadWeeklyLeaderboard(): WeeklyLeaderboard
     suspend fun changePin(newPin: String): ApiResult<Unit>
+    suspend fun loadLatestReviewStatus(): DriverReviewStatus?
+    suspend fun loadLegalDocuments(): LegalDocuments?
+    suspend fun acceptLegalTerms(): ApiResult<Unit>
     suspend fun logout()
 }
 
@@ -309,6 +312,18 @@ class SupabaseDriverRepository : DriverRepository {
                     "註冊資料已送出，但目前無法自動完成開通，請稍後再試。"
                 )
             }
+
+            session = AuthSession(
+                accessToken = accessToken,
+                refreshToken = authJson.optString("refresh_token", ""),
+                expiresInSeconds = authJson.optLong("expires_in", 3600),
+            )
+            DriverSessionStore.saveSession(
+                AppContextHolder.requireContext(),
+                accessToken,
+                authJson.optString("refresh_token", ""),
+            )
+            currentAuthUserId = userId
 
             val existingProfileArray = requestArray(
                 path = "/rest/v1/driver_profiles?select=id&auth_user_id=eq.${urlEncode(userId)}",
@@ -857,8 +872,9 @@ override suspend fun fetchLatestAppRelease(): AppUpdateInfo? = withContext(Dispa
             AppUpdateInfo(
                 version = version,
                 releaseNotes = json.optString("releaseNotes").trim(),
-                downloadPageUrl = json.optString("landingPageUrl").trim(),
+                downloadPageUrl = json.optString("apkUrl").trim().ifBlank { json.optString("landingPageUrl").trim() },
                 stableDownloadUrl = json.optString("stableDownloadUrl").trim(),
+                apkUrl = json.optString("apkUrl").trim(),
             )
         }
     } catch (_: Exception) {
@@ -947,6 +963,71 @@ override suspend fun changePin(newPin: String): ApiResult<Unit> = withContext(Di
         ApiResult.Failure(e.message ?: "更改密碼失敗。")
     }
 }
+
+override suspend fun loadLatestReviewStatus(): DriverReviewStatus? = withContext(Dispatchers.IO) {
+    val token = ensureActiveAccessToken() ?: return@withContext null
+    val userId = currentAuthUserId ?: return@withContext null
+    return@withContext try {
+        val result = requestArray(
+            path = "/rest/v1/driver_applications?select=review_status,review_note,reviewed_at&driver_id=eq.${urlEncode(userId)}&order=submitted_at.desc&limit=1",
+            token = token,
+        )
+        if (result.length() == 0) return@withContext null
+        val json = result.getJSONObject(0)
+        DriverReviewStatus(
+            status = when (json.optString("review_status")) {
+                "approved" -> ApprovalStatus.APPROVED
+                "rejected" -> ApprovalStatus.REJECTED
+                else -> ApprovalStatus.PENDING_APPROVAL
+            },
+            note = json.optString("review_note").trim(),
+            reviewedAt = json.optString("reviewed_at").takeIf { it.isNotBlank() },
+        )
+    } catch (_: Exception) {
+        null
+    }
+}
+
+override suspend fun loadLegalDocuments(): LegalDocuments? = withContext(Dispatchers.IO) {
+    val token = ensureActiveAccessToken() ?: return@withContext null
+    val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+    val request = Request.Builder()
+        .url("$baseUrl/api/mobile/legal")
+        .get()
+        .addHeader("x-supabase-access-token", token)
+        .build()
+
+    client.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) return@withContext null
+        val json = runCatching { JSONObject(response.body?.string().orEmpty()) }.getOrNull() ?: return@withContext null
+        LegalDocuments(
+            disclaimer = json.optString("disclaimer").trim(),
+            serviceTerms = json.optString("serviceTerms").trim(),
+            version = json.optString("version").trim(),
+            acceptedVersion = json.optString("acceptedVersion").takeIf { it.isNotBlank() },
+            mustAccept = json.optBoolean("mustAccept", false),
+        )
+    }
+}
+
+override suspend fun acceptLegalTerms(): ApiResult<Unit> = withContext(Dispatchers.IO) {
+    val token = ensureActiveAccessToken() ?: return@withContext ApiResult.Failure("請先登入。")
+    val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
+    val request = Request.Builder()
+        .url("$baseUrl/api/mobile/legal/accept")
+        .post("{}".toRequestBody("application/json".toMediaType()))
+        .addHeader("Content-Type", "application/json")
+        .addHeader("x-supabase-access-token", token)
+        .build()
+
+    client.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) {
+            return@withContext ApiResult.Failure("同意條款失敗，請稍後再試。")
+        }
+        ApiResult.Success(Unit)
+    }
+}
+
 override suspend fun logout() = withContext(Dispatchers.IO) {
         session = null
         currentDriver = null
