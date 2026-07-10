@@ -29,6 +29,21 @@ type DeleteResponse =
   | { success: true }
   | { success: false; message: string };
 
+
+
+type DiagnosticsResponse =
+  | {
+      success: true;
+      active: Release | null;
+      legacyConfig: { version: string; apkUrl: string; releaseNotes: string; updatedAt: string | null } | null;
+      publicVersion: string | null;
+      publicUsed: string | null;
+      latestRedirectUrl: string | null;
+      latestFilename: string | null;
+      releases: Release[];
+    }
+  | { success: false; message: string };
+
 function formatDate(value?: string | null) {
   if (!value) return "-";
   const d = new Date(value);
@@ -48,6 +63,7 @@ export default function ApkManagerPage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const [releases, setReleases] = useState<Release[]>([]);
+  const [diagnostics, setDiagnostics] = useState<Extract<DiagnosticsResponse, { success: true }> | null>(null);
 
   const [version, setVersion] = useState("");
   const [apkUrl, setApkUrl] = useState("");
@@ -55,6 +71,20 @@ export default function ApkManagerPage() {
   const [saving, setSaving] = useState(false);
 
   const active = releases.find((r) => r.isActive) || null;
+
+
+async function loadDiagnostics() {
+  try {
+    const res = await fetch('/api/apk/diagnostics', { cache: 'no-store' });
+    const json = (await res.json()) as DiagnosticsResponse | { message?: string };
+    if (!res.ok) throw new Error((json as any).message || '載入診斷失敗。');
+    const payload = json as DiagnosticsResponse;
+    if (!payload.success) throw new Error(payload.message);
+    setDiagnostics(payload);
+  } catch (e) {
+    setDiagnostics(null);
+  }
+}
 
   async function loadReleases() {
     setLoading(true);
@@ -68,6 +98,7 @@ export default function ApkManagerPage() {
       if (!payload.success) throw new Error(payload.message);
 
       setReleases(payload.releases);
+      await loadDiagnostics();
     } catch (e) {
       setError(e instanceof Error ? e.message : "載入失敗。"
       );
@@ -247,13 +278,29 @@ export default function ApkManagerPage() {
               <>尚未選擇任何 Active 版本。請先新增版本並設定為最新。</>
             )}
           </div>
-        </div>
-      </section>
 
-      <section className="card">
-        <div className="card-header">
-          <div>
-            <h2 className="card-title">新增 APK 版本</h2>
+  </div>
+
+  <div className="card" style={{ padding: 18, marginTop: 18 }}>
+    <strong>真實對外狀態</strong>
+    <div className="muted" style={{ marginTop: 8 }}>
+      Public API 版本：<span className="code">{diagnostics?.publicVersion || '-'}</span>
+      <br />
+      Public API 來源：<span className="code">{diagnostics?.publicUsed || '-'}</span>
+      <br />
+      /apkdownload/latest 真實檔名：<span className="code">{diagnostics?.latestFilename || '-'}</span>
+      <br />
+      Active 版本：<span className="code">{diagnostics?.active?.version || '-'}</span>
+      <br />
+      Legacy config 版本：<span className="code">{diagnostics?.legacyConfig?.version || '-'}</span>
+    </div>
+  </div>
+</section>
+
+<section className="card">
+  <div className="card-header">
+    <div>
+      <h2 className="card-title">新增 APK 版本</h2>
             <p className="muted">版本號請用你想顯示給車手看的格式，例如：1.0.3</p>
           </div>
         </div>
@@ -310,6 +357,7 @@ export default function ApkManagerPage() {
                 <th>版本</th>
                 <th>建立時間</th>
                 <th>APK</th>
+                <th>對外狀態</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -321,6 +369,15 @@ export default function ApkManagerPage() {
                     <td><span className="code">{r.version}</span></td>
                     <td>{formatDate(r.createdAt)}</td>
                     <td><a href={r.apkUrl} target="_blank" rel="noreferrer">連結</a></td>
+                    <td>
+                      <div className="list" style={{ gap: 6 }}>
+                        {r.isActive ? <span className="code">DB Active</span> : null}
+                        {diagnostics?.publicVersion === r.version ? <span className="code">Public API</span> : null}
+                        {diagnostics?.legacyConfig?.version === r.version ? <span className="code">Legacy Config</span> : null}
+                        {diagnostics?.latestFilename && diagnostics.latestFilename.includes(r.version) ? <span className="code">Latest 下載檔</span> : null}
+                        {!r.isActive && diagnostics?.publicVersion !== r.version && diagnostics?.legacyConfig?.version !== r.version && !(diagnostics?.latestFilename && diagnostics.latestFilename.includes(r.version)) ? <span className="muted">-</span> : null}
+                      </div>
+                    </td>
                     <td>
                       <div className="btn-row">
                         <button className="btn btn-secondary" type="button" disabled={saving || r.isActive} onClick={() => activate(r.id)}>
@@ -334,7 +391,7 @@ export default function ApkManagerPage() {
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan={5} className="muted">尚未建立任何版本。</td></tr>
+                <tr><td colSpan={6} className="muted">尚未建立任何版本。</td></tr>
               )}
             </tbody>
           </table>

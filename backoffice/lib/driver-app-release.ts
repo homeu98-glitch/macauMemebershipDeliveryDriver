@@ -83,16 +83,7 @@ export async function createDriverAppRelease(input: {
     .select("id,version,apk_url,release_notes,created_at,is_active")
     .single();
   if (error) throw error;
-
-  // Sync to legacy download config (used by /apkdownload and fallback update checks)
-  const active = mapRow(data);
-  await saveDriverAppDownloadConfig({
-    apkUrl: active.apkUrl,
-    version: active.version,
-    releaseNotes: active.releaseNotes || "最新版",
-  });
-
-  return active;
+  return mapRow(data);
 }
 
 export async function setActiveDriverAppRelease(releaseId: string) {
@@ -112,16 +103,7 @@ export async function setActiveDriverAppRelease(releaseId: string) {
     .select("id,version,apk_url,release_notes,created_at,is_active")
     .single();
   if (error) throw error;
-
-  // Sync to legacy download config (used by /apkdownload and fallback update checks)
-  const active = mapRow(data);
-  await saveDriverAppDownloadConfig({
-    apkUrl: active.apkUrl,
-    version: active.version,
-    releaseNotes: active.releaseNotes || "最新版",
-  });
-
-  return active;
+  return mapRow(data);
 }
 
 export async function deleteDriverAppRelease(releaseId: string) {
