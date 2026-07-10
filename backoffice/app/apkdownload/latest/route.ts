@@ -25,9 +25,9 @@ async function getActiveDriverAppReleaseDirect() {
 }
 
 export async function GET() {
-  const legacyConfig = await getDriverAppDownloadConfig().catch(() => null);
-  const active = legacyConfig ? null : await getActiveDriverAppReleaseDirect().catch(() => null);
-  const apkUrl = legacyConfig?.apkUrl || active?.apkUrl || "";
+  const active = await getActiveDriverAppReleaseDirect().catch(() => null);
+  const legacyConfig = active ? null : await getDriverAppDownloadConfig().catch(() => null);
+  const apkUrl = active?.apkUrl || legacyConfig?.apkUrl || "";
 
   if (!apkUrl) {
     return NextResponse.json({ message: "No APK configured yet." }, { status: 404 });

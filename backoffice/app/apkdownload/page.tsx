@@ -28,17 +28,17 @@ async function getActiveDriverAppReleaseDirect() {
 }
 
 export default async function ApkDownloadPage() {
-  const legacyConfig = await getDriverAppDownloadConfig().catch(() => null);
-  const active = legacyConfig ? null : await getActiveDriverAppReleaseDirect().catch(() => null);
-  const current = legacyConfig
+  const active = await getActiveDriverAppReleaseDirect().catch(() => null);
+  const legacyConfig = active ? null : await getDriverAppDownloadConfig().catch(() => null);
+  const current = active
     ? {
-        version: legacyConfig.version,
-        releaseNotes: legacyConfig.releaseNotes,
+        version: active.version,
+        releaseNotes: active.releaseNotes,
       }
-    : active
+    : legacyConfig
       ? {
-          version: active.version,
-          releaseNotes: active.releaseNotes,
+          version: legacyConfig.version,
+          releaseNotes: legacyConfig.releaseNotes,
         }
       : null;
 
