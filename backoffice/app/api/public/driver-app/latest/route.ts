@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { getDriverAppDownloadConfig } from "../../../../../lib/app-release-config";
-import { getActiveDriverAppRelease } from "../../../../../lib/driver-app-release";
 import { createServiceRoleSupabaseClient } from "../../../../../lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +26,30 @@ function toErrString(error: unknown) {
   return String(error);
 }
 
+
+async function getActiveDriverAppReleaseDirect() {
+  const supabase = createServiceRoleSupabaseClient();
+  const { data, error } = await supabase
+    .from("driver_app_releases")
+    .select("id,version,apk_url,release_notes,created_at,is_active")
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    id: String(data.id),
+    version: String(data.version),
+    apkUrl: String(data.apk_url),
+    releaseNotes: String(data.release_notes ?? ""),
+    createdAt: String(data.created_at),
+    isActive: Boolean(data.is_active),
+  };
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const origin = url.origin;
@@ -36,7 +59,7 @@ export async function GET(request: Request) {
   let activeError: unknown = null;
   let legacyError: unknown = null;
 
-  const active = await getActiveDriverAppRelease().catch((e) => {
+  const active = await getActiveDriverAppReleaseDirect().catch((e) => {
     activeError = e;
     return null;
   });
