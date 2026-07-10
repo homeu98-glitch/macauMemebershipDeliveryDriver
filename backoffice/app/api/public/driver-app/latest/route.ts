@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 
 import { getDriverAppDownloadConfig } from "../../../../../lib/app-release-config";
 import { getActiveDriverAppRelease } from "../../../../../lib/driver-app-release";
+import { createServiceRoleSupabaseClient } from "../../../../../lib/supabase";
 
 export const dynamic = "force-dynamic";
 
 type DebugInfo = {
   supabaseUrl: string | null;
   serviceRoleKeyPresent: boolean;
+  activeRows?: Array<{ id: string; version: string; createdAt: string; isActive: boolean }>;
+  topRows?: Array<{ id: string; version: string; createdAt: string; isActive: boolean }>;
   vercelRegion: string | null;
   gitCommitSha: string | null;
   deploymentId: string | null;
@@ -27,7 +30,8 @@ function toErrString(error: unknown) {
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const origin = url.origin;
-  const debugEnabled = url.searchParams.get("debug") === "1";
+  const debugLevel = url.searchParams.get("debug");
+  const debugEnabled = debugLevel === "1" || debugLevel === "2";
 
   let activeError: unknown = null;
   let legacyError: unknown = null;
@@ -43,6 +47,49 @@ export async function GET(request: Request) {
         legacyError = e;
         return null;
       });
+
+
+
+let activeRows:
+  | Array<{ id: string; version: string; createdAt: string; isActive: boolean }>
+  | undefined;
+let topRows:
+  | Array<{ id: string; version: string; createdAt: string; isActive: boolean }>
+  | undefined;
+
+// Deep debug mode: show what the backend actually sees in DB
+if (debugLevel === "2") {
+  try {
+    const supabase = createServiceRoleSupabaseClient();
+    const { data: actives } = await supabase
+      .from("driver_app_releases")
+      .select("id,version,created_at,is_active")
+      .eq("is_active", true)
+      .order("created_at", { ascending: false });
+
+    activeRows = (actives ?? []).map((row: any) => ({
+      id: String(row.id),
+      version: String(row.version),
+      createdAt: String(row.created_at),
+      isActive: Boolean(row.is_active),
+    }));
+
+    const { data: tops } = await supabase
+      .from("driver_app_releases")
+      .select("id,version,created_at,is_active")
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    topRows = (tops ?? []).map((row: any) => ({
+      id: String(row.id),
+      version: String(row.version),
+      createdAt: String(row.created_at),
+      isActive: Boolean(row.is_active),
+    }));
+  } catch {
+    // ignore deep debug failure
+  }
+}
 
   const current = active
     ? {
@@ -69,7 +116,8 @@ export async function GET(request: Request) {
         activeVersion: active?.version ?? null,
         legacyVersion: legacyConfig?.version ?? null,
         activeError: toErrString(activeError),
-        legacyError: toErrString(legacyError)
+        legacyError: toErrString(legacyError),
+        ...(debugLevel === "2" ? { activeRows, topRows } : {})
       }
     : undefined;
 
