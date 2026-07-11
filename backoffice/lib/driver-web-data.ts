@@ -8,12 +8,14 @@ export type DriverWebOrderSummary = {
   status: string;
   storeName: string;
   storeAddress: string;
+  storePhone: string | null;
   pickupDistrict: string | null;
   storeLatitude: number;
   storeLongitude: number;
   totalSentOrders: number;
   customerName: string;
   customerAddress: string;
+  customerPhone: string | null;
   destinationDistrict: string | null;
   customerLatitude: number;
   customerLongitude: number;
@@ -125,10 +127,10 @@ async function loadShopAndCustomerMaps(supabase: ReturnType<typeof createService
 
   const [{ data: shops }, { data: customers }, { data: shopOrders }] = await Promise.all([
     shopIds.length
-      ? supabase.from("shops").select("id,name,address,district,latitude,longitude").in("id", shopIds)
+      ? supabase.from("shops").select("id,name,address,district,latitude,longitude,contact_phone").in("id", shopIds)
       : Promise.resolve({ data: [] as any[] }),
     customerIds.length
-      ? supabase.from("customers").select("id,name,address,district,latitude,longitude").in("id", customerIds)
+      ? supabase.from("customers").select("id,name,address,district,latitude,longitude,phone").in("id", customerIds)
       : Promise.resolve({ data: [] as any[] }),
     shopIds.length
       ? supabase.from("orders").select("shop_id").in("shop_id", shopIds)
@@ -157,12 +159,14 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     status: order.status,
     storeName: shop?.name ?? "未命名店舖",
     storeAddress: shop?.address ?? "未提供地址",
+    storePhone: shop?.contact_phone ?? null,
     pickupDistrict: shop?.district ?? null,
     storeLatitude: Number(shop?.latitude ?? 0),
     storeLongitude: Number(shop?.longitude ?? 0),
     totalSentOrders: totalSentOrdersByShopId.get(order.shop_id) ?? 0,
     customerName: customer?.name ?? "未命名客戶",
     customerAddress: customer?.address ?? "未提供地址",
+    customerPhone: customer?.phone ?? null,
     destinationDistrict: customer?.district ?? null,
     customerLatitude: Number(customer?.latitude ?? 0),
     customerLongitude: Number(customer?.longitude ?? 0),
@@ -275,8 +279,8 @@ export async function getDriverOrderDetail(driverId: string, orderId: string) {
   if (order.status !== "new" && !assignment) return null;
 
   const [{ data: shop }, { data: customer }, { data: items }, { data: events }, { data: proof }, { totalSentOrdersByShopId }] = await Promise.all([
-    supabase.from("shops").select("id,name,address,district,latitude,longitude").eq("id", order.shop_id).maybeSingle(),
-    supabase.from("customers").select("id,name,address,district,latitude,longitude").eq("id", order.customer_id).maybeSingle(),
+    supabase.from("shops").select("id,name,address,district,latitude,longitude,contact_phone").eq("id", order.shop_id).maybeSingle(),
+    supabase.from("customers").select("id,name,address,district,latitude,longitude,phone").eq("id", order.customer_id).maybeSingle(),
     supabase.from("order_items").select("item_name,quantity").eq("order_id", orderId),
     supabase.from("order_events").select("event_type,created_at,payload").eq("order_id", orderId).order("created_at", { ascending: true }),
     supabase.from("delivery_proofs").select("id").eq("order_id", orderId).eq("driver_id", driverId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
