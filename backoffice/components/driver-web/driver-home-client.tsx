@@ -61,18 +61,18 @@ export function DriverHomeClient() {
 
   return (
     <div className="stack gap-4">
-      <section className="driver-summary-grid">
+      <section className="card driver-hero-card stack gap-2"><div className="driver-section-title">今日狀態</div><div className="driver-summary-grid">
         <div className="card driver-summary-card"><div className="muted">今日收入</div><strong>MOP {data.todayEarningsMop.toFixed(1)}</strong></div>
         <div className="card driver-summary-card"><div className="muted">本週收入</div><strong>MOP {data.weekEarningsMop.toFixed(1)}</strong></div>
         <div className="card driver-summary-card"><div className="muted">今日完成</div><strong>{data.completedToday} 單</strong></div>
-      </section>
+      </div></section>
       <section className="card stack gap-3">
         <div className="driver-inline-between"><div><div className="driver-section-title">接單狀態</div><div className="muted">目前為 {data.availability === "online" ? "上線中" : "離線中"}</div></div><button className={data.availability === "online" ? "btn-secondary" : "btn-primary"} disabled={busy} onClick={toggleAvailability} type="button">{busy ? "更新中..." : data.availability === "online" ? "切換離線" : "切換上線"}</button></div>
       </section>
       <section className="stack gap-3">
         <div className="driver-inline-between"><div className="driver-section-title">可接訂單</div><button className="btn btn-secondary" onClick={load} type="button">刷新</button></div>
         {data.availableOrders.length === 0 ? <div className="card muted">暫時沒有新訂單。</div> : data.availableOrders.map((order) => (
-          <article className="card stack gap-3" key={order.id}>
+          <article className="card driver-order-card stack gap-3" key={order.id}>
             <div className="driver-inline-between"><strong>{order.storeName}</strong><span className={order.isUrgent ? "driver-badge urgent" : "driver-badge"}>{order.isUrgent ? "急單" : "新單"}</span></div>
             <div className="muted">訂單編號：{order.externalOrderId}</div>
             <div>{order.storeAddress}</div>

@@ -54,9 +54,9 @@ export function DriverRegisterForm() {
         <label className="driver-field"><span>姓名</span><input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="請輸入真實姓名" /></label>
         <label className="driver-field"><span>電話號碼</span><input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="例如 66668888" /></label>
         <label className="driver-field"><span>PIN</span><input type="password" value={pin} onChange={(event) => setPin(event.target.value)} placeholder="4 位數字" /></label>
-        <label className="driver-field"><span>自拍照</span><input accept="image/*" capture="user" type="file" onChange={(event) => setSelfie(event.target.files?.[0] ?? null)} /></label>
-        <label className="driver-field"><span>澳門身份證</span><input accept="image/*" capture="environment" type="file" onChange={(event) => setMacauId(event.target.files?.[0] ?? null)} /></label>
-        <label className="driver-field"><span>駕駛執照</span><input accept="image/*" capture="environment" type="file" onChange={(event) => setDrivingLicence(event.target.files?.[0] ?? null)} /></label>
+        <label className="driver-field"><span>自拍照</span><input accept="image/*" capture="user" type="file" onChange={(event) => setSelfie(event.target.files?.[0] ?? null)} /><div className="driver-file-hint">請保持正面清晰可見。</div></label>
+        <label className="driver-field"><span>澳門身份證</span><input accept="image/*" capture="environment" type="file" onChange={(event) => setMacauId(event.target.files?.[0] ?? null)} /><div className="driver-file-hint">請上傳完整正面照片。</div></label>
+        <label className="driver-field"><span>駕駛執照</span><input accept="image/*" capture="environment" type="file" onChange={(event) => setDrivingLicence(event.target.files?.[0] ?? null)} /><div className="driver-file-hint">請上傳有效的駕駛執照。</div></label>
         {message ? <div className="error">{message}</div> : null}
         <button className="btn-primary" disabled={submitting} type="submit">{submitting ? "提交中..." : "提交審核"}</button>
       </form>
