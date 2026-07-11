@@ -244,9 +244,18 @@ export async function POST(
         Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt);
 
       if (body.action === "grace_release") {
+        const { data: pickedUpEvent } = await supabase
+          .from("order_events")
+          .select("created_at")
+          .eq("order_id", params.orderId)
+          .eq("event_type", "picked_up")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const graceBase = typeof pickedUpEvent?.created_at === "string" ? pickedUpEvent.created_at : assignment?.accepted_at ?? null;
         const withinGrace =
-          typeof assignment?.accepted_at === "string" &&
-          Date.now() - new Date(assignment.accepted_at).getTime() <= 30 * 1000;
+          typeof graceBase === "string" &&
+          Date.now() - new Date(graceBase).getTime() <= 180 * 1000;
         const canRelease =
           withinGrace &&
           !["delivered", "canceled"].includes(order.status);
@@ -279,7 +288,7 @@ export async function POST(
           event_type: "issue_reported",
           actor_type: "driver",
           actor_driver_id: verified.driverId,
-          payload: { ...cancelPayload, cancel_reason: "grace_release", note: "騎手 3 分鐘內取消接單並釋出" }
+          payload: { ...cancelPayload, cancel_reason: "grace_release", note: "騎手於 grace period 內取消並釋出" }
         });
       } else {
         await supabase.from("orders").update({ status: "canceled", updated_at: now }).eq("id", params.orderId);

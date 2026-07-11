@@ -1996,3 +1996,29 @@ html, body {
     padding: 8px 4px;
   }
 }
+
+/* orders width lock */
+
+
+.orders-page-wrap,
+.orders-header-row,
+.full-width-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.orders-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.full-width-card {
+  box-sizing: border-box;
+}
+
+.orders-page-wrap .android-secondary-btn.small {
+  flex-shrink: 0;
+}

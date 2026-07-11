@@ -242,7 +242,7 @@ export function DriverHomeClient() {
         window.alert(payload.message ?? "接單失敗，請稍後再試。");
         return;
       }
-      window.location.href = `/driver/orders/${orderId}`;
+      await load();
     } catch {
       window.alert("接單失敗，請稍後再試。");
     }

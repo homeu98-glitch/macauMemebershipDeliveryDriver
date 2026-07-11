@@ -25,6 +25,11 @@ export type DriverWebOrderSummary = {
   promisedAt: string | null;
   deliveryDeadlineText: string;
   etaMinutes: number;
+  acceptedAt: string | null;
+  pickedUpAt: string | null;
+  cancelReason: string | null;
+  cancelOtherReason: string | null;
+  cancelHandling: "return_to_shop" | "not_returning" | null;
   isUrgent: boolean;
   paymentTag: string;
 };
@@ -71,6 +76,12 @@ function calculateEtaMinutes(value: string | null | undefined) {
   const target = new Date(value).getTime();
   if (Number.isNaN(target)) return 0;
   return Math.max(0, Math.round((target - Date.now()) / 60000));
+}
+
+function formatRawDateTime(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function derivePaymentTag(order: any) {
@@ -176,6 +187,11 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     promisedAt: order.promised_at ? formatDateTime(order.promised_at) : null,
     deliveryDeadlineText: formatDeadline(order.promised_at),
     etaMinutes,
+    acceptedAt: formatRawDateTime(order.accepted_at),
+    pickedUpAt: formatRawDateTime(order.picked_up_at),
+    cancelReason: typeof order.cancel_reason === "string" ? order.cancel_reason : null,
+    cancelOtherReason: typeof order.cancel_other_reason === "string" ? order.cancel_other_reason : null,
+    cancelHandling: order.cancel_handling === "return_to_shop" || order.cancel_handling === "not_returning" ? order.cancel_handling : null,
     isUrgent: order?.source_payload?.priceRaisedAt ? true : etaMinutes > 0 && etaMinutes <= 15,
     paymentTag: derivePaymentTag(order)
   };
@@ -244,7 +260,7 @@ export async function listActiveOrders(driverId: string) {
   const supabase = createServiceRoleSupabaseClient();
   const { data: assignments } = await supabase
     .from("order_assignments")
-    .select("order_id")
+    .select("order_id,accepted_at")
     .eq("driver_id", driverId)
     .is("canceled_at", null)
     .order("assigned_at", { ascending: false });
@@ -260,14 +276,51 @@ export async function listActiveOrders(driverId: string) {
     .order("created_at", { ascending: false });
 
   const orders = rows ?? [];
+  const acceptedAtByOrderId = new Map((assignments ?? []).map((item: any) => [item.order_id, item.accepted_at ?? null]));
+  const { data: events } = await supabase
+    .from("order_events")
+    .select("order_id,event_type,created_at,payload")
+    .in("order_id", orderIds)
+    .in("event_type", ["picked_up", "issue_reported"]);
+  const pickedUpAtByOrderId = new Map<string, string>();
+  const cancelMetaByOrderId = new Map<string, { cancelReason: string | null; cancelOtherReason: string | null; cancelHandling: "return_to_shop" | "not_returning" | null }>();
+  for (const event of events ?? []) {
+    if (event.event_type === "picked_up" && !pickedUpAtByOrderId.has(event.order_id)) {
+      pickedUpAtByOrderId.set(event.order_id, event.created_at);
+    }
+    if (event.event_type === "issue_reported" && event.payload && !cancelMetaByOrderId.has(event.order_id)) {
+      const payload = event.payload as Record<string, unknown>;
+      const cancelHandling = payload.cancel_handling === "return_to_shop" || payload.cancel_handling === "not_returning" ? (payload.cancel_handling as "return_to_shop" | "not_returning") : null;
+      const cancelReason = typeof payload.cancel_reason === "string" ? payload.cancel_reason : null;
+      const cancelOtherReason = typeof payload.cancel_other_reason === "string" ? payload.cancel_other_reason : null;
+      if (cancelHandling || cancelReason || cancelOtherReason) {
+        cancelMetaByOrderId.set(event.order_id, { cancelReason, cancelOtherReason, cancelHandling });
+      }
+    }
+  }
   const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
-  return orders.map((row: any) => toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId));
+  return orders.map((row: any) => {
+    const cancelMeta = cancelMetaByOrderId.get(row.id);
+    return toOrderSummary(
+      {
+        ...row,
+        accepted_at: acceptedAtByOrderId.get(row.id) ?? null,
+        picked_up_at: pickedUpAtByOrderId.get(row.id) ?? null,
+        cancel_reason: cancelMeta?.cancelReason ?? null,
+        cancel_other_reason: cancelMeta?.cancelOtherReason ?? null,
+        cancel_handling: cancelMeta?.cancelHandling ?? null
+      },
+      shopMap.get(row.shop_id),
+      customerMap.get(row.customer_id),
+      totalSentOrdersByShopId
+    );
+  });
 }
 
 export async function getDriverOrderDetail(driverId: string, orderId: string) {
   const supabase = createServiceRoleSupabaseClient();
   const [{ data: assignment }, { data: order }] = await Promise.all([
-    supabase.from("order_assignments").select("id").eq("driver_id", driverId).eq("order_id", orderId).is("canceled_at", null).maybeSingle(),
+    supabase.from("order_assignments").select("id,accepted_at").eq("driver_id", driverId).eq("order_id", orderId).is("canceled_at", null).maybeSingle(),
     supabase
       .from("orders")
       .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
@@ -287,7 +340,16 @@ export async function getDriverOrderDetail(driverId: string, orderId: string) {
     loadShopAndCustomerMaps(supabase, [order])
   ]);
 
-  const summary = toOrderSummary(order, shop, customer, totalSentOrdersByShopId);
+  const pickedUpEvent = (events ?? []).find((event: any) => event.event_type === "picked_up");
+  const cancelEvent = [...(events ?? [])].reverse().find((event: any) => event.event_type === "issue_reported" && (event.payload?.cancel_handling || event.payload?.cancel_reason));
+  const summary = toOrderSummary({
+    ...order,
+    accepted_at: assignment?.accepted_at ?? null,
+    picked_up_at: pickedUpEvent?.created_at ?? null,
+    cancel_reason: cancelEvent?.payload?.cancel_reason ?? null,
+    cancel_other_reason: cancelEvent?.payload?.cancel_other_reason ?? null,
+    cancel_handling: cancelEvent?.payload?.cancel_handling ?? null
+  }, shop, customer, totalSentOrdersByShopId);
   return {
     ...summary,
     items: (items ?? []).map((item: any) => `${item.quantity} x ${item.item_name}`),

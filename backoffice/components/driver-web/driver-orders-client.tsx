@@ -71,6 +71,11 @@ function IconButtonLink({ href, label, type, disabled = false }: { href?: string
   return <a className="mini-icon-btn" aria-label={label} href={href} rel={type === "nav" ? "noreferrer" : undefined} target={type === "nav" ? "_blank" : undefined}>{content}</a>;
 }
 
+function formatCountdown(etaMinutes: number) {
+  if (etaMinutes <= 0) return "已到時";
+  return `${etaMinutes} 分鐘`;
+}
+
 function statusHint(status: string) {
   switch (status) {
     case "accepted":
@@ -139,8 +144,8 @@ export function DriverOrdersClient() {
   if (error) return <div className="android-card error">{error}</div>;
 
   return (
-    <div className="stack gap-3">
-      <div className="driver-inline-between">
+    <div className="stack gap-3 orders-page-wrap">
+      <div className="driver-inline-between orders-header-row">
         <div className="stack gap-1">
           <div className="driver-screen-title">訂單</div>
           <div className="muted">進行中的配送訂單</div>
@@ -157,13 +162,14 @@ export function DriverOrdersClient() {
           const canPickUp = order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop";
           const canDeliver = order.status === "picked_up" || order.status === "arrived_customer";
           return (
-            <article className="android-card active-order-card stack gap-3 no-overflow-card" key={order.id}>
+            <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
               <StageStrip status={order.status} />
 
               <div className="driver-inline-between align-start">
                 <div className="stack gap-1 grow minw-0">
                   <strong className="driver-order-title compact tight">{order.storeName}</strong>
-                  <div className="order-subvalue tight">交易編號 {order.transactionCode ?? order.externalOrderId}</div>
+                  <div className="order-subvalue tight">訂單號 {order.transactionCode ?? order.externalOrderId}</div>
+                  <div className="order-subvalue tight">倒計時 {formatCountdown(order.etaMinutes)}</div>
                   <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
                   <div className="order-subvalue tight">已派送 {order.totalSentOrders} 單</div>
                 </div>
