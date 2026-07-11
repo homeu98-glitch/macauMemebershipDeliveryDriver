@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type OrderDetail = {
   id: string;
@@ -47,26 +46,33 @@ function DetailStageStrip({ status }: { status: string }) {
   if (status === "canceled") {
     return <div className="detail-canceled-strip">此訂單已取消配送</div>;
   }
+
   const stages = ["前往商戶", "已取貨", "前往客戶"];
-  const doneMap = [
-    ["assigned", "accepted", "heading_to_shop", "picked_up", "arrived_customer", "delivered"],
-    ["picked_up", "arrived_customer", "delivered"],
-    ["arrived_customer", "delivered"]
-  ];
   const activeIndex = status === "picked_up" ? 1 : status === "arrived_customer" || status === "delivered" ? 2 : 0;
+
   return (
-    <div className="order-stage-strip-web">
-      {stages.map((label, index) => {
-        const done = doneMap[index].includes(status);
-        const current = activeIndex === index && status !== "delivered";
-        return <div className={current ? "order-stage-chip current" : done ? "order-stage-chip done" : "order-stage-chip"} key={label}>{label}</div>;
-      })}
+    <div className="order-stage-strip-web single-active">
+      {stages.map((label, index) => (
+        <div className={activeIndex === index ? "order-stage-chip current" : "order-stage-chip"} key={label}>
+          {label}
+        </div>
+      ))}
     </div>
   );
 }
 
 function StatusBadge({ status, amount, urgent }: { status: string; amount: number; urgent: boolean }) {
-  const statusLabel = status === "picked_up" ? "配送中" : status === "arrived_customer" ? "前往客戶" : status === "accepted" || status === "assigned" || status === "heading_to_shop" ? "前往商戶" : status === "canceled" ? "已取消" : status;
+  const statusLabel =
+    status === "picked_up"
+      ? "已取貨"
+      : status === "arrived_customer"
+        ? "前往客戶"
+        : status === "accepted" || status === "assigned" || status === "heading_to_shop"
+          ? "前往商戶"
+          : status === "canceled"
+            ? "已取消"
+            : status;
+
   return (
     <div className="detail-top-badges">
       <span className={status === "canceled" ? "detail-status-badge canceled" : "detail-status-badge"}>{statusLabel}</span>
@@ -76,9 +82,18 @@ function StatusBadge({ status, amount, urgent }: { status: string; amount: numbe
 }
 
 function IconButtonLink({ href, label, type, disabled = false }: { href?: string; label: string; type: "call" | "nav"; disabled?: boolean }) {
-  const content = type === "call"
-    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.6 10.8a15.5 15.5 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24c1.08.36 2.22.54 3.4.54a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C11.85 21 3 12.15 3 1a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.18.18 2.32.54 3.4a1 1 0 0 1-.24 1l-2.2 2.4Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z" stroke="currentColor" strokeWidth="1.8"/><circle cx="12" cy="10" r="2.2" stroke="currentColor" strokeWidth="1.8"/></svg>;
+  const content =
+    type === "call" ? (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M6.6 10.8a15.5 15.5 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24c1.08.36 2.22.54 3.4.54a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C11.85 21 3 12.15 3 1a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.18.18 2.32.54 3.4a1 1 0 0 1-.24 1l-2.2 2.4Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ) : (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z" stroke="currentColor" strokeWidth="1.8"/>
+        <circle cx="12" cy="10" r="2.2" stroke="currentColor" strokeWidth="1.8"/>
+      </svg>
+    );
+
   if (!href || disabled) return <span className="mini-icon-btn disabled" aria-label={label}>{content}</span>;
   return <a className="mini-icon-btn" aria-label={label} href={href} rel={type === "nav" ? "noreferrer" : undefined} target={type === "nav" ? "_blank" : undefined}>{content}</a>;
 }
@@ -87,7 +102,8 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
-  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [completeAfterUpload, setCompleteAfterUpload] = useState(false);
+  const proofInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
     try {
@@ -109,17 +125,21 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const canPickUp = order?.status === "accepted" || order?.status === "assigned" || order?.status === "heading_to_shop";
   const canDeliver = order?.status === "picked_up" || order?.status === "arrived_customer";
 
-  async function sendStatus(event: string) {
-    setActionBusy(event);
+  async function sendStatus(eventType: string, redirectAfter = false) {
+    setActionBusy(eventType);
     try {
       const response = await fetch(`/api/driver/orders/${orderId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventType: event })
+        body: JSON.stringify({ eventType })
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string };
       if (!response.ok) {
         window.alert(payload.message ?? "更新訂單狀態失敗。");
+        return;
+      }
+      if (redirectAfter && eventType === "delivered") {
+        window.location.href = "/driver/completed";
         return;
       }
       await load();
@@ -130,21 +150,50 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
     }
   }
 
-  async function uploadProof() {
-    if (!proofFile) return;
-    setActionBusy("proof");
+  async function uploadProofFile(file: File, deliverAfter = false) {
+    setActionBusy(deliverAfter ? "proof-deliver" : "proof");
     try {
       const formData = new FormData();
-      formData.append("file", proofFile);
+      formData.append("file", file);
       const response = await fetch(`/api/driver/orders/${orderId}/proof`, { method: "POST", body: formData });
-      if (!response.ok) throw new Error("proof_failed");
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        window.alert(payload.message ?? "上傳送達證明失敗。");
+        return;
+      }
+      if (deliverAfter) {
+        await sendStatus("delivered", true);
+        return;
+      }
       await load();
-      setProofFile(null);
     } catch {
       window.alert("上傳送達證明失敗。");
     } finally {
       setActionBusy(null);
+      setCompleteAfterUpload(false);
     }
+  }
+
+  function handleCompleteClick() {
+    if (!order) return;
+    if (order.hasProof) {
+      void sendStatus("delivered", true);
+      return;
+    }
+    setCompleteAfterUpload(true);
+    proofInputRef.current?.click();
+  }
+
+  function handleManualUploadClick() {
+    setCompleteAfterUpload(false);
+    proofInputRef.current?.click();
+  }
+
+  async function handleProofInputChange(event: any) {
+    const file = event.target?.files?.[0] as File | undefined;
+    if (!file) return;
+    await uploadProofFile(file, completeAfterUpload);
+    event.target.value = "";
   }
 
   const proofPreviewUrl = useMemo(() => (order?.hasProof ? `/api/driver/orders/${orderId}/proof?ts=${Date.now()}` : null), [order?.hasProof, orderId]);
@@ -209,7 +258,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
           {order.status === "canceled" ? <div className="muted">此訂單已取消配送。</div> : null}
           {canAccept ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("accepted")} type="button">{actionBusy === "accepted" ? "接單中..." : "接單"}</button> : null}
           {canPickUp ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("picked_up")} type="button">{actionBusy === "picked_up" ? "處理中..." : "已取貨"}</button> : null}
-          {canDeliver ? <button className="android-primary-btn" disabled={Boolean(actionBusy) || !order.hasProof} onClick={() => sendStatus("delivered")} type="button">{actionBusy === "delivered" ? "處理中..." : "拍照後完成訂單"}</button> : null}
+          {canDeliver ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={handleCompleteClick} type="button">{actionBusy === "proof-deliver" || actionBusy === "delivered" ? "處理中..." : "拍照後完成訂單"}</button> : null}
           {order.status !== "delivered" ? <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("canceled")} type="button">取消訂單</button> : null}
         </div>
       </section>
@@ -223,14 +272,8 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
         <div className="driver-section-title">送達證明</div>
         <div className="muted">{proofPreviewUrl ? "已上傳送達照片，可重新上傳。" : "請上傳送達照片，作為已完成配送的證明。"}</div>
         {proofPreviewUrl ? <img alt="delivery proof" className="driver-proof-preview" src={proofPreviewUrl} /> : null}
-        <label className={proofFile ? "driver-upload-card uploaded compact" : "driver-upload-card compact"}>
-          <input accept="image/*" capture="environment" onChange={(event) => setProofFile(event.target.files?.[0] ?? null)} type="file" hidden />
-          <div className="driver-upload-title">{proofPreviewUrl ? "重新上傳照片" : "上傳送達照片"}</div>
-          <div className="driver-upload-copy">請選擇直接拍照，或從相簿上傳送達圖片。</div>
-          <div className="driver-upload-file">{proofFile ? proofFile.name : "尚未選擇"}</div>
-          <span className="driver-upload-button">選擇圖片</span>
-        </label>
-        <button className="android-secondary-btn" disabled={!proofFile || actionBusy === "proof"} onClick={uploadProof} type="button">{actionBusy === "proof" ? "上傳中..." : proofPreviewUrl ? "重新上傳照片" : "上傳送達照片"}</button>
+        <input accept="image/*" capture="environment" onChange={handleProofInputChange} ref={proofInputRef} type="file" hidden />
+        <button className="android-secondary-btn" disabled={Boolean(actionBusy)} onClick={handleManualUploadClick} type="button">{actionBusy === "proof" ? "上傳中..." : proofPreviewUrl ? "重新上傳照片" : "上傳送達照片"}</button>
       </section>
     </div>
   );
