@@ -1,7 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+
+function prettyFileName(file: File | null) {
+  if (!file) return "尚未選擇";
+  if (file.name.length <= 18) return file.name;
+  return `${file.name.slice(0, 8)}...${file.name.slice(-8)}`;
+}
 
 export function DriverRegisterForm() {
   const router = useRouter();
@@ -13,6 +19,8 @@ export function DriverRegisterForm() {
   const [drivingLicence, setDrivingLicence] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const uploadCount = useMemo(() => [selfie, macauId, drivingLicence].filter(Boolean).length, [selfie, macauId, drivingLicence]);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,20 +53,63 @@ export function DriverRegisterForm() {
   }
 
   return (
-    <div className="driver-auth-card card stack gap-4">
+    <div className="driver-auth-card android-card stack gap-5">
+      <div className="driver-brand-chip">車手註冊</div>
       <div className="stack gap-2">
-        <h1 className="driver-screen-title">車手註冊</h1>
-        <p className="muted">填寫基本資料並上傳三張文件，送出後等待後台審核。</p>
+        <h1 className="driver-screen-title">建立騎手帳號</h1>
+        <p className="muted">填寫基本資料並上傳三張文件，送出後等待後台審核。審核通過後即可直接在網頁接單。</p>
       </div>
+
+      <div className="android-soft-panel stack gap-1">
+        <div className="driver-soft-label">上傳進度</div>
+        <div className="driver-upload-progress">已完成 {uploadCount} / 3</div>
+      </div>
+
       <form className="stack gap-4" onSubmit={onSubmit}>
-        <label className="driver-field"><span>姓名</span><input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="請輸入真實姓名" /></label>
-        <label className="driver-field"><span>電話號碼</span><input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="例如 66668888" /></label>
-        <label className="driver-field"><span>PIN</span><input type="password" value={pin} onChange={(event) => setPin(event.target.value)} placeholder="4 位數字" /></label>
-        <label className="driver-field"><span>自拍照</span><input accept="image/*" capture="user" type="file" onChange={(event) => setSelfie(event.target.files?.[0] ?? null)} /><div className="driver-file-hint">請保持正面清晰可見。</div></label>
-        <label className="driver-field"><span>澳門身份證</span><input accept="image/*" capture="environment" type="file" onChange={(event) => setMacauId(event.target.files?.[0] ?? null)} /><div className="driver-file-hint">請上傳完整正面照片。</div></label>
-        <label className="driver-field"><span>駕駛執照</span><input accept="image/*" capture="environment" type="file" onChange={(event) => setDrivingLicence(event.target.files?.[0] ?? null)} /><div className="driver-file-hint">請上傳有效的駕駛執照。</div></label>
+        <label className="driver-field modern-field">
+          <span>姓名</span>
+          <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="請輸入真實姓名" />
+        </label>
+        <label className="driver-field modern-field">
+          <span>電話號碼</span>
+          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="例如 66668888" />
+        </label>
+        <label className="driver-field modern-field">
+          <span>PIN</span>
+          <input type="password" value={pin} onChange={(event) => setPin(event.target.value)} placeholder="請輸入 4 位數字" />
+        </label>
+
+        <div className="driver-upload-grid">
+          <label className={selfie ? "driver-upload-card uploaded" : "driver-upload-card"}>
+            <input accept="image/*" capture="user" type="file" onChange={(event) => setSelfie(event.target.files?.[0] ?? null)} hidden />
+            <div className="driver-upload-title">自拍照</div>
+            <div className="driver-upload-copy">請保持正面清晰可見</div>
+            <div className="driver-upload-file">{prettyFileName(selfie)}</div>
+            <span className="driver-upload-button">選擇圖片</span>
+          </label>
+
+          <label className={macauId ? "driver-upload-card uploaded" : "driver-upload-card"}>
+            <input accept="image/*" capture="environment" type="file" onChange={(event) => setMacauId(event.target.files?.[0] ?? null)} hidden />
+            <div className="driver-upload-title">澳門身份證</div>
+            <div className="driver-upload-copy">請上傳完整正面照片</div>
+            <div className="driver-upload-file">{prettyFileName(macauId)}</div>
+            <span className="driver-upload-button">選擇圖片</span>
+          </label>
+
+          <label className={drivingLicence ? "driver-upload-card uploaded" : "driver-upload-card"}>
+            <input accept="image/*" capture="environment" type="file" onChange={(event) => setDrivingLicence(event.target.files?.[0] ?? null)} hidden />
+            <div className="driver-upload-title">駕駛執照</div>
+            <div className="driver-upload-copy">請上傳有效的駕駛執照</div>
+            <div className="driver-upload-file">{prettyFileName(drivingLicence)}</div>
+            <span className="driver-upload-button">選擇圖片</span>
+          </label>
+        </div>
+
         {message ? <div className="error">{message}</div> : null}
-        <button className="btn-primary" disabled={submitting} type="submit">{submitting ? "提交中..." : "提交審核"}</button>
+
+        <button className="android-primary-btn" disabled={submitting} type="submit">
+          {submitting ? "提交中..." : "提交審核"}
+        </button>
       </form>
     </div>
   );

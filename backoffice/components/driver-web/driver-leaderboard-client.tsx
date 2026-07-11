@@ -14,19 +14,20 @@ export function DriverLeaderboardClient() {
       .catch(() => undefined);
   }, []);
 
-  if (!data) return <div className="card">載入排行榜中...</div>;
+  if (!data) return <div className="android-card">載入排行榜中...</div>;
 
   return (
     <div className="stack gap-4">
-      <section className="card stack gap-2">
-        <h1 className="driver-screen-title">本週排行榜</h1>
-        <div className="muted">我的名次：{data.me.rank ?? '-'} · 完成 {data.me.completedCount} 單</div>
+      <section className="android-summary-hero stack gap-3">
+        <div className="driver-brand-chip">排行榜</div>
+        <div className="driver-hero-heading">本週排名</div>
+        <div className="driver-hero-note">我的名次：{data.me.rank ?? '-'} · 完成 {data.me.completedCount} 單</div>
       </section>
       <section className="stack gap-3">
-        {data.top.length === 0 ? <div className="card muted">本週暫無排行資料。</div> : data.top.map((item) => (
-          <article className="card driver-inline-between" key={`${item.rank}-${item.name}`}>
+        {data.top.length === 0 ? <div className="android-card muted">本週暫無排行資料。</div> : data.top.map((item) => (
+          <article className="android-card driver-inline-between" key={`${item.rank}-${item.name}`}>
             <div><strong>#{item.rank}</strong> {item.name}</div>
-            <div>{item.completedCount} 單</div>
+            <div className="driver-amount">{item.completedCount} 單</div>
           </article>
         ))}
       </section>

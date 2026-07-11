@@ -47,7 +47,7 @@ export function DriverNotificationsClient() {
 
   async function subscribePush() {
     if (!("serviceWorker" in navigator) || !config?.publicKey) {
-      setMessage("未配置 Web Push 公鑰，暫時不能正式註冊。")
+      setMessage("未配置 Web Push 公鑰，暫時不能正式註冊。");
       return;
     }
     setBusy(true);
@@ -66,9 +66,9 @@ export function DriverNotificationsClient() {
       });
       if (!response.ok) throw new Error("subscribe_failed");
       setSubscribed(true);
-      setMessage("已完成此裝置的通知註冊。")
+      setMessage("已完成此裝置的通知註冊。");
     } catch {
-      setMessage("通知註冊失敗，請檢查瀏覽器支援與權限。")
+      setMessage("通知註冊失敗，請檢查瀏覽器支援與權限。");
     } finally {
       setBusy(false);
     }
@@ -90,9 +90,9 @@ export function DriverNotificationsClient() {
         await subscription.unsubscribe();
       }
       setSubscribed(false);
-      setMessage("已取消此裝置的通知註冊。")
+      setMessage("已取消此裝置的通知註冊。");
     } catch {
-      setMessage("取消通知註冊失敗。")
+      setMessage("取消通知註冊失敗。");
     } finally {
       setBusy(false);
     }
@@ -109,25 +109,26 @@ export function DriverNotificationsClient() {
 
   return (
     <div className="stack gap-4">
-      <section className="card stack gap-3">
-        <h1 className="driver-screen-title">通知</h1>
-        <div className="muted">通知權限：{permission}</div>
-        <div className="muted">Service Worker：{swReady ? "已註冊" : "未註冊"}</div>
-        <div className="muted">Web Push 公鑰：{config?.vapidPublicKeyConfigured ? "已配置" : "未配置"}</div>
-        <div className="muted">裝置註冊：{subscribed ? "已註冊" : "未註冊"}</div>
-        {message ? <div className="muted">{message}</div> : null}
-        <div className="driver-action-grid">
-          <button className="btn-primary" onClick={requestPermission} type="button">開啟通知權限</button>
-          <button className="btn-secondary" disabled={permission !== "granted" || busy || !config?.vapidPublicKeyConfigured} onClick={subscribePush} type="button">{busy ? "處理中..." : "註冊此裝置通知"}</button>
-          <button className="btn-secondary" disabled={busy || !subscribed} onClick={unsubscribePush} type="button">取消此裝置通知</button>
-          <button className="btn-secondary" disabled={permission !== "granted"} onClick={sendTest} type="button">發送測試通知</button>
-        </div>
+      <section className="android-summary-hero stack gap-3">
+        <div className="driver-brand-chip">通知</div>
+        <div className="driver-hero-heading">把通知打開</div>
+        <div className="driver-hero-note">工作時保持頁面開啟，通知與聲音提示會更穩定。</div>
       </section>
-      <section className="card stack gap-2">
-        <div className="driver-section-title">使用建議</div>
-        <div>工作時請保持頁面開啟，並允許通知與聲音提示。</div>
-        <div>iPhone 建議從 Safari 加到主畫面後使用。</div>
-        <div>若你要正式接新單推播，部署環境還需要設定 `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY`。</div>
+
+      <section className="android-card stack gap-3">
+        <div className="driver-status-grid">
+          <div className="android-soft-panel"><div className="driver-soft-label">通知權限</div><div>{permission}</div></div>
+          <div className="android-soft-panel"><div className="driver-soft-label">Service Worker</div><div>{swReady ? "已註冊" : "未註冊"}</div></div>
+          <div className="android-soft-panel"><div className="driver-soft-label">Web Push 公鑰</div><div>{config?.vapidPublicKeyConfigured ? "已配置" : "未配置"}</div></div>
+          <div className="android-soft-panel"><div className="driver-soft-label">裝置註冊</div><div>{subscribed ? "已註冊" : "未註冊"}</div></div>
+        </div>
+        {message ? <div className="android-soft-panel">{message}</div> : null}
+        <div className="driver-action-grid">
+          <button className="android-primary-btn" onClick={requestPermission} type="button">開啟通知權限</button>
+          <button className="android-secondary-btn" disabled={permission !== "granted" || busy || !config?.vapidPublicKeyConfigured} onClick={subscribePush} type="button">{busy ? "處理中..." : "註冊此裝置通知"}</button>
+          <button className="android-secondary-btn" disabled={busy || !subscribed} onClick={unsubscribePush} type="button">取消此裝置通知</button>
+          <button className="android-secondary-btn" disabled={permission !== "granted"} onClick={sendTest} type="button">發送測試通知</button>
+        </div>
       </section>
     </div>
   );

@@ -3,7 +3,16 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type OrderSummary = { id: string; externalOrderId: string; status: string; storeName: string; customerName: string; customerAddress: string; amountMop: number; createdAt: string; };
+type OrderSummary = {
+  id: string;
+  externalOrderId: string;
+  status: string;
+  storeName: string;
+  customerName: string;
+  customerAddress: string;
+  amountMop: number;
+  createdAt: string;
+};
 
 export function DriverOrdersClient() {
   const [orders, setOrders] = useState<OrderSummary[]>([]);
@@ -29,20 +38,39 @@ export function DriverOrdersClient() {
     return () => window.clearInterval(timer);
   }, []);
 
-  if (loading) return <div className="card">載入進行中訂單...</div>;
-  if (error) return <div className="card error">{error}</div>;
+  if (loading) return <div className="android-card">載入進行中訂單...</div>;
+  if (error) return <div className="android-card error">{error}</div>;
 
   return (
     <div className="stack gap-3">
-      <div className="driver-inline-between"><div className="driver-section-title">進行中訂單</div><button className="btn btn-secondary" onClick={load} type="button">刷新</button></div>
-      {orders.length === 0 ? <div className="card muted">目前沒有進行中訂單。</div> : orders.map((order) => (
-        <article className="android-card stack gap-3" key={order.id}>
-          <div className="driver-inline-between"><div className="stack gap-1"><strong className="driver-order-title">{order.storeName}</strong><div className="muted">訂單編號：{order.externalOrderId}</div></div><span className="driver-badge">{order.status}</span></div>
-          <div className="android-soft-panel"><div className="driver-soft-label">客戶送達點</div><div>{order.customerName} · {order.customerAddress}</div></div>
-          <div className="driver-inline-between"><span>MOP {order.amountMop.toFixed(1)}</span><span>{order.createdAt}</span></div>
-          <Link className="btn btn-secondary" href={`/driver/orders/${order.id}`}>打開訂單</Link>
-        </article>
-      ))}
+      <div className="driver-inline-between">
+        <div className="driver-screen-title">進行中訂單</div>
+        <button className="android-secondary-btn small" onClick={load} type="button">刷新</button>
+      </div>
+      {orders.length === 0 ? (
+        <div className="android-card muted">目前沒有進行中訂單。</div>
+      ) : (
+        orders.map((order) => (
+          <article className="android-card stack gap-3" key={order.id}>
+            <div className="driver-inline-between">
+              <div className="stack gap-1">
+                <strong className="driver-order-title">{order.storeName}</strong>
+                <div className="muted">訂單編號：{order.externalOrderId}</div>
+              </div>
+              <span className="driver-badge">{order.status}</span>
+            </div>
+            <div className="android-soft-panel">
+              <div className="driver-soft-label">客戶送達點</div>
+              <div>{order.customerName} · {order.customerAddress}</div>
+            </div>
+            <div className="driver-inline-between">
+              <span className="driver-amount">MOP {order.amountMop.toFixed(1)}</span>
+              <span className="muted">{order.createdAt}</span>
+            </div>
+            <Link className="android-primary-btn small no-underline" href={`/driver/orders/${order.id}`}>打開訂單</Link>
+          </article>
+        ))
+      )}
     </div>
   );
 }

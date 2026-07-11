@@ -17,7 +17,11 @@ export function DriverLoginForm() {
     setSubmitting(true);
     setMessage(null);
     try {
-      const response = await fetch("/api/driver/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone, pin }) });
+      const response = await fetch("/api/driver/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, pin })
+      });
       const payload = (await response.json()) as { message?: string; driver?: { approvalStatus?: string } };
       if (!response.ok) {
         setMessage(payload.message ?? "登入失敗，請稍後再試。");
@@ -37,19 +41,32 @@ export function DriverLoginForm() {
   }
 
   return (
-    <div className="driver-auth-card android-card stack gap-4">
-      <div className="driver-brand-chip">騎手登入</div>
+    <div className="driver-auth-card android-card stack gap-5">
+      <div className="driver-brand-chip">車手登入</div>
       <div className="stack gap-2">
         <h1 className="driver-screen-title">會員配送騎手</h1>
-        <p className="muted">使用電話登入，接單、導航、上傳送達證明與異常回報都會直接連接真實資料。</p>
+        <p className="muted">保持頁面開啟即可接單。登入後會直接同步你的接單、送達證明與收入資料。</p>
       </div>
+
       <form className="stack gap-4" onSubmit={onSubmit}>
-        <label className="driver-field"><span>電話號碼</span><input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="例如 66668888" /></label>
-        <label className="driver-field"><span>密碼（4 位數字）</span><input value={pin} onChange={(event) => setPin(event.target.value)} placeholder="請輸入 4 位數字" type="password" /></label>
+        <label className="driver-field modern-field">
+          <span>電話號碼</span>
+          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="例如 66668888" />
+        </label>
+        <label className="driver-field modern-field">
+          <span>密碼（4 位數字）</span>
+          <input value={pin} onChange={(event) => setPin(event.target.value)} placeholder="請輸入 4 位數字" type="password" />
+        </label>
+
         {message ? <div className="error">{message}</div> : null}
-        <button className="btn-primary" disabled={submitting} type="submit">{submitting ? "登入中..." : "登入"}</button>
+
+        <button className="android-primary-btn" disabled={submitting} type="submit">
+          {submitting ? "登入中..." : "登入"}
+        </button>
       </form>
-      <div className="driver-help-copy">若你剛完成註冊，帳號需等待後台審核通過後才能正式接單。</div>
+
+      <div className="driver-help-copy">如果你剛完成註冊，需等待後台審核通過後才能正式接單。</div>
+
       <div className="driver-auth-actions-row">
         <Link className="android-outline-link" href="/driver/register">立即註冊</Link>
         <Link className="android-outline-link" href="/driver/pending">查看審核</Link>
