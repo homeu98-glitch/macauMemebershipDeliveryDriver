@@ -1531,3 +1531,218 @@ select {
     flex-wrap: nowrap;
   }
 }
+
+/* overflow/web-nav/install/push refinements */
+
+
+html, body {
+  overflow-x: hidden;
+}
+
+.driver-mobile-shell,
+.driver-mobile-main,
+.driver-home-page,
+.order-card-android,
+.android-soft-panel,
+.driver-filter-row,
+.web-floating-nav {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.driver-mobile-shell {
+  width: min(100vw, 460px);
+  padding: 12px 12px 112px;
+}
+
+.web-floating-nav {
+  position: fixed;
+  z-index: 120;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100vw - 20px), 460px);
+  max-width: calc(100vw - 20px);
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border-radius: 26px;
+  background: rgba(255, 250, 244, 0.98);
+  box-shadow: 0 12px 32px rgba(32, 24, 14, 0.12);
+  border: 1px solid rgba(219, 204, 176, 0.9);
+  backdrop-filter: blur(14px);
+}
+
+.web-floating-nav .driver-nav-item {
+  min-height: 58px;
+  border-radius: 18px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #5E554D;
+}
+
+.web-floating-nav .driver-nav-item.active {
+  background: #E9DFF2;
+  color: #3F314A;
+}
+
+.driver-install-banner,
+.driver-notice-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: #FFF8E8;
+  border: 1px solid #EEDAA4;
+}
+
+.install-banner-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #2A1A00;
+}
+
+.install-banner-copy,
+.small-copy {
+  font-size: 0.84rem;
+  color: #6C7F93;
+  line-height: 1.4;
+}
+
+.install-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.install-banner-btn,
+.install-banner-close,
+.link-btn {
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.install-banner-btn,
+.link-btn {
+  background: #F1B93A;
+  color: #3B2A00;
+  text-decoration: none;
+}
+
+.install-banner-close {
+  background: transparent;
+  color: #6C7F93;
+}
+
+.driver-filter-row.compact {
+  border-radius: 18px;
+}
+
+.filter-select-card.compact {
+  padding: 10px 14px;
+  gap: 2px;
+}
+
+.filter-select-card.compact .filter-label {
+  font-size: 0.82rem;
+}
+
+.filter-select-card.compact .filter-value {
+  font-size: 0.94rem;
+}
+
+.order-gap-5 {
+  margin-bottom: 5px;
+}
+
+.minw-0 {
+  min-width: 0;
+}
+
+.driver-order-title.compact.tight {
+  font-size: 0.96rem;
+  line-height: 1.28;
+}
+
+.order-subvalue.tight {
+  font-size: 0.88rem;
+  line-height: 1.28;
+}
+
+.money-chip.large.compact {
+  min-width: 96px;
+  min-height: 40px;
+  font-size: 0.88rem;
+  padding: 6px 12px;
+}
+
+.order-address-panel.compact {
+  padding: 12px 13px;
+  gap: 6px;
+}
+
+.address-text.compact {
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.inline-meta-pills.compact {
+  gap: 6px;
+}
+
+.inline-meta-pills.compact .meta-pill {
+  min-height: 26px;
+  padding: 4px 8px;
+  font-size: 0.78rem;
+}
+
+.order-bottom-meta.compact {
+  font-size: 0.84rem;
+}
+
+.action-buttons-row.compact-row {
+  gap: 10px;
+  align-items: stretch;
+}
+
+.nav-btn-large.compact,
+.order-accept-btn.compact {
+  width: auto;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 46px !important;
+  font-size: 0.92rem !important;
+  padding: 10px 12px !important;
+}
+
+.filter-modal-list.compact-list {
+  gap: 8px;
+}
+
+.filter-check-row.compact {
+  padding: 10px 12px;
+}
+
+@media (max-width: 480px) {
+  .driver-install-banner,
+  .driver-notice-banner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .install-banner-actions {
+    width: 100%;
+  }
+
+  .install-banner-btn,
+  .install-banner-close,
+  .link-btn {
+    flex: 1;
+    text-align: center;
+  }
+}

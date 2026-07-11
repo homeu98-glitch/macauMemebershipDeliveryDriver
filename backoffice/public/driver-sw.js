@@ -18,7 +18,10 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      data: { url: payload.url || '/driver/home' }
+      data: { url: payload.url || '/driver/home' },
+      tag: 'driver-dispatch',
+      renotify: true,
+      vibrate: [140, 70, 140]
     })
   );
 });

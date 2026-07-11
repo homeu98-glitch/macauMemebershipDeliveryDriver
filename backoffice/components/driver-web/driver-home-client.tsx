@@ -1,9 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-
-import { formatDistanceKmFromCurrent } from "@/lib/driver-web-data";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type OrderSummary = {
   id: string;
@@ -44,6 +42,31 @@ type Dashboard = {
 
 type FilterModalType = "pickup" | "destination" | null;
 
+type NotificationCheck = {
+  permission: NotificationPermission | "unsupported";
+  subscribed: boolean;
+  vapidConfigured: boolean;
+};
+
+function haversineKm(startLat: number, startLng: number, endLat: number, endLng: number) {
+  if (!startLat || !startLng || !endLat || !endLng) return null;
+  const toRad = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(endLat - startLat);
+  const dLng = toRad(endLng - startLng);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(startLat)) * Math.cos(toRad(endLat)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.asin(Math.sqrt(a));
+  return Math.round(earthRadiusKm * c * 10) / 10;
+}
+
+function formatDistanceKmFromCurrent(current: { lat: number; lng: number } | null, order: OrderSummary) {
+  if (!current) return null;
+  const km = haversineKm(current.lat, current.lng, order.storeLatitude, order.storeLongitude);
+  return km ? `${km.toFixed(1)} 公里到商戶` : null;
+}
+
 function buildGoogleNavUrl(order: OrderSummary) {
   if (order.storeLatitude && order.storeLongitude) {
     return `https://www.google.com/maps/dir/?api=1&destination=${order.storeLatitude},${order.storeLongitude}&travelmode=driving`;
@@ -74,6 +97,10 @@ export function DriverHomeClient() {
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [navOrder, setNavOrder] = useState<OrderSummary | null>(null);
   const [filterModal, setFilterModal] = useState<FilterModalType>(null);
+  const [notificationCheck, setNotificationCheck] = useState<NotificationCheck>({ permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission, subscribed: false, vapidConfigured: false });
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const previousOrderIdsRef = useRef<string[]>([]);
 
   async function load() {
     try {
@@ -103,6 +130,84 @@ export function DriverHomeClient() {
     );
   }, []);
 
+  useEffect(() => {
+    const unlockAudio = async () => {
+      if (audioContextRef.current) {
+        await audioContextRef.current.resume().catch(() => undefined);
+        setAudioUnlocked(true);
+        return;
+      }
+      const AudioCtx = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
+      await ctx.resume().catch(() => undefined);
+      setAudioUnlocked(true);
+    };
+
+    window.addEventListener("pointerdown", unlockAudio, { once: true });
+    return () => window.removeEventListener("pointerdown", unlockAudio);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/driver/notifications/config", { cache: "no-store" })
+      .then((res) => res.json())
+      .then(async (payload) => {
+        let subscribed = false;
+        if ("serviceWorker" in navigator) {
+          const reg = await navigator.serviceWorker.register("/driver-sw.js");
+          subscribed = Boolean(await reg.pushManager.getSubscription());
+        }
+        setNotificationCheck({
+          permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission,
+          subscribed,
+          vapidConfigured: Boolean((payload as { vapidPublicKeyConfigured?: boolean }).vapidPublicKeyConfigured)
+        });
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    const currentIds = data.availableOrders.map((item) => item.id);
+    const previousIds = previousOrderIdsRef.current;
+    if (previousIds.length > 0) {
+      const newOrders = data.availableOrders.filter((item) => !previousIds.includes(item.id));
+      if (newOrders.length > 0) {
+        const firstNew = newOrders[0];
+        if (audioContextRef.current && audioUnlocked) {
+          const now = audioContextRef.current.currentTime;
+          const toneA = audioContextRef.current.createOscillator();
+          const gainA = audioContextRef.current.createGain();
+          toneA.type = "sine";
+          toneA.frequency.setValueAtTime(880, now);
+          gainA.gain.setValueAtTime(0.0001, now);
+          gainA.gain.exponentialRampToValueAtTime(0.14, now + 0.02);
+          gainA.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+          toneA.connect(gainA).connect(audioContextRef.current.destination);
+          toneA.start(now);
+          toneA.stop(now + 0.22);
+
+          const toneB = audioContextRef.current.createOscillator();
+          const gainB = audioContextRef.current.createGain();
+          toneB.type = "sine";
+          toneB.frequency.setValueAtTime(988, now + 0.25);
+          gainB.gain.setValueAtTime(0.0001, now + 0.25);
+          gainB.gain.exponentialRampToValueAtTime(0.18, now + 0.27);
+          gainB.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
+          toneB.connect(gainB).connect(audioContextRef.current.destination);
+          toneB.start(now + 0.25);
+          toneB.stop(now + 0.5);
+        }
+
+        if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.visibilityState === "visible") {
+          new Notification("會員配送車手", { body: `${firstNew.storeName} 有新的可接訂單` });
+        }
+      }
+    }
+    previousOrderIdsRef.current = currentIds;
+  }, [audioUnlocked, data]);
+
   async function toggleAvailability() {
     if (!data || busy) return;
     const previous = data.availability;
@@ -116,7 +221,7 @@ export function DriverHomeClient() {
         body: JSON.stringify({ availability: next })
       });
       if (!response.ok) throw new Error("availability_failed");
-      void load();
+      await load();
     } catch {
       setData((current) => (current ? { ...current, availability: previous } : current));
       window.alert("更新上下線狀態失敗。");
@@ -167,7 +272,23 @@ export function DriverHomeClient() {
 
   return (
     <>
-      <div className="stack gap-4">
+      <div className="stack gap-4 driver-home-page">
+        {(notificationCheck.permission !== "granted" || !notificationCheck.subscribed || !notificationCheck.vapidConfigured) ? (
+          <section className="driver-notice-banner">
+            <div className="stack gap-1 grow">
+              <div className="install-banner-title">推送提醒未完全開啟</div>
+              <div className="install-banner-copy">
+                {notificationCheck.permission !== "granted"
+                  ? "目前還沒開通知權限。"
+                  : !notificationCheck.vapidConfigured
+                    ? "Web Push 公鑰尚未配置。"
+                    : "此裝置尚未註冊推送。"}
+              </div>
+            </div>
+            <Link className="install-banner-btn link-btn" href="/driver/notifications">去開啟</Link>
+          </section>
+        ) : null}
+
         <section className="android-status-panel">
           <div className="stack gap-1 grow">
             <div className="status-panel-title">{data.availability === "online" ? "上線" : "離線"}</div>
@@ -179,21 +300,21 @@ export function DriverHomeClient() {
           </label>
         </section>
 
-        <section className="stack gap-3">
+        <section className="stack gap-2">
           <div className="driver-inline-between section-heading-row">
             <div className="stack gap-1">
               <div className="driver-screen-title small">可接訂單</div>
-              <div className="muted">向下拉即可即時刷新</div>
+              <div className="muted small-copy">向下拉即可即時刷新</div>
             </div>
             <div className="driver-count-chip">{filteredOrders.length} 張</div>
           </div>
 
-          <div className="driver-filter-row">
-            <button className="filter-select-card" onClick={() => setFilterModal("pickup")} type="button">
+          <div className="driver-filter-row compact">
+            <button className="filter-select-card compact" onClick={() => setFilterModal("pickup")} type="button">
               <span className="filter-label">取貨地區</span>
               <span className="filter-value">{formatFilterValue(pickupDistricts)}</span>
             </button>
-            <button className="filter-select-card" onClick={() => setFilterModal("destination")} type="button">
+            <button className="filter-select-card compact" onClick={() => setFilterModal("destination")} type="button">
               <span className="filter-label">送達地區</span>
               <span className="filter-value">{formatFilterValue(destinationDistricts)}</span>
             </button>
@@ -206,37 +327,36 @@ export function DriverHomeClient() {
           filteredOrders.map((order) => {
             const distanceLabel = formatDistanceKmFromCurrent(driverLocation, order) ?? "--";
             return (
-              <article className="android-card order-card-android stack gap-3" key={order.id}>
+              <article className="android-card order-card-android stack gap-3 order-gap-5" key={order.id}>
                 <div className="driver-inline-between align-start">
-                  <div className="stack gap-1 grow">
-                    <strong className="driver-order-title compact">{order.storeName}</strong>
-                    <div className="order-subline">交易編號</div>
-                    <div className="order-subvalue">{order.transactionCode ?? order.externalOrderId}</div>
-                    <div className="order-subvalue">已派送 {order.totalSentOrders} 單</div>
-                    <div className="order-subvalue">送達時間 {order.deliveryDeadlineText}</div>
-                    <div className="order-subvalue">發單日期 {order.publishedAt}</div>
+                  <div className="stack gap-1 grow minw-0">
+                    <strong className="driver-order-title compact tight">{order.storeName}</strong>
+                    <div className="order-subvalue tight">交易編號 {order.transactionCode ?? order.externalOrderId}</div>
+                    <div className="order-subvalue tight">已派送 {order.totalSentOrders} 單</div>
+                    <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
+                    <div className="order-subvalue tight">發單日期 {order.publishedAt}</div>
                   </div>
-                  <div className={order.isUrgent ? "money-chip urgent large" : "money-chip large"}>MOP {order.amountMop.toFixed(1)}</div>
+                  <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
                 </div>
 
-                <div className="android-soft-panel order-address-panel">
+                <div className="android-soft-panel order-address-panel compact">
                   <div className="driver-soft-label">商戶地址</div>
-                  <div className="address-text">{order.storeAddress}</div>
+                  <div className="address-text compact">{order.storeAddress}</div>
                   <div className="driver-soft-label">客戶地址</div>
-                  <div className="address-text">{order.customerAddress}</div>
+                  <div className="address-text compact">{order.customerAddress}</div>
                 </div>
 
-                <div className="inline-meta-pills">
+                <div className="inline-meta-pills compact">
                   <span className="meta-pill green">{order.paymentTag}</span>
                   <span className="meta-pill">取貨區：{order.pickupDistrict ?? "-"}</span>
                   <span className="meta-pill">送達區：{order.destinationDistrict ?? "-"}</span>
                 </div>
 
-                <div className="order-bottom-meta">{distanceLabel} 到商戶 · {order.deliveryDeadlineText.replace(/.*\s/, "") || order.promisedAt || "--"}</div>
+                <div className="order-bottom-meta compact">{distanceLabel} · {order.deliveryDeadlineText.replace(/.*\s/, "") || order.promisedAt || "--"}</div>
 
-                <div className="driver-inline-between action-buttons-row">
-                  <button className="android-outline-link as-button nav-btn-large" onClick={() => setNavOrder(order)} type="button">前往商戶</button>
-                  <button className="android-primary-btn order-accept-btn" onClick={() => acceptOrder(order.id)} type="button">{data.availability === "online" ? "接單" : "請先上線"}</button>
+                <div className="driver-inline-between action-buttons-row compact-row">
+                  <button className="android-outline-link as-button nav-btn-large compact" onClick={() => setNavOrder(order)} type="button">前往商戶</button>
+                  <button className="android-primary-btn order-accept-btn compact" onClick={() => acceptOrder(order.id)} type="button">{data.availability === "online" ? "接單" : "請先上線"}</button>
                 </div>
               </article>
             );
@@ -248,9 +368,9 @@ export function DriverHomeClient() {
         <div className="driver-modal-backdrop" onClick={() => setFilterModal(null)}>
           <div className="driver-modal-card stack gap-3" onClick={(event) => event.stopPropagation()}>
             <div className="driver-screen-title small">{filterModal === "pickup" ? "取貨地區" : "送達地區"}</div>
-            <div className="filter-modal-list">
+            <div className="filter-modal-list compact-list">
               {filterOptions.map((item) => (
-                <label className="filter-check-row" key={item}>
+                <label className="filter-check-row compact" key={item}>
                   <input type="checkbox" checked={selectedOptions.includes(item)} onChange={() => toggleFilterValue(filterModal, item)} />
                   <span>{item}</span>
                 </label>
