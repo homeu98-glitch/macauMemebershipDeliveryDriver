@@ -10,7 +10,18 @@ type Dashboard = {
   availability: string;
   approvalStatus: string;
   availableOrders: Array<{
-    id: string; externalOrderId: string; status: string; storeName: string; storeAddress: string; customerName: string; customerAddress: string; amountMop: number; createdAt: string; promisedAt: string | null; etaMinutes: number; isUrgent: boolean;
+    id: string;
+    externalOrderId: string;
+    status: string;
+    storeName: string;
+    storeAddress: string;
+    customerName: string;
+    customerAddress: string;
+    amountMop: number;
+    createdAt: string;
+    promisedAt: string | null;
+    etaMinutes: number;
+    isUrgent: boolean;
   }>;
 };
 
@@ -44,7 +55,11 @@ export function DriverHomeClient() {
     setBusy(true);
     try {
       const next = data.availability === "online" ? "offline" : "online";
-      const response = await fetch("/api/driver/availability", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ availability: next }) });
+      const response = await fetch("/api/driver/availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ availability: next })
+      });
       if (!response.ok) throw new Error("availability_failed");
       await load();
     } catch {
@@ -56,7 +71,11 @@ export function DriverHomeClient() {
 
   async function acceptOrder(orderId: string) {
     try {
-      const response = await fetch(`/api/driver/orders/${orderId}/status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "accepted" }) });
+      const response = await fetch(`/api/driver/orders/${orderId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event: "accepted" })
+      });
       if (!response.ok) throw new Error("accept_failed");
       window.location.href = `/driver/orders/${orderId}`;
     } catch {
@@ -74,7 +93,9 @@ export function DriverHomeClient() {
         <div className="stack gap-1 grow">
           <div className="status-panel-title">接單狀態</div>
           <div className="status-panel-value">{data.availability === "online" ? "上線中" : "離線中"}</div>
-          <div className="status-panel-note">{data.availability === "online" ? "保持上線即可即時看到新工單。" : "切換上線後才可以開始接單。"}</div>
+          <div className="status-panel-note">
+            {data.availability === "online" ? "保持上線即可即時看到新工單。" : "切換上線後才可以開始接單。"}
+          </div>
         </div>
         <label className="driver-switch-wrap">
           <input type="checkbox" checked={data.availability === "online"} onChange={toggleAvailability} disabled={busy} />
@@ -91,12 +112,12 @@ export function DriverHomeClient() {
       </section>
 
       {data.availableOrders.length === 0 ? (
-        <div className="android-card muted">暫時還沒有新單</div>
+        <div className="android-card muted">目前沒有可接訂單</div>
       ) : (
         data.availableOrders.map((order) => (
           <article className="android-card driver-order-card stack gap-3" key={order.id}>
-            <div className="driver-inline-between">
-              <div className="stack gap-1">
+            <div className="driver-inline-between align-start">
+              <div className="stack gap-1 grow">
                 {order.isUrgent ? <div className="urgent-text">急單</div> : null}
                 <strong className="driver-order-title">{order.storeName}</strong>
                 <div className="muted">交易編號 {order.externalOrderId}</div>
@@ -104,15 +125,19 @@ export function DriverHomeClient() {
               </div>
               <div className={order.isUrgent ? "money-chip urgent" : "money-chip"}>MOP {order.amountMop.toFixed(1)}</div>
             </div>
+
             <div className="android-soft-panel">
               <div className="driver-soft-label">商戶地址</div>
               <div>{order.storeAddress}</div>
               <div className="driver-soft-label">客戶地址</div>
               <div>{order.customerAddress}</div>
             </div>
+
             <div className="driver-inline-between mobile-actions-row">
               <Link className="android-outline-link" href={`/driver/orders/${order.id}`}>前往商戶</Link>
-              <button className="android-primary-btn small" onClick={() => acceptOrder(order.id)} type="button">{data.availability === "online" ? "接單" : "請先上線"}</button>
+              <button className="android-primary-btn small" onClick={() => acceptOrder(order.id)} type="button">
+                {data.availability === "online" ? "接單" : "請先上線"}
+              </button>
             </div>
           </article>
         ))
