@@ -796,6 +796,40 @@ useEffect(() => {
 }
 
 export function RidersTable({ riders }: { riders: Rider[] }) {
+  const router = useRouter();
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function handleRiderAction(id: string, action: 'suspend' | 'activate' | 'delete') {
+    const confirmed = window.confirm(
+      action === 'delete'
+        ? '確定要刪除此騎手？此操作會連同登入帳號一起刪除，且無法復原。'
+        : action === 'suspend'
+          ? '確定要停用此騎手？停用後將不能正常登入接單。'
+          : '確定要恢復此騎手為可用狀態？'
+    );
+    if (!confirmed) return;
+
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/riders/${id}/manage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { message?: string };
+        throw new Error(payload.message ?? '更新失敗');
+      }
+
+      router.refresh();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : '更新失敗');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="card">
       <div className="card-header">
@@ -818,6 +852,7 @@ export function RidersTable({ riders }: { riders: Rider[] }) {
                 <th>審核</th>
                 <th>評分</th>
                 <th>完成訂單</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -841,6 +876,37 @@ export function RidersTable({ riders }: { riders: Rider[] }) {
                   </td>
                   <td>{rider.rating > 0 ? `${rider.rating.toFixed(1)} / 5.0` : "尚無"}</td>
                   <td>{rider.completedOrders}</td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {rider.status === 'suspended' ? (
+                        <button
+                          className="btn btn-secondary"
+                          disabled={busyId === rider.id}
+                          onClick={() => handleRiderAction(rider.id, 'activate')}
+                          type="button"
+                        >
+                          {busyId === rider.id ? '處理中...' : '恢復'}
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-secondary"
+                          disabled={busyId === rider.id}
+                          onClick={() => handleRiderAction(rider.id, 'suspend')}
+                          type="button"
+                        >
+                          {busyId === rider.id ? '處理中...' : '停用'}
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-danger"
+                        disabled={busyId === rider.id}
+                        onClick={() => handleRiderAction(rider.id, 'delete')}
+                        type="button"
+                      >
+                        {busyId === rider.id ? '處理中...' : '刪除'}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

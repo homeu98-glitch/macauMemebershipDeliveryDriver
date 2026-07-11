@@ -3038,6 +3038,7 @@ private fun approvalLabel(status: ApprovalStatus): String {
         ApprovalStatus.PENDING_APPROVAL -> "待審核"
         ApprovalStatus.APPROVED -> "已核准"
         ApprovalStatus.REJECTED -> "已拒絕"
+        ApprovalStatus.SUSPENDED -> "已停用"
     }
 }
 

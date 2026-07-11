@@ -48,7 +48,7 @@ data class DriverProfile(
     val availability: DriverAvailability,
 )
 
-enum class ApprovalStatus { PENDING_APPROVAL, APPROVED, REJECTED }
+enum class ApprovalStatus { PENDING_APPROVAL, APPROVED, REJECTED, SUSPENDED }
 
 data class RegistrationDocument(
     val label: String,

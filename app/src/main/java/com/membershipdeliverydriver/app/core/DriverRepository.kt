@@ -118,6 +118,7 @@ class SupabaseDriverRepository : DriverRepository {
             return@withContext when (profile.approvalStatus) {
                 ApprovalStatus.PENDING_APPROVAL -> ApiResult.Failure("帳號仍在審核中，請等待後台批准。")
                 ApprovalStatus.REJECTED -> ApiResult.Failure("帳號已被拒絕，請聯絡後台重新提交資料。")
+                ApprovalStatus.SUSPENDED -> ApiResult.Failure("帳號已被停用，請聯絡後台。")
                 ApprovalStatus.APPROVED -> {
                     ApiResult.Success(profile)
                 }
@@ -171,6 +172,7 @@ class SupabaseDriverRepository : DriverRepository {
                 }
                 ApprovalStatus.PENDING_APPROVAL -> ApiResult.Failure("帳號仍在審核中，請等待後台批准。")
                 ApprovalStatus.REJECTED -> ApiResult.Failure("帳號已被拒絕，請聯絡後台重新提交資料。")
+                ApprovalStatus.SUSPENDED -> ApiResult.Failure("帳號已被停用，請聯絡後台。")
             }
         } catch (_: Exception) {
             DriverSessionStore.clear(context)
@@ -1706,6 +1708,7 @@ private fun parseNavigationCoordinates(sourcePayload: JSONObject?, key: String):
         val approval = when (optString("approval_status")) {
             "approved" -> ApprovalStatus.APPROVED
             "rejected" -> ApprovalStatus.REJECTED
+            "suspended" -> ApprovalStatus.SUSPENDED
             else -> ApprovalStatus.PENDING_APPROVAL
         }
         val availability = if (optString("availability") == "online") {
