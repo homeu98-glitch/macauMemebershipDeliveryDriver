@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { DriverShell } from "@/components/driver-web/driver-shell";
 
@@ -11,6 +11,10 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "車手工作台"
   }
+};
+
+export const viewport: Viewport = {
+  themeColor: "#f59e0b"
 };
 
 export default function DriverLayout({ children }: { children: React.ReactNode }) {

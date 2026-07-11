@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const SESSION_COOKIE_NAME = "backoffice_session";
 
-const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/logout", "/apkdownload"];
+const PUBLIC_ROUTES = ["/login", "/api/auth/login", "/api/auth/logout", "/apkdownload", "/manifest.webmanifest", "/driver-sw.js"];
 
 function isPublicRoute(pathname: string) {
   return (
@@ -17,7 +17,8 @@ function isPublicRoute(pathname: string) {
     pathname.endsWith(".ico") ||
     pathname.endsWith(".png") ||
     pathname.endsWith(".jpg") ||
-    pathname.endsWith(".svg")
+    pathname.endsWith(".svg") ||
+    pathname.endsWith(".webmanifest")
   );
 }
 
