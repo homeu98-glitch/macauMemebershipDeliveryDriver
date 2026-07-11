@@ -50,7 +50,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
       const response = await fetch(`/api/driver/orders/${orderId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event })
+        body: JSON.stringify({ eventType: event })
       });
       if (!response.ok) throw new Error("status_failed");
       await load();

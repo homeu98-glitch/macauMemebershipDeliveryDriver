@@ -12,11 +12,26 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 const navItems = [
-  { href: "/driver/home", label: "首頁" },
-  { href: "/driver/orders", label: "訂單" },
-  { href: "/driver/completed", label: "完成" },
-  { href: "/driver/profile", label: "我的" }
-];
+  { href: "/driver/home", label: "首頁", icon: "home" },
+  { href: "/driver/orders", label: "訂單", icon: "orders" },
+  { href: "/driver/completed", label: "完成", icon: "completed" },
+  { href: "/driver/profile", label: "我的", icon: "profile" }
+] as const;
+
+function NavIcon({ type, active }: { type: (typeof navItems)[number]["icon"]; active: boolean }) {
+  const stroke = active ? "currentColor" : "currentColor";
+  const common = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", xmlns: "http://www.w3.org/2000/svg" };
+  if (type === "home") {
+    return <svg {...common}><path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1v-9.5Z" stroke={stroke} strokeWidth="2" strokeLinejoin="round" /></svg>;
+  }
+  if (type === "orders") {
+    return <svg {...common}><rect x="4" y="4" width="16" height="16" rx="2" stroke={stroke} strokeWidth="2"/><path d="M8 9h8M8 13h8M8 17h5" stroke={stroke} strokeWidth="2" strokeLinecap="round"/></svg>;
+  }
+  if (type === "completed") {
+    return <svg {...common}><circle cx="12" cy="12" r="8" stroke={stroke} strokeWidth="2"/><path d="m8.5 12 2.2 2.2 4.8-5.2" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+  }
+  return <svg {...common}><circle cx="12" cy="8" r="3.5" stroke={stroke} strokeWidth="2"/><path d="M5 19c1.8-3 4.2-4.5 7-4.5s5.2 1.5 7 4.5" stroke={stroke} strokeWidth="2" strokeLinecap="round"/></svg>;
+}
 
 function isStandaloneMode() {
   if (typeof window === "undefined") return false;
@@ -44,11 +59,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setStandalone(isStandaloneMode());
-
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/driver-sw.js").catch(() => undefined);
-    }
-
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/driver-sw.js").catch(() => undefined);
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPromptEvent(event as BeforeInstallPromptEvent);
@@ -63,7 +74,6 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
         window.localStorage.setItem("driver-pwa-installed-at", new Date().toISOString());
       } catch {}
     };
-
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onAppInstalled);
     window.matchMedia?.("(display-mode: standalone)")?.addEventListener?.("change", onModeChange);
@@ -77,15 +87,10 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (plainMode) return;
     let active = true;
-    fetch("/api/driver/legal", { cache: "no-store" })
-      .then(async (res) => (res.ok ? ((await res.json()) as LegalState) : null))
-      .then((data) => {
-        if (active && data) setLegalState(data);
-      })
-      .catch(() => undefined);
-    return () => {
-      active = false;
-    };
+    fetch("/api/driver/legal", { cache: "no-store" }).then(async (res) => (res.ok ? ((await res.json()) as LegalState) : null)).then((data) => {
+      if (active && data) setLegalState(data);
+    }).catch(() => undefined);
+    return () => { active = false; };
   }, [plainMode, pathname]);
 
   async function acceptLegal() {
@@ -107,14 +112,10 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       const result = await installPromptEvent.userChoice;
       if (result?.outcome === "accepted") {
         setHideInstallBanner(true);
-        try {
-          window.localStorage.setItem("driver-pwa-install-accepted", "1");
-        } catch {}
+        try { window.localStorage.setItem("driver-pwa-install-accepted", "1"); } catch {}
       }
       if (result?.outcome === "dismissed") {
-        try {
-          window.localStorage.setItem("driver-pwa-install-dismissed", "1");
-        } catch {}
+        try { window.localStorage.setItem("driver-pwa-install-dismissed", "1"); } catch {}
       }
       return;
     }
@@ -123,9 +124,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
 
   function dismissInstallBanner() {
     setHideInstallBanner(true);
-    try {
-      window.localStorage.setItem("driver-pwa-install-dismissed", "1");
-    } catch {}
+    try { window.localStorage.setItem("driver-pwa-install-dismissed", "1"); } catch {}
   }
 
   const showInstallBanner = !plainMode && !standalone && !hideInstallBanner;
@@ -152,7 +151,12 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
           <nav className="driver-bottom-nav web-floating-nav" aria-label="Driver navigation">
             {navItems.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return <Link key={item.href} href={item.href} className={active ? "driver-nav-item active" : "driver-nav-item"}><span>{item.label}</span></Link>;
+              return (
+                <Link key={item.href} href={item.href} className={active ? "driver-nav-item active" : "driver-nav-item"}>
+                  <span className="driver-nav-icon"><NavIcon type={item.icon} active={active} /></span>
+                  <span className="driver-nav-label">{item.label}</span>
+                </Link>
+              );
             })}
           </nav>
         </div>

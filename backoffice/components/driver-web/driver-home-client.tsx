@@ -235,9 +235,13 @@ export function DriverHomeClient() {
       const response = await fetch(`/api/driver/orders/${orderId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event: "accepted" })
+        body: JSON.stringify({ eventType: "accepted" })
       });
-      if (!response.ok) throw new Error("accept_failed");
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        window.alert(payload.message ?? "接單失敗，請稍後再試。");
+        return;
+      }
       window.location.href = `/driver/orders/${orderId}`;
     } catch {
       window.alert("接單失敗，請稍後再試。");
@@ -327,7 +331,7 @@ export function DriverHomeClient() {
           filteredOrders.map((order) => {
             const distanceLabel = formatDistanceKmFromCurrent(driverLocation, order) ?? "--";
             return (
-              <article className="android-card order-card-android stack gap-3 order-gap-5" key={order.id}>
+              <article className="android-card order-card-android home-order-card stack gap-3" key={order.id}>
                 <div className="driver-inline-between align-start">
                   <div className="stack gap-1 grow minw-0">
                     <strong className="driver-order-title compact tight">{order.storeName}</strong>
