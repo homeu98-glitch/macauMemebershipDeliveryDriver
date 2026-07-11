@@ -1930,3 +1930,48 @@ html, body {
     grid-template-columns: 1fr;
   }
 }
+
+/* order detail alignment */
+
+
+.detail-main-card {
+  padding: 2px 0;
+}
+
+.detail-top-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.detail-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #FFF1C7;
+  color: #6E4A00;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.detail-status-badge.canceled {
+  background: #FFF0F0;
+  color: #B3261E;
+}
+
+.detail-canceled-strip {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #FFF0F0;
+  border: 1px solid #E6B7B7;
+  color: #B3261E;
+  font-size: 0.92rem;
+  font-weight: 700;
+  text-align: center;
+}

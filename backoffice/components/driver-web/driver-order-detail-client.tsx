@@ -1,22 +1,87 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type OrderDetail = {
   id: string;
   externalOrderId: string;
+  transactionCode: string | null;
   status: string;
   storeName: string;
   storeAddress: string;
+  storePhone: string | null;
+  pickupDistrict: string | null;
+  storeLatitude: number;
+  storeLongitude: number;
+  totalSentOrders: number;
   customerName: string;
   customerAddress: string;
+  customerPhone: string | null;
+  destinationDistrict: string | null;
+  customerLatitude: number;
+  customerLongitude: number;
   amountMop: number;
   createdAt: string;
+  publishedAt: string;
   promisedAt: string | null;
+  deliveryDeadlineText: string;
+  etaMinutes: number;
+  isUrgent: boolean;
+  paymentTag: string;
   items: string[];
   timeline: Array<{ label: string; timestamp: string; note: string }>;
   hasProof: boolean;
 };
+
+function buildGoogleNavUrl(label: string, address: string, lat: number, lng: number) {
+  if (lat && lng) return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${label} ${address}`)}`;
+}
+
+function dialHref(phone: string | null) {
+  return phone ? `tel:${phone}` : undefined;
+}
+
+function DetailStageStrip({ status }: { status: string }) {
+  if (status === "canceled") {
+    return <div className="detail-canceled-strip">此訂單已取消配送</div>;
+  }
+  const stages = ["前往商戶", "已取貨", "前往客戶"];
+  const doneMap = [
+    ["assigned", "accepted", "heading_to_shop", "picked_up", "arrived_customer", "delivered"],
+    ["picked_up", "arrived_customer", "delivered"],
+    ["arrived_customer", "delivered"]
+  ];
+  const activeIndex = status === "picked_up" ? 1 : status === "arrived_customer" || status === "delivered" ? 2 : 0;
+  return (
+    <div className="order-stage-strip-web">
+      {stages.map((label, index) => {
+        const done = doneMap[index].includes(status);
+        const current = activeIndex === index && status !== "delivered";
+        return <div className={current ? "order-stage-chip current" : done ? "order-stage-chip done" : "order-stage-chip"} key={label}>{label}</div>;
+      })}
+    </div>
+  );
+}
+
+function StatusBadge({ status, amount, urgent }: { status: string; amount: number; urgent: boolean }) {
+  const statusLabel = status === "picked_up" ? "配送中" : status === "arrived_customer" ? "前往客戶" : status === "accepted" || status === "assigned" || status === "heading_to_shop" ? "前往商戶" : status === "canceled" ? "已取消" : status;
+  return (
+    <div className="detail-top-badges">
+      <span className={status === "canceled" ? "detail-status-badge canceled" : "detail-status-badge"}>{statusLabel}</span>
+      <span className={urgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {amount.toFixed(1)}</span>
+    </div>
+  );
+}
+
+function IconButtonLink({ href, label, type, disabled = false }: { href?: string; label: string; type: "call" | "nav"; disabled?: boolean }) {
+  const content = type === "call"
+    ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6.6 10.8a15.5 15.5 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24c1.08.36 2.22.54 3.4.54a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C11.85 21 3 12.15 3 1a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.18.18 2.32.54 3.4a1 1 0 0 1-.24 1l-2.2 2.4Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+    : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s6-5.1 6-11a6 6 0 1 0-12 0c0 5.9 6 11 6 11Z" stroke="currentColor" strokeWidth="1.8"/><circle cx="12" cy="10" r="2.2" stroke="currentColor" strokeWidth="1.8"/></svg>;
+  if (!href || disabled) return <span className="mini-icon-btn disabled" aria-label={label}>{content}</span>;
+  return <a className="mini-icon-btn" aria-label={label} href={href} rel={type === "nav" ? "noreferrer" : undefined} target={type === "nav" ? "_blank" : undefined}>{content}</a>;
+}
 
 export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
@@ -41,7 +106,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   }, [orderId]);
 
   const canAccept = order?.status === "new";
-  const canPickUp = order?.status === "accepted" || order?.status === "arrived_shop" || order?.status === "assigned";
+  const canPickUp = order?.status === "accepted" || order?.status === "assigned" || order?.status === "heading_to_shop";
   const canDeliver = order?.status === "picked_up" || order?.status === "arrived_customer";
 
   async function sendStatus(event: string) {
@@ -52,7 +117,11 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventType: event })
       });
-      if (!response.ok) throw new Error("status_failed");
+      const payload = (await response.json().catch(() => ({}))) as { message?: string };
+      if (!response.ok) {
+        window.alert(payload.message ?? "更新訂單狀態失敗。");
+        return;
+      }
       await load();
     } catch {
       window.alert("更新訂單狀態失敗。");
@@ -83,53 +152,85 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   if (loading) return <div className="android-card">載入訂單中...</div>;
   if (!order) return <div className="android-card error">找不到訂單資料。</div>;
 
+  const toShop = buildGoogleNavUrl(order.storeName, order.storeAddress, order.storeLatitude, order.storeLongitude);
+  const toCustomer = buildGoogleNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude);
+
   return (
     <div className="stack gap-4">
-      <section className="android-card stack gap-2">
-        <div className="driver-inline-between align-start">
-          <div className="stack gap-1 grow">
-            <div className="driver-screen-title">訂單詳情</div>
-            <div className="muted">交易編號 {order.externalOrderId}</div>
-            <div className="muted">送達時間 {order.promisedAt ?? order.createdAt}</div>
+      <section className="android-card detail-main-card stack gap-3 no-overflow-card">
+        <div className="driver-inline-between align-start gap-3">
+          <div className="stack gap-1 grow minw-0">
+            {order.isUrgent ? <div className="urgent-text">急單</div> : null}
+            <div className="driver-screen-title">{order.storeName}</div>
+            <div className="order-subvalue tight">交易編號 {order.transactionCode ?? order.externalOrderId}</div>
+            <div className="order-subvalue tight">已派送 {order.totalSentOrders} 張單</div>
+            <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
+            <div className="order-subvalue tight">發單日期 {order.publishedAt}</div>
           </div>
-          <div className="money-chip">MOP {order.amountMop.toFixed(1)}</div>
+          <StatusBadge status={order.status} amount={order.amountMop} urgent={order.isUrgent} />
         </div>
-      </section>
 
-      <section className="android-soft-panel stack gap-2">
-        <div className="driver-soft-label">商戶地址</div>
-        <div>{order.storeAddress}</div>
-        <div className="driver-soft-label">客戶地址</div>
-        <div>{order.customerAddress}</div>
+        <DetailStageStrip status={order.status} />
+
+        <div className="android-soft-panel order-address-panel compact stack gap-2">
+          <div className="location-row-web">
+            <div className="grow minw-0">
+              <div className="driver-soft-label">商戶</div>
+              <div className="location-title">{order.storeName}</div>
+              <div className="address-text compact">{order.storeAddress}</div>
+            </div>
+            <div className="mini-icon-actions">
+              <IconButtonLink href={dialHref(order.storePhone)} label="致電商戶" type="call" disabled={!order.storePhone} />
+              <IconButtonLink href={toShop} label="導航到商戶" type="nav" />
+            </div>
+          </div>
+          <div className="location-row-web">
+            <div className="grow minw-0">
+              <div className="driver-soft-label">客戶</div>
+              <div className="location-title">{order.customerName}</div>
+              <div className="address-text compact">{order.customerAddress}</div>
+            </div>
+            <div className="mini-icon-actions">
+              <IconButtonLink href={dialHref(order.customerPhone)} label="致電客戶" type="call" disabled={!order.customerPhone} />
+              <IconButtonLink href={toCustomer} label="導航到客戶" type="nav" />
+            </div>
+          </div>
+        </div>
+
+        <div className="inline-meta-pills compact wrap-safe">
+          <span className="meta-pill green">{order.paymentTag}</span>
+          <span className="meta-pill">取貨區：{order.pickupDistrict ?? "未分區"}</span>
+          <span className="meta-pill">送達區：{order.destinationDistrict ?? "未分區"}</span>
+        </div>
+
+        <div className="order-bottom-meta compact">{order.deliveryDeadlineText} · 請盡快完成本單</div>
+
+        <div className="stack gap-2">
+          {order.status === "canceled" ? <div className="muted">此訂單已取消配送。</div> : null}
+          {canAccept ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("accepted")} type="button">{actionBusy === "accepted" ? "接單中..." : "接單"}</button> : null}
+          {canPickUp ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("picked_up")} type="button">{actionBusy === "picked_up" ? "處理中..." : "已取貨"}</button> : null}
+          {canDeliver ? <button className="android-primary-btn" disabled={Boolean(actionBusy) || !order.hasProof} onClick={() => sendStatus("delivered")} type="button">{actionBusy === "delivered" ? "處理中..." : "拍照後完成訂單"}</button> : null}
+          {order.status !== "delivered" ? <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("canceled")} type="button">取消訂單</button> : null}
+        </div>
       </section>
 
       <section className="android-card stack gap-3">
         <div className="driver-section-title">商品清單</div>
-        {order.items.length === 0 ? <div className="muted">沒有商品明細。</div> : order.items.map((item) => <div className="driver-list-line" key={item}>{item}</div>)}
-      </section>
-
-      <section className="android-card stack gap-3">
-        <div className="driver-action-grid">
-          {canAccept ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("accepted")} type="button">{actionBusy === "accepted" ? "接單中..." : "接單"}</button> : null}
-          {canPickUp ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("picked_up")} type="button">{actionBusy === "picked_up" ? "處理中..." : "已取貨"}</button> : null}
-          {canDeliver ? <button className="android-primary-btn" disabled={Boolean(actionBusy) || !order.hasProof} onClick={() => sendStatus("delivered")} type="button">{actionBusy === "delivered" ? "處理中..." : "拍照後完成訂單"}</button> : null}
-          <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("canceled")} type="button">取消訂單</button>
-        </div>
+        {order.items.length === 0 ? <div className="muted">沒有商品明細。</div> : order.items.map((item) => <div className="driver-list-line" key={item}>• {item}</div>)}
       </section>
 
       <section className="android-card stack gap-3">
         <div className="driver-section-title">送達證明</div>
-        {proofPreviewUrl ? <img alt="delivery proof" className="driver-proof-preview" src={proofPreviewUrl} /> : <div className="android-soft-panel muted">尚未上傳送達證明。</div>}
+        <div className="muted">{proofPreviewUrl ? "已上傳送達照片，可重新上傳。" : "請上傳送達照片，作為已完成配送的證明。"}</div>
+        {proofPreviewUrl ? <img alt="delivery proof" className="driver-proof-preview" src={proofPreviewUrl} /> : null}
         <label className={proofFile ? "driver-upload-card uploaded compact" : "driver-upload-card compact"}>
           <input accept="image/*" capture="environment" onChange={(event) => setProofFile(event.target.files?.[0] ?? null)} type="file" hidden />
-          <div className="driver-upload-title">拍照後完成訂單</div>
+          <div className="driver-upload-title">{proofPreviewUrl ? "重新上傳照片" : "上傳送達照片"}</div>
           <div className="driver-upload-copy">請選擇直接拍照，或從相簿上傳送達圖片。</div>
           <div className="driver-upload-file">{proofFile ? proofFile.name : "尚未選擇"}</div>
           <span className="driver-upload-button">選擇圖片</span>
         </label>
-        <button className="android-secondary-btn" disabled={!proofFile || actionBusy === "proof"} onClick={uploadProof} type="button">
-          {actionBusy === "proof" ? "上傳中..." : "上傳送達證明"}
-        </button>
+        <button className="android-secondary-btn" disabled={!proofFile || actionBusy === "proof"} onClick={uploadProof} type="button">{actionBusy === "proof" ? "上傳中..." : proofPreviewUrl ? "重新上傳照片" : "上傳送達照片"}</button>
       </section>
     </div>
   );
