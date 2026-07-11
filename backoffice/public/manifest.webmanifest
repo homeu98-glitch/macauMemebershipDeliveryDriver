@@ -1,7 +1,9 @@
 {
   "name": "會員配送車手工作台",
   "short_name": "車手工作台",
-  "start_url": "/driver/home",
+  "description": "會員配送車手可安裝的 Web App，提供接單、訂單追蹤、通知與收入查詢。",
+  "start_url": "/driver/home?source=pwa",
+  "scope": "/driver/",
   "display": "standalone",
   "background_color": "#fff8e8",
   "theme_color": "#f59e0b",

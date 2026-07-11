@@ -33,16 +33,43 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   const plainMode = useMemo(() => pathname === "/driver/login" || pathname === "/driver/register" || pathname === "/driver/install" || pathname.startsWith("/driver/pending"), [pathname]);
 
   useEffect(() => {
+    try {
+      const dismissed = window.localStorage.getItem("driver-pwa-install-dismissed");
+      const installed = window.localStorage.getItem("driver-pwa-installed");
+      setHideInstallBanner(dismissed === "1" || installed === "1");
+    } catch {
+      setHideInstallBanner(false);
+    }
+  }, []);
+
+  useEffect(() => {
     setStandalone(isStandaloneMode());
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/driver-sw.js").catch(() => undefined);
+    }
+
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPromptEvent(event as BeforeInstallPromptEvent);
     };
     const onModeChange = () => setStandalone(isStandaloneMode());
+    const onAppInstalled = () => {
+      setStandalone(true);
+      setHideInstallBanner(true);
+      setInstallPromptEvent(null);
+      try {
+        window.localStorage.setItem("driver-pwa-installed", "1");
+        window.localStorage.setItem("driver-pwa-installed-at", new Date().toISOString());
+      } catch {}
+    };
+
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
     window.matchMedia?.("(display-mode: standalone)")?.addEventListener?.("change", onModeChange);
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onAppInstalled);
       window.matchMedia?.("(display-mode: standalone)")?.removeEventListener?.("change", onModeChange);
     };
   }, []);
@@ -80,10 +107,25 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       const result = await installPromptEvent.userChoice;
       if (result?.outcome === "accepted") {
         setHideInstallBanner(true);
+        try {
+          window.localStorage.setItem("driver-pwa-install-accepted", "1");
+        } catch {}
+      }
+      if (result?.outcome === "dismissed") {
+        try {
+          window.localStorage.setItem("driver-pwa-install-dismissed", "1");
+        } catch {}
       }
       return;
     }
     window.location.href = "/driver/install";
+  }
+
+  function dismissInstallBanner() {
+    setHideInstallBanner(true);
+    try {
+      window.localStorage.setItem("driver-pwa-install-dismissed", "1");
+    } catch {}
   }
 
   const showInstallBanner = !plainMode && !standalone && !hideInstallBanner;
@@ -102,7 +144,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
               </div>
               <div className="install-banner-actions">
                 <button className="install-banner-btn" onClick={triggerInstall} type="button">安裝</button>
-                <button className="install-banner-close" onClick={() => setHideInstallBanner(true)} type="button">稍後</button>
+                <button className="install-banner-close" onClick={dismissInstallBanner} type="button">稍後</button>
               </div>
             </div>
           ) : null}
