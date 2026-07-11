@@ -8,9 +8,8 @@ type LegalState = { serviceTerms: string; mustAccept: boolean };
 
 const navItems = [
   { href: "/driver/home", label: "首頁" },
-  { href: "/driver/orders", label: "進行中" },
-  { href: "/driver/completed", label: "已完成" },
-  { href: "/driver/earnings", label: "收益" },
+  { href: "/driver/orders", label: "訂單" },
+  { href: "/driver/completed", label: "完成" },
   { href: "/driver/profile", label: "我的" }
 ];
 
@@ -50,15 +49,18 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       {plainMode ? (
-        <div className="driver-plain-layout">{children}</div>
+        <div className="driver-plain-layout">
+          <div className="driver-auth-wrap">{children}</div>
+        </div>
       ) : (
-        <div className="driver-mobile-shell">
-          <header className="driver-mobile-header">
-            <div className="driver-mobile-title">車手工作台</div>
-            <div className="driver-mobile-subtitle">保持頁面開啟，接單會更穩定</div>
+        <div className="driver-mobile-shell android-like-shell">
+          <header className="driver-mobile-header android-like-header">
+            <div className="driver-brand-chip">騎手工作台</div>
+            <div className="driver-mobile-title">會員配送騎手</div>
+            <div className="driver-mobile-subtitle">接單、導航、送達證明與異常回報都會直接連接真實資料。</div>
           </header>
           <main className="driver-mobile-main">{children}</main>
-          <nav className="driver-bottom-nav">
+          <nav className="driver-bottom-nav android-like-bottom-nav">
             {navItems.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
@@ -73,7 +75,8 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       {legalState?.mustAccept ? (
         <div className="driver-modal-backdrop">
           <div className="driver-modal-card">
-            <h2>服務條款與隱私政策</h2>
+            <div className="driver-brand-chip">服務條款</div>
+            <h2>同意後才能繼續接單</h2>
             <div className="driver-legal-scroll">{legalState.serviceTerms || "目前尚未設定內容。"}</div>
             <button className="btn-primary" type="button" disabled={submitting} onClick={acceptLegal}>
               {submitting ? "處理中..." : "同意並繼續"}

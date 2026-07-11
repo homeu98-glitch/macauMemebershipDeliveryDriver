@@ -36,10 +36,9 @@ export function DriverOrdersClient() {
     <div className="stack gap-3">
       <div className="driver-inline-between"><div className="driver-section-title">進行中訂單</div><button className="btn btn-secondary" onClick={load} type="button">刷新</button></div>
       {orders.length === 0 ? <div className="card muted">目前沒有進行中訂單。</div> : orders.map((order) => (
-        <article className="card stack gap-2" key={order.id}>
-          <div className="driver-inline-between"><strong>{order.storeName}</strong><span className="driver-badge">{order.status}</span></div>
-          <div className="muted">訂單編號：{order.externalOrderId}</div>
-          <div>{order.customerName} · {order.customerAddress}</div>
+        <article className="android-card stack gap-3" key={order.id}>
+          <div className="driver-inline-between"><div className="stack gap-1"><strong className="driver-order-title">{order.storeName}</strong><div className="muted">訂單編號：{order.externalOrderId}</div></div><span className="driver-badge">{order.status}</span></div>
+          <div className="android-soft-panel"><div className="driver-soft-label">客戶送達點</div><div>{order.customerName} · {order.customerAddress}</div></div>
           <div className="driver-inline-between"><span>MOP {order.amountMop.toFixed(1)}</span><span>{order.createdAt}</span></div>
           <Link className="btn btn-secondary" href={`/driver/orders/${order.id}`}>打開訂單</Link>
         </article>

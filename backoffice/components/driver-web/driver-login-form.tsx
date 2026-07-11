@@ -37,18 +37,23 @@ export function DriverLoginForm() {
   }
 
   return (
-    <div className="driver-auth-card card stack gap-4">
+    <div className="driver-auth-card android-card stack gap-4">
+      <div className="driver-brand-chip">騎手登入</div>
       <div className="stack gap-2">
-        <h1 className="driver-screen-title">車手登入</h1>
-        <p className="muted">使用與安卓 App 相同的電話與 PIN 登入。</p>
+        <h1 className="driver-screen-title">會員配送騎手</h1>
+        <p className="muted">使用電話登入，接單、導航、上傳送達證明與異常回報都會直接連接真實資料。</p>
       </div>
       <form className="stack gap-4" onSubmit={onSubmit}>
         <label className="driver-field"><span>電話號碼</span><input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="例如 66668888" /></label>
-        <label className="driver-field"><span>PIN</span><input value={pin} onChange={(event) => setPin(event.target.value)} placeholder="4 至 8 位數字" type="password" /></label>
+        <label className="driver-field"><span>密碼（4 位數字）</span><input value={pin} onChange={(event) => setPin(event.target.value)} placeholder="請輸入 4 位數字" type="password" /></label>
         {message ? <div className="error">{message}</div> : null}
         <button className="btn-primary" disabled={submitting} type="submit">{submitting ? "登入中..." : "登入"}</button>
       </form>
-      <div className="driver-auth-links"><Link href="/driver/register">註冊成為車手</Link><Link href="/driver/install">加入主畫面教學</Link></div>
+      <div className="driver-help-copy">若你剛完成註冊，帳號需等待後台審核通過後才能正式接單。</div>
+      <div className="driver-auth-actions-row">
+        <Link className="android-outline-link" href="/driver/register">立即註冊</Link>
+        <Link className="android-outline-link" href="/driver/pending">查看審核</Link>
+      </div>
     </div>
   );
 }
