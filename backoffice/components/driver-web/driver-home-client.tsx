@@ -42,6 +42,8 @@ type Dashboard = {
   destinationDistrictOptions: string[];
 };
 
+type FilterModalType = "pickup" | "destination" | null;
+
 function buildGoogleNavUrl(order: OrderSummary) {
   if (order.storeLatitude && order.storeLongitude) {
     return `https://www.google.com/maps/dir/?api=1&destination=${order.storeLatitude},${order.storeLongitude}&travelmode=driving`;
@@ -56,15 +58,22 @@ function buildAmapNavUrl(order: OrderSummary) {
   return `https://uri.amap.com/search?keyword=${encodeURIComponent(order.storeAddress)}`;
 }
 
+function formatFilterValue(values: string[]) {
+  if (values.length === 0) return "全部";
+  if (values.length === 1) return values[0];
+  return `已選 ${values.length} 項`;
+}
+
 export function DriverHomeClient() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [pickupDistrict, setPickupDistrict] = useState("");
-  const [destinationDistrict, setDestinationDistrict] = useState("");
+  const [pickupDistricts, setPickupDistricts] = useState<string[]>([]);
+  const [destinationDistricts, setDestinationDistricts] = useState<string[]>([]);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [navOrder, setNavOrder] = useState<OrderSummary | null>(null);
+  const [filterModal, setFilterModal] = useState<FilterModalType>(null);
 
   async function load() {
     try {
@@ -95,18 +104,21 @@ export function DriverHomeClient() {
   }, []);
 
   async function toggleAvailability() {
-    if (!data) return;
+    if (!data || busy) return;
+    const previous = data.availability;
+    const next = previous === "online" ? "offline" : "online";
     setBusy(true);
+    setData((current) => (current ? { ...current, availability: next } : current));
     try {
-      const next = data.availability === "online" ? "offline" : "online";
       const response = await fetch("/api/driver/availability", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ availability: next })
       });
       if (!response.ok) throw new Error("availability_failed");
-      await load();
+      void load();
     } catch {
+      setData((current) => (current ? { ...current, availability: previous } : current));
       window.alert("更新上下線狀態失敗。");
     } finally {
       setBusy(false);
@@ -127,14 +139,27 @@ export function DriverHomeClient() {
     }
   }
 
+  function toggleFilterValue(type: Exclude<FilterModalType, null>, value: string) {
+    const setter = type === "pickup" ? setPickupDistricts : setDestinationDistricts;
+    setter((current) => (current.includes(value) ? current.filter((item) => item !== value) : [...current, value]));
+  }
+
+  function clearFilter(type: Exclude<FilterModalType, null>) {
+    if (type === "pickup") setPickupDistricts([]);
+    else setDestinationDistricts([]);
+  }
+
   const filteredOrders = useMemo(() => {
     if (!data) return [] as OrderSummary[];
     return data.availableOrders.filter((order) => {
-      const pickupOk = !pickupDistrict || order.pickupDistrict === pickupDistrict;
-      const destinationOk = !destinationDistrict || order.destinationDistrict === destinationDistrict;
+      const pickupOk = pickupDistricts.length === 0 || (order.pickupDistrict ? pickupDistricts.includes(order.pickupDistrict) : false);
+      const destinationOk = destinationDistricts.length === 0 || (order.destinationDistrict ? destinationDistricts.includes(order.destinationDistrict) : false);
       return pickupOk && destinationOk;
     });
-  }, [data, pickupDistrict, destinationDistrict]);
+  }, [data, pickupDistricts, destinationDistricts]);
+
+  const filterOptions = filterModal === "pickup" ? data?.pickupDistrictOptions ?? [] : data?.destinationDistrictOptions ?? [];
+  const selectedOptions = filterModal === "pickup" ? pickupDistricts : destinationDistricts;
 
   if (loading) return <div className="android-card">首頁載入中...</div>;
   if (error) return <div className="android-card error">{error}</div>;
@@ -145,33 +170,33 @@ export function DriverHomeClient() {
       <div className="stack gap-4">
         <section className="android-status-panel">
           <div className="stack gap-1 grow">
-            <div className="status-panel-title">接單狀態</div>
-            <div className="status-panel-value">{data.availability === "online" ? "上線中" : "離線中"}</div>
-            <div className="status-panel-note">{data.availability === "online" ? "保持上線即可即時看到新工單。" : "切換上線後才可以開始接單。"}</div>
+            <div className="status-panel-title">{data.availability === "online" ? "上線" : "離線"}</div>
+            <div className="status-panel-note">{busy ? "更新中..." : data.availability === "online" ? "保持上線即可即時看到新工單。" : "切換上線後才可以開始接單。"}</div>
           </div>
-          <label className="driver-switch-wrap">
+          <label className={busy ? "driver-switch-wrap busy" : "driver-switch-wrap"}>
             <input type="checkbox" checked={data.availability === "online"} onChange={toggleAvailability} disabled={busy} />
             <span className="driver-switch-slider" />
           </label>
         </section>
 
-        <section className="driver-filter-panel stack gap-3">
-          <div className="driver-screen-title small">可接訂單</div>
-          <div className="driver-filter-grid">
-            <label className="driver-field compact-field">
-              <span>取貨地區</span>
-              <select value={pickupDistrict} onChange={(event) => setPickupDistrict(event.target.value)}>
-                <option value="">全部</option>
-                {data.pickupDistrictOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
-            <label className="driver-field compact-field">
-              <span>送達地區</span>
-              <select value={destinationDistrict} onChange={(event) => setDestinationDistrict(event.target.value)}>
-                <option value="">全部</option>
-                {data.destinationDistrictOptions.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
+        <section className="stack gap-3">
+          <div className="driver-inline-between section-heading-row">
+            <div className="stack gap-1">
+              <div className="driver-screen-title small">可接訂單</div>
+              <div className="muted">向下拉即可即時刷新</div>
+            </div>
+            <div className="driver-count-chip">{filteredOrders.length} 張</div>
+          </div>
+
+          <div className="driver-filter-row">
+            <button className="filter-select-card" onClick={() => setFilterModal("pickup")} type="button">
+              <span className="filter-label">取貨地區</span>
+              <span className="filter-value">{formatFilterValue(pickupDistricts)}</span>
+            </button>
+            <button className="filter-select-card" onClick={() => setFilterModal("destination")} type="button">
+              <span className="filter-label">送達地區</span>
+              <span className="filter-value">{formatFilterValue(destinationDistricts)}</span>
+            </button>
           </div>
         </section>
 
@@ -181,46 +206,63 @@ export function DriverHomeClient() {
           filteredOrders.map((order) => {
             const distanceLabel = formatDistanceKmFromCurrent(driverLocation, order) ?? "--";
             return (
-              <article className="android-card driver-order-card stack gap-4" key={order.id}>
-                <div className="driver-inline-between align-start card-top-gap">
+              <article className="android-card order-card-android stack gap-3" key={order.id}>
+                <div className="driver-inline-between align-start">
                   <div className="stack gap-1 grow">
-                    {order.isUrgent ? <div className="urgent-text">急單</div> : null}
-                    <strong className="driver-order-title">{order.storeName}</strong>
-                    <div className="muted">{order.totalSentOrders} 單</div>
+                    <strong className="driver-order-title compact">{order.storeName}</strong>
+                    <div className="order-subline">交易編號</div>
+                    <div className="order-subvalue">{order.transactionCode ?? order.externalOrderId}</div>
+                    <div className="order-subvalue">已派送 {order.totalSentOrders} 單</div>
+                    <div className="order-subvalue">送達時間 {order.deliveryDeadlineText}</div>
+                    <div className="order-subvalue">發單日期 {order.publishedAt}</div>
                   </div>
-                  <div className={order.isUrgent ? "money-chip urgent" : "money-chip"}>MOP {order.amountMop.toFixed(1)}</div>
+                  <div className={order.isUrgent ? "money-chip urgent large" : "money-chip large"}>MOP {order.amountMop.toFixed(1)}</div>
                 </div>
 
-                <section className="driver-order-meta-grid">
-                  <div><span className="meta-label">發單日期</span><span className="meta-value">{order.publishedAt}</span></div>
-                  <div><span className="meta-label">支付方式</span><span className="meta-value">{order.paymentTag}</span></div>
-                  <div><span className="meta-label">取貨地區</span><span className="meta-value">{order.pickupDistrict ?? "-"}</span></div>
-                  <div><span className="meta-label">送達地區</span><span className="meta-value">{order.destinationDistrict ?? "-"}</span></div>
-                  <div><span className="meta-label">距離</span><span className="meta-value">{distanceLabel}</span></div>
-                  <div><span className="meta-label">時間</span><span className="meta-value">{order.deliveryDeadlineText}</span></div>
-                </section>
-
-                <div className="android-soft-panel stack gap-2">
-                  <div>
-                    <div className="driver-soft-label">商戶地址</div>
-                    <div>{order.storeAddress}</div>
-                  </div>
-                  <div>
-                    <div className="driver-soft-label">客戶地址</div>
-                    <div>{order.customerAddress}</div>
-                  </div>
-                  <div className="muted">交易編號 {order.transactionCode ?? order.externalOrderId}</div>
+                <div className="android-soft-panel order-address-panel">
+                  <div className="driver-soft-label">商戶地址</div>
+                  <div className="address-text">{order.storeAddress}</div>
+                  <div className="driver-soft-label">客戶地址</div>
+                  <div className="address-text">{order.customerAddress}</div>
                 </div>
 
-                <div className="driver-inline-between mobile-actions-row order-actions-gap">
-                  <button className="android-outline-link as-button" onClick={() => setNavOrder(order)} type="button">前往商戶</button>
-                  <button className="android-primary-btn small" onClick={() => acceptOrder(order.id)} type="button">{data.availability === "online" ? "接單" : "請先上線"}</button>
+                <div className="inline-meta-pills">
+                  <span className="meta-pill green">{order.paymentTag}</span>
+                  <span className="meta-pill">取貨區：{order.pickupDistrict ?? "-"}</span>
+                  <span className="meta-pill">送達區：{order.destinationDistrict ?? "-"}</span>
+                </div>
+
+                <div className="order-bottom-meta">{distanceLabel} 到商戶 · {order.deliveryDeadlineText.replace(/.*\s/, "") || order.promisedAt || "--"}</div>
+
+                <div className="driver-inline-between action-buttons-row">
+                  <button className="android-outline-link as-button nav-btn-large" onClick={() => setNavOrder(order)} type="button">前往商戶</button>
+                  <button className="android-primary-btn order-accept-btn" onClick={() => acceptOrder(order.id)} type="button">{data.availability === "online" ? "接單" : "請先上線"}</button>
                 </div>
               </article>
             );
           })
         )}
       </div>
+
+      {filterModal ? (
+        <div className="driver-modal-backdrop" onClick={() => setFilterModal(null)}>
+          <div className="driver-modal-card stack gap-3" onClick={(event) => event.stopPropagation()}>
+            <div className="driver-screen-title small">{filterModal === "pickup" ? "取貨地區" : "送達地區"}</div>
+            <div className="filter-modal-list">
+              {filterOptions.map((item) => (
+                <label className="filter-check-row" key={item}>
+                  <input type="checkbox" checked={selectedOptions.includes(item)} onChange={() => toggleFilterValue(filterModal, item)} />
+                  <span>{item}</span>
+                </label>
+              ))}
+            </div>
+            <div className="driver-auth-actions-row single-mobile-row">
+              <button className="android-secondary-btn" onClick={() => clearFilter(filterModal)} type="button">清除</button>
+              <button className="android-primary-btn" onClick={() => setFilterModal(null)} type="button">完成</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {navOrder ? (
         <div className="driver-modal-backdrop" onClick={() => setNavOrder(null)}>
