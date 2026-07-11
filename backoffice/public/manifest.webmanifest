@@ -1,0 +1,20 @@
+{
+  "name": "會員配送車手工作台",
+  "short_name": "車手工作台",
+  "start_url": "/driver/home",
+  "display": "standalone",
+  "background_color": "#fff8e8",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/icons/driver-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/driver-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

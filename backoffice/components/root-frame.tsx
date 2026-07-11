@@ -14,7 +14,7 @@ export function RootFrame({
 }) {
   const pathname = usePathname();
 
-  if (pathname === "/login" || pathname.startsWith("/download") || pathname.startsWith("/apkdownload")) {
+  if (pathname === "/login" || pathname.startsWith("/download") || pathname.startsWith("/apkdownload") || pathname.startsWith("/driver")) {
     return <>{children}</>;
   }
 

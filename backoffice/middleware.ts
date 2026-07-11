@@ -8,6 +8,8 @@ function isPublicRoute(pathname: string) {
   return (
     PUBLIC_ROUTES.includes(pathname) ||
     pathname.startsWith("/apkdownload") ||
+    pathname.startsWith("/driver") ||
+    pathname.startsWith("/api/driver/") ||
     pathname.startsWith("/api/v1/") ||
     pathname.startsWith("/api/mobile/") ||
     pathname.startsWith("/api/public/") ||
