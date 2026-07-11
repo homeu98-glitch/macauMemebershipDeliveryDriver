@@ -140,7 +140,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
             <div className="driver-install-banner">
               <div className="stack gap-1 grow">
                 <div className="install-banner-title">可安裝到主畫面</div>
-                <div className="install-banner-copy">安裝後會直接從首頁打開，並以獨立 App 模式運行。</div>
+                <div className="install-banner-copy">安裝後會直接從首頁打開，並以獨立 App 模式運行。如你以前裝過舊捷徑，請先刪除舊圖示再重新安裝。</div>
               </div>
               <div className="install-banner-actions">
                 <button className="install-banner-btn" onClick={triggerInstall} type="button">安裝</button>
