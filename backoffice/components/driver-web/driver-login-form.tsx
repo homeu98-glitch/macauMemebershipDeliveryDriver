@@ -42,11 +42,8 @@ export function DriverLoginForm() {
 
   return (
     <div className="driver-auth-card android-card stack gap-5">
-      <div className="driver-brand-chip">車手登入</div>
-      <div className="stack gap-2">
-        <h1 className="driver-screen-title">會員配送騎手</h1>
-        <p className="muted">保持頁面開啟即可接單。登入後會直接同步你的接單、送達證明與收入資料。</p>
-      </div>
+      <div className="driver-brand-chip">騎手登入</div>
+      <h1 className="driver-screen-title">會員配送騎手</h1>
 
       <form className="stack gap-4" onSubmit={onSubmit}>
         <label className="driver-field modern-field">
@@ -64,8 +61,6 @@ export function DriverLoginForm() {
           {submitting ? "登入中..." : "登入"}
         </button>
       </form>
-
-      <div className="driver-help-copy">如果你剛完成註冊，需等待後台審核通過後才能正式接單。</div>
 
       <div className="driver-auth-actions-row">
         <Link className="android-outline-link" href="/driver/register">立即註冊</Link>

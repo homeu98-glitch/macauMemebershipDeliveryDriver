@@ -20,18 +20,21 @@ export function DriverCompletedClient() {
   return (
     <div className="stack gap-3">
       <div className="driver-inline-between">
-        <h1 className="driver-screen-title">已完成訂單</h1>
+        <div className="stack gap-1">
+          <div className="driver-screen-title">已完成訂單</div>
+          <div className="muted">可查看送達時間、照片資訊與已完成紀錄。</div>
+        </div>
         <select className="driver-range-select" value={range} onChange={(event) => setRange(event.target.value as "today" | "week" | "history")}>
           <option value="today">今天</option>
           <option value="week">本週</option>
           <option value="history">歷史</option>
         </select>
       </div>
-      {loading ? <div className="android-card">載入中...</div> : orders.length === 0 ? <div className="android-card muted">沒有已完成訂單。</div> : orders.map((order) => (
+      {loading ? <div className="android-card">載入中...</div> : orders.length === 0 ? <div className="android-card muted">這個時間範圍內還沒有已完成訂單。</div> : orders.map((order) => (
         <article className="android-card stack gap-3" key={order.id}>
           <div className="driver-inline-between"><strong className="driver-order-title">{order.storeName}</strong><span className="driver-amount">MOP {order.amountMop.toFixed(1)}</span></div>
-          <div className="android-soft-panel"><div className="driver-soft-label">客戶送達點</div><div>{order.customerName} · {order.customerAddress}</div></div>
-          <div className="driver-inline-between"><span className="muted">訂單編號：{order.externalOrderId}</span><span className="muted">{order.deliveredAt}</span></div>
+          <div className="android-soft-panel"><div>{order.customerName}</div><div>{order.customerAddress}</div></div>
+          <div className="driver-inline-between"><span className="muted">交易編號 {order.externalOrderId}</span><span className="muted">{order.deliveredAt}</span></div>
         </article>
       ))}
     </div>
