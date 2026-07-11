@@ -1265,3 +1265,84 @@ select {
 .mobile-actions-row {
   gap: 8px;
 }
+
+
+.driver-auth-card {
+  gap: 20px;
+}
+
+.driver-auth-card form {
+  margin-top: 4px;
+}
+
+.driver-auth-actions-row {
+  margin-top: 8px;
+}
+
+.driver-filter-panel {
+  background: #FFFDF8;
+  border: 1px solid #F1E0BE;
+  border-radius: 22px;
+  padding: 16px;
+}
+
+.driver-filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.compact-field select {
+  min-height: 46px;
+  border: 1px solid #E7D8BA;
+  background: #FFF;
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.card-top-gap {
+  margin-bottom: 2px;
+}
+
+.driver-order-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+  padding: 2px 0;
+}
+
+.driver-order-meta-grid > div {
+  display: grid;
+  gap: 4px;
+}
+
+.meta-label {
+  font-size: 0.82rem;
+  color: #6C7F93;
+}
+
+.meta-value {
+  font-size: 0.95rem;
+  color: #2A1A00;
+  font-weight: 600;
+}
+
+.order-actions-gap {
+  margin-top: 2px;
+}
+
+.as-button {
+  background: #fff;
+  cursor: pointer;
+}
+
+.align-start {
+  align-items: flex-start;
+}
+
+@media (max-width: 480px) {
+  .driver-filter-grid,
+  .driver-order-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
