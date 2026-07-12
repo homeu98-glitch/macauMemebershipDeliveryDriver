@@ -168,7 +168,12 @@ export function DriverOrdersClient() {
         return;
       }
       const ok = await sendStatus(orderId, "delivered");
-      if (ok) await load();
+      if (ok) {
+        try {
+          window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey: "order_completed" } }));
+        } catch {}
+        await load();
+      }
     } catch {
       window.alert("上傳送達證明失敗。");
     } finally {
@@ -239,6 +244,7 @@ export function DriverOrdersClient() {
 
                 <div className="driver-inline-between align-start orders-card-top-row">
                   <div className="stack gap-1 grow minw-0">
+                    {order.isUrgent ? <div className="urgent-text">急單</div> : null}
                     <div className="order-subvalue tight">{order.transactionCode ?? order.externalOrderId}</div>
                     <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
                     <div className="order-subvalue tight">已派送 {order.totalSentOrders} 單</div>

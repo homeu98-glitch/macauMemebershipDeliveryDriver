@@ -302,6 +302,7 @@ export function DriverHomeClient() {
               <article className="android-card order-card-android home-order-card stack gap-3" key={order.id}>
                 <div className="driver-inline-between align-start">
                   <div className="stack gap-1 grow minw-0">
+                    {order.isUrgent ? <div className="urgent-text">急單</div> : null}
                     <strong className="driver-order-title compact tight">{order.storeName}</strong>
                     <div className="order-subvalue tight">交易編號 {order.transactionCode ?? order.externalOrderId}</div>
                     <div className="order-subvalue tight">已派送 {order.totalSentOrders} 單</div>

@@ -163,6 +163,15 @@ async function loadShopAndCustomerMaps(supabase: ReturnType<typeof createService
 
 function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByShopId: Map<string, number>): DriverWebOrderSummary {
   const etaMinutes = calculateEtaMinutes(order.promised_at);
+  const sourcePayload =
+    order?.source_payload && typeof order.source_payload === "object"
+      ? (order.source_payload as Record<string, unknown>)
+      : null;
+  const urgentFromPayload =
+    sourcePayload?.priceRaisedAt ||
+    sourcePayload?.price_raised_at ||
+    sourcePayload?.urgent === true ||
+    sourcePayload?.urgent === "true";
   return {
     id: order.id,
     externalOrderId: order.external_order_id,
@@ -192,7 +201,7 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     cancelReason: typeof order.cancel_reason === "string" ? order.cancel_reason : null,
     cancelOtherReason: typeof order.cancel_other_reason === "string" ? order.cancel_other_reason : null,
     cancelHandling: order.cancel_handling === "return_to_shop" || order.cancel_handling === "not_returning" ? order.cancel_handling : null,
-    isUrgent: order?.source_payload?.priceRaisedAt ? true : etaMinutes > 0 && etaMinutes <= 15,
+    isUrgent: Boolean(urgentFromPayload) || (etaMinutes > 0 && etaMinutes <= 15),
     paymentTag: derivePaymentTag(order)
   };
 }

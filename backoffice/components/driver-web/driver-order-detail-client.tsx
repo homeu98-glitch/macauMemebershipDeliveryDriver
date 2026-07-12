@@ -166,7 +166,12 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
         return;
       }
       if (redirectAfter && eventType === "delivered") {
-        window.location.href = "/driver/completed";
+        try {
+          window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey: "order_completed" } }));
+        } catch {}
+        window.setTimeout(() => {
+          window.location.href = "/driver/completed";
+        }, 220);
         return;
       }
       await load();
