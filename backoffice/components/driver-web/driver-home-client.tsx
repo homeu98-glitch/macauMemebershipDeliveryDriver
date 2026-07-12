@@ -98,8 +98,6 @@ export function DriverHomeClient() {
   const [navOrder, setNavOrder] = useState<OrderSummary | null>(null);
   const [filterModal, setFilterModal] = useState<FilterModalType>(null);
   const [notificationCheck, setNotificationCheck] = useState<NotificationCheck>({ permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission, subscribed: false, vapidConfigured: false });
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const previousOrderIdsRef = useRef<string[]>([]);
 
   async function load() {
@@ -131,25 +129,6 @@ export function DriverHomeClient() {
   }, []);
 
   useEffect(() => {
-    const unlockAudio = async () => {
-      if (audioContextRef.current) {
-        await audioContextRef.current.resume().catch(() => undefined);
-        setAudioUnlocked(true);
-        return;
-      }
-      const AudioCtx = window.AudioContext || (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      audioContextRef.current = ctx;
-      await ctx.resume().catch(() => undefined);
-      setAudioUnlocked(true);
-    };
-
-    window.addEventListener("pointerdown", unlockAudio, { once: true });
-    return () => window.removeEventListener("pointerdown", unlockAudio);
-  }, []);
-
-  useEffect(() => {
     fetch("/api/driver/notifications/config", { cache: "no-store" })
       .then((res) => res.json())
       .then(async (payload) => {
@@ -170,43 +149,8 @@ export function DriverHomeClient() {
   useEffect(() => {
     if (!data) return;
     const currentIds = data.availableOrders.map((item) => item.id);
-    const previousIds = previousOrderIdsRef.current;
-    if (previousIds.length > 0) {
-      const newOrders = data.availableOrders.filter((item) => !previousIds.includes(item.id));
-      if (newOrders.length > 0) {
-        const firstNew = newOrders[0];
-        if (audioContextRef.current && audioUnlocked) {
-          const now = audioContextRef.current.currentTime;
-          const toneA = audioContextRef.current.createOscillator();
-          const gainA = audioContextRef.current.createGain();
-          toneA.type = "sine";
-          toneA.frequency.setValueAtTime(880, now);
-          gainA.gain.setValueAtTime(0.0001, now);
-          gainA.gain.exponentialRampToValueAtTime(0.14, now + 0.02);
-          gainA.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-          toneA.connect(gainA).connect(audioContextRef.current.destination);
-          toneA.start(now);
-          toneA.stop(now + 0.22);
-
-          const toneB = audioContextRef.current.createOscillator();
-          const gainB = audioContextRef.current.createGain();
-          toneB.type = "sine";
-          toneB.frequency.setValueAtTime(988, now + 0.25);
-          gainB.gain.setValueAtTime(0.0001, now + 0.25);
-          gainB.gain.exponentialRampToValueAtTime(0.18, now + 0.27);
-          gainB.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
-          toneB.connect(gainB).connect(audioContextRef.current.destination);
-          toneB.start(now + 0.25);
-          toneB.stop(now + 0.5);
-        }
-
-        if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.visibilityState === "visible") {
-          new Notification("會員配送車手", { body: `${firstNew.storeName} 有新的可接訂單` });
-        }
-      }
-    }
     previousOrderIdsRef.current = currentIds;
-  }, [audioUnlocked, data]);
+  }, [data]);
 
   async function toggleAvailability() {
     if (!data || busy) return;
