@@ -2238,3 +2238,15 @@ html, body {
     grid-template-columns: 1fr;
   }
 }
+
+/* profile section margins and proof modal */
+
+
+.profile-page-wrap .profile-section {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.proof-modal-card {
+  max-width: 420px;
+}

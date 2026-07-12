@@ -112,8 +112,8 @@ export function DriverProfileClient() {
   const myRank = leaderboard?.currentDriver ?? leaderboard?.me ?? null;
 
   return (
-    <div className="stack gap-4">
-      <section className="android-card stack gap-3">
+    <div className="stack gap-4 profile-page-wrap">
+      <section className="android-card stack gap-3 profile-section">
         <div className="driver-screen-title">我的資料</div>
         <div><strong>{me?.fullName ?? "未登入"}</strong></div>
         <div className="muted">電話：{me?.maskedPhone ?? "-"}</div>
@@ -121,12 +121,12 @@ export function DriverProfileClient() {
         <div className="muted">接單：{me?.availability ?? "-"}</div>
       </section>
 
-      <section className="android-card stack gap-3">
+      <section className="android-card stack gap-3 profile-section">
         <div className="driver-section-title">車手公告</div>
         <div className="driver-notice-card">{announcement}</div>
       </section>
 
-      <section className="android-card stack gap-3">
+      <section className="android-card stack gap-3 profile-section">
         <div className="driver-section-title">收入記錄</div>
         <div className="profile-summary-grid">
           <div className="profile-summary-card"><span>今日收入</span><strong>MOP {(earnings?.todayTotal ?? 0).toFixed(1)}</strong></div>
@@ -147,7 +147,7 @@ export function DriverProfileClient() {
         </div>
       </section>
 
-      <section className="android-card stack gap-3">
+      <section className="android-card stack gap-3 profile-section">
         <div className="driver-section-title">更改密碼</div>
         <label className="driver-field compact-field">
           <span>新密碼（4 位數字）</span>
@@ -160,7 +160,7 @@ export function DriverProfileClient() {
         <button className="android-primary-btn" disabled={savingPassword} onClick={updatePassword} type="button">{savingPassword ? "處理中..." : "更改密碼"}</button>
       </section>
 
-      <section className="android-card stack gap-3">
+      <section className="android-card stack gap-3 profile-section">
         <div className="driver-section-title">車手排名</div>
         {myRank ? (
           <div className="driver-notice-card">
@@ -181,13 +181,13 @@ export function DriverProfileClient() {
         </div>
       </section>
 
-      <section className="android-card stack gap-3">
+      <section className="android-card stack gap-3 profile-section">
         <div className="muted">條款同意時間：{legal?.acceptedAt ?? "尚未同意"}</div>
         <details className="driver-detail-box"><summary>免責條款</summary><div className="driver-legal-scroll small">{legal?.disclaimer ?? "目前沒有內容。"}</div></details>
         <details className="driver-detail-box"><summary>服務條款與隱私政策</summary><div className="driver-legal-scroll small">{legal?.serviceTerms ?? "目前沒有內容。"}</div></details>
       </section>
 
-      <section className="android-card stack gap-3">
+      <section className="android-card stack gap-3 profile-section">
         <button className="android-danger-btn" onClick={logout} type="button">登出</button>
       </section>
     </div>
