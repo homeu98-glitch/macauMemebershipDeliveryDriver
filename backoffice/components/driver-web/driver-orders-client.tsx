@@ -200,10 +200,7 @@ export function DriverOrdersClient() {
             const inGrace = (order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop") && graceLeft > 0;
             return (
               <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
-                <div className="order-card-number stack gap-1">
-                  <span>訂單 {index + 1}</span>
-                  <span className="order-card-number-sub">單號 {order.transactionCode ?? order.externalOrderId}</span>
-                </div>
+                <div className="order-card-number">訂單 {index + 1}</div>
 
                 <div className="driver-inline-between align-start orders-card-top-row">
                   <div className="stack gap-1 grow minw-0">
