@@ -45,9 +45,9 @@ function dialHref(phone: string | null) {
   return phone ? `tel:${phone}` : undefined;
 }
 
-function graceSecondsLeft(pickedUpAt: string | null) {
-  if (!pickedUpAt) return 0;
-  const startedAt = new Date(pickedUpAt).getTime();
+function graceSecondsLeft(acceptedAt: string | null) {
+  if (!acceptedAt) return 0;
+  const startedAt = new Date(acceptedAt).getTime();
   if (Number.isNaN(startedAt)) return 0;
   return Math.max(0, 180 - Math.floor((Date.now() - startedAt) / 1000));
 }
@@ -196,8 +196,8 @@ export function DriverOrdersClient() {
             const canPickUp = order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop";
             const canDeliver = order.status === "picked_up" || order.status === "arrived_customer";
             const pickupElapsed = order.status === "picked_up" || order.status === "arrived_customer" ? formatPickupElapsed(order.pickedUpAt, nowTick) : null;
-            const graceLeft = graceSecondsLeft(order.pickedUpAt);
-            const inGrace = order.status === "picked_up" && graceLeft > 0;
+            const graceLeft = graceSecondsLeft(order.acceptedAt);
+            const inGrace = (order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop") && graceLeft > 0;
             return (
               <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
                 <div className="order-card-number stack gap-1">
@@ -207,7 +207,7 @@ export function DriverOrdersClient() {
 
                 <div className="driver-inline-between align-start orders-card-top-row">
                   <div className="stack gap-1 grow minw-0">
-                    <div className="order-subvalue tight">訂單號碼 {order.transactionCode ?? order.externalOrderId}</div>
+                    <div className="order-subvalue tight">{order.transactionCode ?? order.externalOrderId}</div>
                     <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
                     <div className="order-subvalue tight">已派送 {order.totalSentOrders} 單</div>
                   </div>
@@ -252,28 +252,34 @@ export function DriverOrdersClient() {
                   <span className="meta-pill">送達區：{order.destinationDistrict ?? "未分區"}</span>
                 </div>
 
+                {order.status === "canceled" ? (
+                  <div className="canceled-order-frame">此訂單已取消配送</div>
+                ) : null}
+
                 {inGrace ? <div className="grace-cancel-hint">可在 {formatGraceCountdown(graceLeft)} 內取消並釋出回首頁</div> : null}
 
                 <div className="stack gap-2 action-block-gap">
-                  {canPickUp ? (
+                  {order.status !== "canceled" && canPickUp ? (
                     <button className="android-primary-btn action-with-margin" disabled={busyOrderId === order.id + "picked_up"} onClick={() => sendStatus(order.id, "picked_up")} type="button">{busyOrderId === order.id + "picked_up" ? "處理中..." : "已取貨"}</button>
                   ) : null}
-                  {canDeliver ? (
+                  {order.status !== "canceled" && canDeliver ? (
                     <Link className="android-primary-btn no-underline action-with-margin" href={`/driver/orders/${order.id}`}>拍照後完成訂單</Link>
                   ) : null}
-                  <button
-                    className="android-danger-btn action-with-margin"
-                    disabled={busyOrderId === order.id + "canceled"}
-                    onClick={() => {
-                      setCancelOrder(order);
-                      setCancelReason("臨時有事無法配送");
-                      setCancelOtherReason("");
-                      setCancelHandling("return_to_shop");
-                    }}
-                    type="button"
-                  >
-                    {busyOrderId === order.id + "canceled" ? "處理中..." : inGrace ? "立即取消並釋出" : "取消訂單"}
-                  </button>
+                  {order.status !== "canceled" ? (
+                    <button
+                      className="android-danger-btn action-with-margin"
+                      disabled={busyOrderId === order.id + "canceled"}
+                      onClick={() => {
+                        setCancelOrder(order);
+                        setCancelReason("臨時有事無法配送");
+                        setCancelOtherReason("");
+                        setCancelHandling("return_to_shop");
+                      }}
+                      type="button"
+                    >
+                      {busyOrderId === order.id + "canceled" ? "處理中..." : inGrace ? "立即取消並釋出" : "取消訂單"}
+                    </button>
+                  ) : null}
                 </div>
               </article>
             );
@@ -285,9 +291,9 @@ export function DriverOrdersClient() {
         <div className="driver-modal-backdrop" onClick={() => setCancelOrder(null)}>
           <div className="driver-modal-card stack gap-3" onClick={(event) => event.stopPropagation()}>
             <div className="driver-screen-title small">取消訂單</div>
-            {cancelOrder.status === "picked_up" && graceSecondsLeft(cancelOrder.pickedUpAt) > 0 ? (
+            {(cancelOrder.status === "accepted" || cancelOrder.status === "assigned" || cancelOrder.status === "heading_to_shop") && graceSecondsLeft(cancelOrder.acceptedAt) > 0 ? (
               <>
-                <div className="muted">可在 {formatGraceCountdown(graceSecondsLeft(cancelOrder.pickedUpAt))} 內取消並釋出回首頁，無需填寫原因。</div>
+                <div className="muted">可在 {formatGraceCountdown(graceSecondsLeft(cancelOrder.acceptedAt))} 內取消並釋出回首頁，無需填寫原因。</div>
               </>
             ) : (
               <>

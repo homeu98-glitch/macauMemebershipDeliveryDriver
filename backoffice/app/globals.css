@@ -2103,3 +2103,43 @@ html, body {
   min-width: 0;
   max-width: 100%;
 }
+
+/* cancel card and home spacing */
+
+
+.canceled-order-frame {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #FFEFEF;
+  border: 1px solid #E6B7B7;
+  color: #B3261E;
+  font-size: 0.92rem;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+
+.home-driver-screen,
+.home-driver-screen .available-orders-section,
+.home-driver-screen .home-filter-row,
+.home-driver-screen .home-order-card .order-address-panel,
+.home-driver-screen .home-order-card .driver-auth-actions-row {
+  min-width: 0;
+}
+
+.home-driver-screen .available-orders-section {
+  margin-top: 8px;
+}
+
+.home-driver-screen .home-filter-row {
+  margin-top: 8px;
+}
+
+.home-driver-screen .home-order-card .order-address-panel {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.home-driver-screen .home-order-card .driver-auth-actions-row {
+  margin-top: 5px;
+}
