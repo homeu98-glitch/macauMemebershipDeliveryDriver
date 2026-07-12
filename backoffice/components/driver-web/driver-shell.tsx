@@ -2,13 +2,23 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type LegalState = { serviceTerms: string; mustAccept: boolean };
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice?: Promise<{ outcome: "accepted" | "dismissed" }>;
+};
+
+type DriverSoundKey = "new_order" | "urgent_order" | "customer_hurry" | "order_completed" | "order_cancelled";
+
+const DRIVER_SOUND_PATHS: Record<DriverSoundKey, string> = {
+  new_order: "/driver-sounds/new_order.mp3",
+  urgent_order: "/driver-sounds/urgent_order.mp3",
+  customer_hurry: "/driver-sounds/customer_hurry.mp3",
+  order_completed: "/driver-sounds/order_completed.mp3",
+  order_cancelled: "/driver-sounds/order_cancelled.mp3"
 };
 
 const navItems = [
@@ -45,6 +55,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
   const [hideInstallBanner, setHideInstallBanner] = useState(false);
+  const audioMapRef = useRef<Partial<Record<DriverSoundKey, HTMLAudioElement>>>({});
   const plainMode = useMemo(() => pathname === "/driver/login" || pathname === "/driver/register" || pathname === "/driver/install" || pathname.startsWith("/driver/pending"), [pathname]);
 
   useEffect(() => {
@@ -60,6 +71,35 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setStandalone(isStandaloneMode());
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/driver-sw.js").catch(() => undefined);
+
+    const audioEntries = Object.entries(DRIVER_SOUND_PATHS) as Array<[DriverSoundKey, string]>;
+    audioEntries.forEach(([key, src]) => {
+      const audio = new Audio(src);
+      audio.preload = "auto";
+      audioMapRef.current[key] = audio;
+    });
+
+    const playSoundByKey = (soundKey: string | undefined) => {
+      if (!soundKey) return;
+      const key = soundKey as DriverSoundKey;
+      const audio = audioMapRef.current[key];
+      if (!audio) return;
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        void audio.play().catch(() => undefined);
+      } catch {
+        // ignore autoplay errors
+      }
+    };
+
+    const onWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "driver_push_sound") return;
+      playSoundByKey(event.data?.soundKey);
+    };
+
+    navigator.serviceWorker?.addEventListener?.("message", onWorkerMessage);
+
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPromptEvent(event as BeforeInstallPromptEvent);
@@ -78,6 +118,12 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("appinstalled", onAppInstalled);
     window.matchMedia?.("(display-mode: standalone)")?.addEventListener?.("change", onModeChange);
     return () => {
+      navigator.serviceWorker?.removeEventListener?.("message", onWorkerMessage);
+      Object.values(audioMapRef.current).forEach((audio) => {
+        try {
+          audio?.pause();
+        } catch {}
+      });
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onAppInstalled);
       window.matchMedia?.("(display-mode: standalone)")?.removeEventListener?.("change", onModeChange);
