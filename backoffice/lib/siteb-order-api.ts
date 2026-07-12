@@ -418,7 +418,7 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       pickupTime: input.pickupTime ?? null,
       deliveryMode: normalizeDeliveryMode(input.deliveryMode),
       deliveryDeadline: input.deliveryDeadline ?? null,
-      urgent: false,
+      urgent: input.urgent === true,
       currency: input.currency ?? "MOP",
       notes: input.notes ?? {},
       callback: normalizedCallback,
@@ -440,17 +440,18 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
   await replaceItems(createdOrder.id as string, input.items ?? []);
   await appendEvent(createdOrder.id as string, "website.order_created", {
     externalOrderId: input.externalOrderId,
-    urgent: false
+    urgent: input.urgent === true
   });
 
   await sendPushToOnlineDrivers({
-    title: "有新訂單可接",
+    title: input.urgent === true ? "有急單呀, 快D睇下" : "有新訂單可接",
     body: `${input.shop.name} 有新配送工單，請立即查看首頁。`,
-    soundKey: "new_order",
+    soundKey: input.urgent === true ? "urgent_order" : "new_order",
     data: {
       type: "new_order",
       externalOrderId: input.externalOrderId,
-      urgent: "false",
+      urgent: String(input.urgent === true),
+      ...(input.urgent === true ? { playSound: "true" } : {}),
     },
   }).catch(() => undefined)
 

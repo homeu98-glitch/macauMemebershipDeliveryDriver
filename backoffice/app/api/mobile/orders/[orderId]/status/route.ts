@@ -240,8 +240,9 @@ export async function POST(
       const isUrgent =
         order.source_payload &&
         typeof order.source_payload === "object" &&
-        typeof (order.source_payload as Record<string, unknown>).priceRaisedAt === "string" &&
-        Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt);
+        (Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt) ||
+          (order.source_payload as Record<string, unknown>).urgent === true ||
+          (order.source_payload as Record<string, unknown>).urgent === "true");
 
       if (body.action === "grace_release") {
         const graceBase = assignment?.accepted_at ?? null;
