@@ -166,8 +166,7 @@ export function DriverHomeClient() {
               registration.showNotification("會員配送車手", {
                 body: `${firstNew.storeName} 有新的可接訂單`,
                 data: { url: "/driver/home", soundKey },
-                tag: `foreground-${firstNew.id}`,
-                vibrate: [140, 70, 140]
+                tag: `foreground-${firstNew.id}`
               })
             )
             .catch(() => undefined);
