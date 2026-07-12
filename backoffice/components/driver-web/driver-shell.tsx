@@ -25,6 +25,7 @@ const navItems = [
   { href: "/driver/home", label: "首頁", icon: "home" },
   { href: "/driver/orders", label: "訂單", icon: "orders" },
   { href: "/driver/completed", label: "完成", icon: "completed" },
+  { href: "/driver/notifications", label: "通知", icon: "notifications" },
   { href: "/driver/profile", label: "我的", icon: "profile" }
 ] as const;
 
@@ -39,6 +40,9 @@ function NavIcon({ type, active }: { type: (typeof navItems)[number]["icon"]; ac
   }
   if (type === "completed") {
     return <svg {...common}><circle cx="12" cy="12" r="8" stroke={stroke} strokeWidth="2"/><path d="m8.5 12 2.2 2.2 4.8-5.2" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>;
+  }
+  if (type === "notifications") {
+    return <svg {...common}><path d="M12 5a4 4 0 0 0-4 4v2.4c0 .5-.18.98-.5 1.36L6.4 14.1A1 1 0 0 0 7.16 15.8h9.68a1 1 0 0 0 .76-1.7l-1.1-1.34a2.1 2.1 0 0 1-.5-1.36V9a4 4 0 0 0-4-4Z" stroke={stroke} strokeWidth="2" strokeLinejoin="round"/><path d="M10 18a2 2 0 0 0 4 0" stroke={stroke} strokeWidth="2" strokeLinecap="round"/></svg>;
   }
   return <svg {...common}><circle cx="12" cy="8" r="3.5" stroke={stroke} strokeWidth="2"/><path d="M5 19c1.8-3 4.2-4.5 7-4.5s5.2 1.5 7 4.5" stroke={stroke} strokeWidth="2" strokeLinecap="round"/></svg>;
 }
@@ -105,7 +109,17 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       }
     };
 
+    const onWindowSound = (event: Event) => {
+      try {
+        const customEvent = event as CustomEvent<{ soundKey?: string }>;
+        playSoundByKey(customEvent.detail?.soundKey);
+      } catch {
+        // ignore custom event errors
+      }
+    };
+
     navigator.serviceWorker?.addEventListener?.("message", onWorkerMessage);
+    window.addEventListener("driver_play_sound", onWindowSound as EventListener);
     window.addEventListener("pointerdown", unlockAudio, { passive: true });
     window.addEventListener("touchstart", unlockAudio, { passive: true });
 
@@ -128,6 +142,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
     window.matchMedia?.("(display-mode: standalone)")?.addEventListener?.("change", onModeChange);
     return () => {
       navigator.serviceWorker?.removeEventListener?.("message", onWorkerMessage);
+      window.removeEventListener("driver_play_sound", onWindowSound as EventListener);
       window.removeEventListener("pointerdown", unlockAudio);
       window.removeEventListener("touchstart", unlockAudio);
       try {
