@@ -2143,3 +2143,37 @@ html, body {
 .home-driver-screen .home-order-card .driver-auth-actions-row {
   margin-top: 5px;
 }
+
+/* home section spacing and order badge clearance */
+
+
+.driver-home-page > section:nth-of-type(2) {
+  margin-top: 8px;
+}
+
+.driver-home-page .driver-filter-row.compact {
+  margin-top: 8px;
+}
+
+.driver-home-page .home-order-card .order-address-panel {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.driver-home-page .home-order-card .action-buttons-row.compact-row {
+  margin-top: 5px;
+}
+
+.order-card-number {
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 2;
+}
+
+.orders-card-top-row {
+  margin-top: 2px;
+}
+
+.order-price-block {
+  margin-left: 12px;
+}

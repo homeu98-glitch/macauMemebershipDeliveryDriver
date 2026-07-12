@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type OrderSummary = {
   id: string;
@@ -107,6 +106,8 @@ export function DriverOrdersClient() {
   const [cancelOtherReason, setCancelOtherReason] = useState("");
   const [cancelHandling, setCancelHandling] = useState<"return_to_shop" | "not_returning">("return_to_shop");
   const [nowTick, setNowTick] = useState(Date.now());
+  const [completeOrderId, setCompleteOrderId] = useState<string | null>(null);
+  const proofInputRef = useRef<HTMLInputElement | null>(null);
 
   async function load() {
     try {
@@ -155,6 +156,39 @@ export function DriverOrdersClient() {
     }
   }
 
+  async function uploadProofAndComplete(orderId: string, file: File) {
+    setBusyOrderId(orderId + "proof-delivered");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const proofResponse = await fetch(`/api/driver/orders/${orderId}/proof`, { method: "POST", body: formData });
+      const proofPayload = (await proofResponse.json().catch(() => ({}))) as { message?: string };
+      if (!proofResponse.ok) {
+        window.alert(proofPayload.message ?? "上傳送達證明失敗。");
+        return;
+      }
+      const ok = await sendStatus(orderId, "delivered");
+      if (ok) await load();
+    } catch {
+      window.alert("上傳送達證明失敗。");
+    } finally {
+      setBusyOrderId(null);
+      setCompleteOrderId(null);
+    }
+  }
+
+  function triggerComplete(orderId: string) {
+    setCompleteOrderId(orderId);
+    proofInputRef.current?.click();
+  }
+
+  async function handleProofChange(event: any) {
+    const file = event.target?.files?.[0] as File | undefined;
+    if (!file || !completeOrderId) return;
+    await uploadProofAndComplete(completeOrderId, file);
+    event.target.value = "";
+  }
+
   async function submitCancel() {
     if (!cancelOrder) return;
     const inGrace = cancelOrder.status === "picked_up" && graceSecondsLeft(cancelOrder.pickedUpAt) > 0;
@@ -178,6 +212,7 @@ export function DriverOrdersClient() {
 
   return (
     <>
+      <input accept="image/*" capture="environment" hidden onChange={handleProofChange} ref={proofInputRef} type="file" />
       <div className="stack gap-3 orders-page-wrap">
         <div className="driver-inline-between orders-header-row">
           <div className="stack gap-1">
@@ -260,7 +295,7 @@ export function DriverOrdersClient() {
                     <button className="android-primary-btn action-with-margin" disabled={busyOrderId === order.id + "picked_up"} onClick={() => sendStatus(order.id, "picked_up")} type="button">{busyOrderId === order.id + "picked_up" ? "處理中..." : "已取貨"}</button>
                   ) : null}
                   {order.status !== "canceled" && canDeliver ? (
-                    <Link className="android-primary-btn no-underline action-with-margin" href={`/driver/orders/${order.id}`}>拍照後完成訂單</Link>
+                    <button className="android-primary-btn action-with-margin" disabled={busyOrderId === order.id + "proof-delivered"} onClick={() => triggerComplete(order.id)} type="button">{busyOrderId === order.id + "proof-delivered" ? "上傳中..." : "拍照後完成訂單"}</button>
                   ) : null}
                   {order.status !== "canceled" ? (
                     <button
