@@ -156,14 +156,14 @@ export function DriverOrdersClient() {
       {orders.length === 0 ? (
         <div className="android-card muted">目前沒有進行中訂單。</div>
       ) : (
-        orders.map((order) => {
+        orders.map((order, index) => {
           const toShop = buildGoogleNavUrl(order.storeName, order.storeAddress, order.storeLatitude, order.storeLongitude);
           const toCustomer = buildGoogleNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude);
           const canPickUp = order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop";
           const canDeliver = order.status === "picked_up" || order.status === "arrived_customer";
           return (
             <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
-              <StageStrip status={order.status} />
+              <div className="order-card-number">訂單 {index + 1}</div>
 
               <div className="driver-inline-between align-start">
                 <div className="stack gap-1 grow minw-0">
@@ -174,6 +174,10 @@ export function DriverOrdersClient() {
                   <div className="order-subvalue tight">已派送 {order.totalSentOrders} 單</div>
                 </div>
                 <div className="money-chip large compact">MOP {order.amountMop.toFixed(1)}</div>
+              </div>
+
+              <div className="stage-strip-frame">
+                <StageStrip status={order.status} />
               </div>
 
               <div className="android-soft-panel order-address-panel compact stack gap-2">

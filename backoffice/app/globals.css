@@ -2022,3 +2022,32 @@ html, body {
 .orders-page-wrap .android-secondary-btn.small {
   flex-shrink: 0;
 }
+
+/* orders stage frame and order label */
+
+
+.order-card-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: #FFF6DA;
+  border: 1px solid #F0D48A;
+  color: #6E4A00;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.stage-strip-frame {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 16px;
+  background: #FBF7EF;
+  border: 1px solid #E6DCCD;
+  box-sizing: border-box;
+}
