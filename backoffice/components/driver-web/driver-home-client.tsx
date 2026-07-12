@@ -149,6 +149,31 @@ export function DriverHomeClient() {
   useEffect(() => {
     if (!data) return;
     const currentIds = data.availableOrders.map((item) => item.id);
+    const previousIds = previousOrderIdsRef.current;
+    if (previousIds.length > 0) {
+      const newOrders = data.availableOrders.filter((item) => !previousIds.includes(item.id));
+      if (newOrders.length > 0) {
+        const firstNew = newOrders[0];
+        const soundKey = firstNew.isUrgent ? "urgent_order" : "new_order";
+        try {
+          window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey } }));
+        } catch {
+          // ignore sound fallback errors
+        }
+        if (typeof Notification !== "undefined" && Notification.permission === "granted" && "serviceWorker" in navigator) {
+          navigator.serviceWorker.ready
+            .then((registration) =>
+              registration.showNotification("會員配送車手", {
+                body: `${firstNew.storeName} 有新的可接訂單`,
+                data: { url: "/driver/home", soundKey },
+                tag: `foreground-${firstNew.id}`,
+                vibrate: [140, 70, 140]
+              })
+            )
+            .catch(() => undefined);
+        }
+      }
+    }
     previousOrderIdsRef.current = currentIds;
   }, [data]);
 
