@@ -8,6 +8,16 @@ type ConfigPayload = {
   publicKey: string | null;
 };
 
+type DriverSoundKey = "new_order" | "urgent_order" | "customer_hurry" | "order_completed" | "order_cancelled";
+
+const soundTests: Array<{ key: DriverSoundKey; label: string; body: string }> = [
+  { key: "new_order", label: "測試新單聲", body: "這是一則新單提示音測試。" },
+  { key: "urgent_order", label: "測試急單聲", body: "這是一則急單提示音測試。" },
+  { key: "customer_hurry", label: "測試催單聲", body: "這是一則客戶催單提示音測試。" },
+  { key: "order_completed", label: "測試完成聲", body: "這是一則完成訂單提示音測試。" },
+  { key: "order_cancelled", label: "測試取消聲", body: "這是一則取消訂單提示音測試。" }
+];
+
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -98,13 +108,26 @@ export function DriverNotificationsClient() {
     }
   }
 
-  async function sendTest() {
+  async function sendTestNotification(soundKey?: DriverSoundKey, body?: string) {
     if (!("serviceWorker" in navigator)) return;
     const registration = await navigator.serviceWorker.ready;
     await registration.showNotification("會員配送車手", {
-      body: "這是一則測試通知，之後可用來提示新訂單。",
-      data: { url: "/driver/home" }
+      body: body ?? "這是一則測試通知，之後可用來提示新訂單。",
+      data: { url: "/driver/home", soundKey: soundKey ?? "new_order" },
+      tag: soundKey ? `manual-${soundKey}` : "manual-notification"
     });
+  }
+
+  async function triggerSoundTest(soundKey: DriverSoundKey, body: string) {
+    try {
+      window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey } }));
+      if (permission === "granted") {
+        await sendTestNotification(soundKey, body);
+      }
+      setMessage(`已觸發 ${soundKey} 測試。`);
+    } catch {
+      setMessage("測試提示失敗，請稍後再試。");
+    }
   }
 
   return (
@@ -127,7 +150,19 @@ export function DriverNotificationsClient() {
           <button className="android-primary-btn" onClick={requestPermission} type="button">開啟通知權限</button>
           <button className="android-secondary-btn" disabled={permission !== "granted" || busy || !config?.vapidPublicKeyConfigured} onClick={subscribePush} type="button">{busy ? "處理中..." : "註冊此裝置通知"}</button>
           <button className="android-secondary-btn" disabled={busy || !subscribed} onClick={unsubscribePush} type="button">取消此裝置通知</button>
-          <button className="android-secondary-btn" disabled={permission !== "granted"} onClick={sendTest} type="button">發送測試通知</button>
+          <button className="android-secondary-btn" disabled={permission !== "granted"} onClick={() => sendTestNotification()} type="button">發送測試通知</button>
+        </div>
+      </section>
+
+      <section className="android-card stack gap-3">
+        <div className="driver-section-title">聲音測試</div>
+        <div className="muted">先手動點一下頁面，再逐個測試不同事件聲音。</div>
+        <div className="driver-action-grid">
+          {soundTests.map((item) => (
+            <button className="android-secondary-btn" key={item.key} onClick={() => triggerSoundTest(item.key, item.body)} type="button">
+              {item.label}
+            </button>
+          ))}
         </div>
       </section>
     </div>
