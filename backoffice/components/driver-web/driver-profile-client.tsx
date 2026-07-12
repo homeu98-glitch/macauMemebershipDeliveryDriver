@@ -51,10 +51,8 @@ type LeaderboardPayload = {
 function extractAnnouncement(legal: LegalPayload | null) {
   const source = (legal?.disclaimer || legal?.serviceTerms || "").trim();
   if (!source) return "暫時沒有新的車手公告。";
-  const normalized = source.replace(/
-/g, "");
-  return normalized.split("
-").find((line) => line.trim().length > 0)?.trim() ?? "暫時沒有新的車手公告。";
+  const normalized = source.split(String.fromCharCode(13)).join("");
+  return normalized.split(String.fromCharCode(10)).find((line) => line.trim().length > 0)?.trim() ?? "暫時沒有新的車手公告。";
 }
 
 export function DriverProfileClient() {
