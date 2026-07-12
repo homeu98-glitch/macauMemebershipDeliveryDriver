@@ -2177,3 +2177,64 @@ html, body {
 .order-price-block {
   margin-left: 12px;
 }
+
+/* profile and completed refinements */
+
+
+.driver-notice-card {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #FFF7E5;
+  border: 1px solid #F2D7A1;
+  color: #5C430F;
+  line-height: 1.5;
+}
+
+.profile-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profile-summary-card {
+  padding: 12px;
+  border-radius: 14px;
+  background: #FFFDF8;
+  border: 1px solid #E8DED0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-summary-card span {
+  font-size: 0.82rem;
+  color: #7A746B;
+}
+
+.profile-summary-card strong {
+  font-size: 0.98rem;
+  color: #2A1A00;
+}
+
+.driver-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #F0E7DA;
+}
+
+.driver-list-row:last-child {
+  border-bottom: none;
+}
+
+.small-text {
+  font-size: 0.8rem;
+}
+
+@media (max-width: 480px) {
+  .profile-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
