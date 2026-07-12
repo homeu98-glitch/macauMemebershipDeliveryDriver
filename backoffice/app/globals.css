@@ -2051,3 +2051,55 @@ html, body {
   border: 1px solid #E6DCCD;
   box-sizing: border-box;
 }
+
+/* orders timer and spacing refinements */
+
+
+.order-block-gap {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.action-block-gap {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.action-with-margin {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.order-price-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pickup-elapsed-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #E9F7EF;
+  border: 1px solid #B7DEC4;
+  color: #22663A;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.grace-cancel-hint {
+  font-size: 0.84rem;
+  color: #8A5A00;
+  line-height: 1.35;
+}
+
+.orders-card-top-row {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
