@@ -207,6 +207,8 @@ export function DriverHomeClient() {
   }
 
   async function acceptOrder(orderId: string) {
+    if (acceptingOrderId) return;
+    setAcceptingOrderId(orderId);
     try {
       const response = await fetch(`/api/driver/orders/${orderId}/status`, {
         method: "POST",
@@ -221,6 +223,8 @@ export function DriverHomeClient() {
       await load();
     } catch {
       window.alert("接單失敗，請稍後再試。");
+    } finally {
+      setAcceptingOrderId(null);
     }
   }
 
@@ -342,7 +346,10 @@ export function DriverHomeClient() {
                     disabled={acceptingOrderId !== null || data.availability !== "online"}
                     onClick={() => acceptOrder(order.id)}
                     type="button"
-                  >{acceptingOrderId === order.id ? "接單中..." : data.availability === "online" ? "接單" : "請先上線"}</button>
+                  >
+                    {acceptingOrderId === order.id ? <span className="btn-spinner" aria-hidden="true" /> : null}
+                    {acceptingOrderId === order.id ? "接單中..." : data.availability === "online" ? "接單" : "請先上線"}
+                  </button>
                 </div>
               </article>
             );
