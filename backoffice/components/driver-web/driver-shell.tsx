@@ -75,6 +75,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
   const [hideInstallBanner, setHideInstallBanner] = useState(false);
+  const [showInstallPromptModal, setShowInstallPromptModal] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ title: string; body: string } | null>(null);
   const audioUnlockedRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -352,23 +353,35 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       await installPromptEvent.prompt();
       const result = await installPromptEvent.userChoice;
       if (result?.outcome === "accepted") {
+        setShowInstallPromptModal(false);
         setHideInstallBanner(true);
         try { window.localStorage.setItem("driver-pwa-install-accepted", "1"); } catch {}
       }
       if (result?.outcome === "dismissed") {
+        setShowInstallPromptModal(false);
         try { window.localStorage.setItem("driver-pwa-install-dismissed", "1"); } catch {}
       }
       return;
     }
+    setShowInstallPromptModal(false);
     window.location.href = "/driver/install";
   }
 
   function dismissInstallBanner() {
+    setShowInstallPromptModal(false);
     setHideInstallBanner(true);
     try { window.localStorage.setItem("driver-pwa-install-dismissed", "1"); } catch {}
   }
 
   const showInstallBanner = !plainMode && !standalone && !hideInstallBanner;
+
+  useEffect(() => {
+    if (showInstallBanner) {
+      const timer = window.setTimeout(() => setShowInstallPromptModal(true), 300);
+      return () => window.clearTimeout(timer);
+    }
+    setShowInstallPromptModal(false);
+  }, [showInstallBanner]);
 
   return (
     <>
@@ -402,6 +415,19 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       )}
+      {showInstallPromptModal ? (
+        <div className="driver-modal-backdrop" onClick={dismissInstallBanner}>
+          <div className="driver-modal-card stack gap-3" onClick={(event) => event.stopPropagation()}>
+            <div className="driver-screen-title small">安裝車手 App</div>
+            <div className="muted">可直接安裝到手機主畫面，之後會像 App 一樣打開，更方便收單與通知。</div>
+            <div className="muted small-text">Android 可直接安裝；iPhone 會帶你去安裝教學頁。</div>
+            <div className="driver-inline-between" style={{ gap: 10 }}>
+              <button className="android-primary-btn" onClick={triggerInstall} type="button">立即安裝</button>
+              <button className="android-secondary-btn" onClick={dismissInstallBanner} type="button">稍後</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {toastMessage ? (
         <div className="driver-realtime-toast">
           <div className="driver-realtime-toast-title">{toastMessage.title}</div>
