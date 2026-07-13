@@ -388,7 +388,7 @@ function buildRandomOrder(index: number, callbackBaseUrl: string): CreateOrderIn
     deliveryMode: "scheduled",
     deliveryDeadline,
     deliveryFeeMop: 28 + index * 6,
-    urgent: index % 2 === 0,
+    urgent: false,
     currency: "MOP",
     shop: {
       externalShopId: `TEST-SHOP-${index + 1}-${suffix}`,

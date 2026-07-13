@@ -167,11 +167,7 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     order?.source_payload && typeof order.source_payload === "object"
       ? (order.source_payload as Record<string, unknown>)
       : null;
-  const urgentFromPayload =
-    sourcePayload?.priceRaisedAt ||
-    sourcePayload?.price_raised_at ||
-    sourcePayload?.urgent === true ||
-    sourcePayload?.urgent === "true";
+  const urgentFromPayload = sourcePayload?.priceRaisedAt || sourcePayload?.price_raised_at;
   return {
     id: order.id,
     externalOrderId: order.external_order_id,
