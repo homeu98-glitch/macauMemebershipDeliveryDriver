@@ -2,12 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+type AnnouncementItem = {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+};
+
 type MePayload = {
   fullName: string;
   maskedPhone: string;
   approvalStatus: string;
   availability: string;
   acceptedTermsAt: string | null;
+  announcements?: AnnouncementItem[];
 };
 
 type LegalPayload = {
@@ -48,11 +56,40 @@ type LeaderboardPayload = {
   me?: LeaderboardEntry | null;
 };
 
-function extractAnnouncement(legal: LegalPayload | null) {
-  const source = (legal?.disclaimer || legal?.serviceTerms || "").trim();
-  if (!source) return "暫時沒有新的車手公告。";
-  const normalized = source.split(String.fromCharCode(13)).join("");
-  return normalized.split(String.fromCharCode(10)).find((line) => line.trim().length > 0)?.trim() ?? "暫時沒有新的車手公告。";
+function labelApprovalStatus(value: string | null | undefined) {
+  switch ((value ?? "").toLowerCase()) {
+    case "approved":
+      return "已核准";
+    case "pending_review":
+    case "pending":
+      return "待審核";
+    case "rejected":
+      return "未通過";
+    case "suspended":
+      return "已停用";
+    default:
+      return value ?? "-";
+  }
+}
+
+function labelAvailability(value: string | null | undefined) {
+  switch ((value ?? "").toLowerCase()) {
+    case "online":
+      return "上線";
+    case "offline":
+      return "離線";
+    default:
+      return value ?? "-";
+  }
+}
+
+function firstAnnouncement(items: AnnouncementItem[] | undefined) {
+  const first = (items ?? [])[0];
+  if (!first) return { title: "車手公告", content: "暫時沒有新的車手公告。" };
+  return {
+    title: first.title?.trim() ? first.title : "車手公告",
+    content: (first.content ?? "").trim() || "暫時沒有新的車手公告。"
+  };
 }
 
 export function DriverProfileClient() {
@@ -107,7 +144,7 @@ export function DriverProfileClient() {
     }
   }
 
-  const announcement = useMemo(() => extractAnnouncement(legal), [legal]);
+  const announcement = useMemo(() => firstAnnouncement(me?.announcements), [me?.announcements]);
   const leaderboardRows = (leaderboard?.entries ?? leaderboard?.leaderboard ?? leaderboard?.rows ?? []).slice(0, 5);
   const myRank = leaderboard?.currentDriver ?? leaderboard?.me ?? null;
 
@@ -117,13 +154,16 @@ export function DriverProfileClient() {
         <div className="driver-screen-title">我的資料</div>
         <div><strong>{me?.fullName ?? "未登入"}</strong></div>
         <div className="muted">電話：{me?.maskedPhone ?? "-"}</div>
-        <div className="muted">狀態：{me?.approvalStatus ?? "-"}</div>
-        <div className="muted">接單：{me?.availability ?? "-"}</div>
+        <div className="muted">狀態：{labelApprovalStatus(me?.approvalStatus)}</div>
+        <div className="muted">接單：{labelAvailability(me?.availability)}</div>
       </section>
 
       <section className="android-card stack gap-3 profile-section">
         <div className="driver-section-title">車手公告</div>
-        <div className="driver-notice-card">{announcement}</div>
+        <div className="driver-notice-card">
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>{announcement.title}</div>
+          <div style={{ whiteSpace: "pre-wrap" }}>{announcement.content}</div>
+        </div>
       </section>
 
       <section className="android-card stack gap-3 profile-section">

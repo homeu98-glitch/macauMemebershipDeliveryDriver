@@ -45,6 +45,17 @@ function buildGoogleNavUrl(label: string, address: string, lat: number, lng: num
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${label} ${address}`)}`;
 }
 
+
+function buildAmapNavUrl(label: string, address: string, latitude: number | null, longitude: number | null) {
+  if (!latitude || !longitude) return null;
+  const url = new URL("https://uri.amap.com/navigation");
+  url.searchParams.set("to", `${longitude},${latitude},${label}`);
+  url.searchParams.set("mode", "car");
+  url.searchParams.set("src", "membership_delivery_driver_web");
+  url.searchParams.set("callnative", "1");
+  return url.toString();
+}
+
 function dialHref(phone: string | null) {
   return phone ? `tel:${phone}` : undefined;
 }
@@ -129,6 +140,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const [showCancelPanel, setShowCancelPanel] = useState(false);
   const [cancelReason, setCancelReason] = useState("customer_request");
   const [cancelOtherReason, setCancelOtherReason] = useState("");
+  const [navTarget, setNavTarget] = useState<{ label: string; googleUrl: string | null; amapUrl: string | null } | null>(null);
   const [cancelHandling, setCancelHandling] = useState<"return_to_shop" | "not_returning">("return_to_shop");
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const previousOrderStatusRef = useRef<string | null>(null);
@@ -313,7 +325,9 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
               </div>
               <div className="mini-icon-actions">
                 <IconButtonLink href={dialHref(order.storePhone)} label="致電商戶" type="call" disabled={!order.storePhone} />
-                <IconButtonLink href={toShop} label="導航到商戶" type="nav" />
+                <button className="mini-icon-btn" onClick={() => setNavTarget({ label: `導航到商戶：${order.storeName}`, googleUrl: toShop, amapUrl: buildAmapNavUrl(order.storeName, order.storeAddress, order.storeLatitude, order.storeLongitude) })} type="button">
+                <span className="mini-icon" aria-hidden>🧭</span>
+              </button>
               </div>
             </div>
             <div className="location-row-web">
@@ -324,7 +338,9 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
               </div>
               <div className="mini-icon-actions">
                 <IconButtonLink href={dialHref(order.customerPhone)} label="致電客戶" type="call" disabled={!order.customerPhone} />
-                <IconButtonLink href={toCustomer} label="導航到客戶" type="nav" />
+                <button className="mini-icon-btn" onClick={() => setNavTarget({ label: `導航到客戶：${order.customerName}`, googleUrl: toCustomer, amapUrl: buildAmapNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude) })} type="button">
+                <span className="mini-icon" aria-hidden>🧭</span>
+              </button>
               </div>
             </div>
           </div>
@@ -405,6 +421,25 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
           </div>
         </div>
       ) : null}
-    </>
+    
+
+{navTarget ? (
+  <div className="driver-modal-backdrop" onClick={() => setNavTarget(null)}>
+    <div className="driver-modal-card stack gap-3" onClick={(event) => event.stopPropagation()}>
+      <div className="driver-screen-title small">{navTarget.label}</div>
+      <div className="muted">請選擇導航軟件</div>
+      <div className="driver-inline-between" style={{ gap: 10 }}>
+        <a className={navTarget.amapUrl ? "android-primary-btn" : "android-primary-btn disabled"} href={navTarget.amapUrl ?? undefined} onClick={() => setNavTarget(null)} rel="noreferrer" target="_blank">
+          高德
+        </a>
+        <a className={navTarget.googleUrl ? "android-secondary-btn" : "android-secondary-btn disabled"} href={navTarget.googleUrl ?? undefined} onClick={() => setNavTarget(null)} rel="noreferrer" target="_blank">
+          Google
+        </a>
+      </div>
+      <button className="android-secondary-btn" onClick={() => setNavTarget(null)} type="button">關閉</button>
+    </div>
+  </div>
+) : null}
+</>
   );
 }
