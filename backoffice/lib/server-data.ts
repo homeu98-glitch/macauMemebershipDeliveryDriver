@@ -147,7 +147,49 @@ export async function listRiders(): Promise<Rider[]> {
     throw error;
   }
 
-  return (data ?? []).map((item: any) => ({
+  const riders = data ?? [];
+  const { data: deliveredOrders, error: deliveredOrdersError } = await supabase
+    .from("orders")
+    .select("id")
+    .eq("status", "delivered");
+
+  if (deliveredOrdersError) {
+    throw deliveredOrdersError;
+  }
+
+  const deliveredOrderIds = (deliveredOrders ?? []).map((item: any) => item.id);
+  const { data: deliveredAssignments, error: deliveredAssignmentsError } = deliveredOrderIds.length
+    ? await supabase
+        .from("order_assignments")
+        .select("order_id,driver_id,assigned_at,canceled_at")
+        .in("order_id", deliveredOrderIds)
+        .order("assigned_at", { ascending: false })
+    : { data: [], error: null as any };
+
+  if (deliveredAssignmentsError) {
+    throw deliveredAssignmentsError;
+  }
+
+  const latestActiveAssignmentByOrderId = new Map<string, { driver_id: string; assigned_at: string }>();
+  for (const assignment of deliveredAssignments ?? []) {
+    if (assignment.canceled_at) continue;
+    if (!latestActiveAssignmentByOrderId.has(assignment.order_id)) {
+      latestActiveAssignmentByOrderId.set(assignment.order_id, {
+        driver_id: assignment.driver_id,
+        assigned_at: assignment.assigned_at
+      });
+    }
+  }
+
+  const completedCountByDriverId = new Map<string, number>();
+  for (const assignment of latestActiveAssignmentByOrderId.values()) {
+    completedCountByDriverId.set(
+      assignment.driver_id,
+      (completedCountByDriverId.get(assignment.driver_id) ?? 0) + 1
+    );
+  }
+
+  return riders.map((item: any) => ({
     id: item.id,
     name: item.full_name,
     phone: item.phone,
@@ -165,7 +207,7 @@ export async function listRiders(): Promise<Rider[]> {
           ? "rejected"
           : "pending",
     rating: 0,
-    completedOrders: 0
+    completedOrders: completedCountByDriverId.get(item.id) ?? 0
   }));
 }
 
