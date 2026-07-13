@@ -277,7 +277,7 @@ export async function listActiveOrders(driverId: string) {
     .from("orders")
     .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
     .in("id", orderIds)
-    .neq("status", "delivered")
+    .not("status", "in", "(\"delivered\",\"canceled\",\"failed\")")
     .order("created_at", { ascending: false });
 
   const orders = rows ?? [];
