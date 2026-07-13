@@ -92,6 +92,7 @@ export function DriverHomeClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [acceptingOrderId, setAcceptingOrderId] = useState<string | null>(null);
   const [pickupDistricts, setPickupDistricts] = useState<string[]>([]);
   const [destinationDistricts, setDestinationDistricts] = useState<string[]>([]);
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -336,7 +337,12 @@ export function DriverHomeClient() {
 
                 <div className="driver-inline-between action-buttons-row compact-row">
                   <button className="android-outline-link as-button nav-btn-large compact" onClick={() => setNavOrder(order)} type="button">前往商戶</button>
-                  <button className="android-primary-btn order-accept-btn compact" onClick={() => acceptOrder(order.id)} type="button">{data.availability === "online" ? "接單" : "請先上線"}</button>
+                  <button
+                    className={acceptingOrderId === order.id ? "android-primary-btn order-accept-btn compact loading" : "android-primary-btn order-accept-btn compact"}
+                    disabled={acceptingOrderId !== null || data.availability !== "online"}
+                    onClick={() => acceptOrder(order.id)}
+                    type="button"
+                  >{acceptingOrderId === order.id ? "接單中..." : data.availability === "online" ? "接單" : "請先上線"}</button>
                 </div>
               </article>
             );

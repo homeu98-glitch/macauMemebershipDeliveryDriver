@@ -240,7 +240,13 @@ export function DriverOrdersClient() {
             const inGrace = (order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop") && graceLeft > 0;
             return (
               <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
-                <div className="order-card-number">訂單 {index + 1}</div>
+                <div className="active-order-card-topbar">
+                  <div className="order-card-number">訂單 {index + 1}</div>
+                  <div className="order-price-top-right">
+                    <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
+                    {pickupElapsed ? <div className="pickup-elapsed-chip">{pickupElapsed}</div> : null}
+                  </div>
+                </div>
 
                 <div className="driver-inline-between align-start orders-card-top-row">
                   <div className="stack gap-1 grow minw-0">
@@ -248,10 +254,6 @@ export function DriverOrdersClient() {
                     <div className="order-subvalue tight">{order.transactionCode ?? order.externalOrderId}</div>
                     <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
                     <div className="order-subvalue tight">已派送 {order.totalSentOrders} 單</div>
-                  </div>
-                  <div className="order-price-block">
-                    <div className="money-chip large compact">MOP {order.amountMop.toFixed(1)}</div>
-                    {pickupElapsed ? <div className="pickup-elapsed-chip">{pickupElapsed}</div> : null}
                   </div>
                 </div>
 

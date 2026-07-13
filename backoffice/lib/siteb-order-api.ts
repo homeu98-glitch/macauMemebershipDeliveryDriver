@@ -473,7 +473,7 @@ export async function cancelOrderByExternalId(
   const { data: order, error } = await supabase
     .from("orders")
     .select("id,status,source_payload")
-    .eq("external_order_id", externalOrderId)
+    .or(`external_order_id.eq.${externalOrderId},transaction_code.eq.${externalOrderId}`)
     .maybeSingle();
 
   if (error) throw error;
@@ -776,7 +776,7 @@ export async function raiseOrderPriceByExternalId(
   const { data: order, error } = await supabase
     .from("orders")
     .select("id,status,source_payload")
-    .eq("external_order_id", externalOrderId)
+    .or(`external_order_id.eq.${externalOrderId},transaction_code.eq.${externalOrderId}`)
     .maybeSingle();
   if (error) throw error;
   if (!order) return { found: false as const };
@@ -861,7 +861,7 @@ export async function hurryOrderByExternalId(
   const { data: order, error } = await supabase
     .from("orders")
     .select("id,status")
-    .eq("external_order_id", externalOrderId)
+    .or(`external_order_id.eq.${externalOrderId},transaction_code.eq.${externalOrderId}`)
     .maybeSingle();
 
   if (error) throw error;
@@ -908,7 +908,7 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
   const { data: order, error } = await supabase
     .from("orders")
     .select("id,external_order_id,status,assigned_fee_mop,created_at,promised_at,source_payload,shop_id,customer_id")
-    .eq("external_order_id", externalOrderId)
+    .or(`external_order_id.eq.${externalOrderId},transaction_code.eq.${externalOrderId}`)
     .maybeSingle();
 
   if (error) throw error;
