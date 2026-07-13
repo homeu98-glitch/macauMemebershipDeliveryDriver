@@ -251,13 +251,7 @@ export async function listAvailableOrders(filters?: { pickupDistrict?: string; d
     .order("created_at", { ascending: false })
     .limit(30);
 
-  const orders = (rows ?? []).filter((row: any) => {
-    if (row.status !== "canceled") return true;
-    const sourcePayload = row?.source_payload && typeof row.source_payload === "object"
-      ? (row.source_payload as Record<string, unknown>)
-      : null;
-    return !sourcePayload?.shopConfirmedAt;
-  });
+  const orders = rows ?? [];
   const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
   const mapped = orders.map((row: any) => toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId));
   return mapped.filter((item) => {
@@ -286,24 +280,22 @@ export async function listActiveOrders(driverId: string) {
     .not("status", "in", "(\"delivered\",\"failed\")")
     .order("created_at", { ascending: false });
 
-  const orders = (rows ?? []).filter((row: any) => {
-    if (row.status !== "canceled") return true;
-    const sourcePayload = row?.source_payload && typeof row.source_payload === "object"
-      ? (row.source_payload as Record<string, unknown>)
-      : null;
-    return !sourcePayload?.shopConfirmedAt;
-  });
+  const rawOrders = rows ?? [];
   const acceptedAtByOrderId = new Map((assignments ?? []).map((item: any) => [item.order_id, item.accepted_at ?? null]));
   const { data: events } = await supabase
     .from("order_events")
     .select("order_id,event_type,created_at,payload")
     .in("order_id", orderIds)
-    .in("event_type", ["picked_up", "issue_reported"]);
+    .in("event_type", ["picked_up", "issue_reported", "website.shop_owner_confirmed_driver_cancel"]);
   const pickedUpAtByOrderId = new Map<string, string>();
   const cancelMetaByOrderId = new Map<string, { cancelReason: string | null; cancelOtherReason: string | null; cancelHandling: "return_to_shop" | "not_returning" | null }>();
+  const shopConfirmedCancelOrderIds = new Set<string>();
   for (const event of events ?? []) {
     if (event.event_type === "picked_up" && !pickedUpAtByOrderId.has(event.order_id)) {
       pickedUpAtByOrderId.set(event.order_id, event.created_at);
+    }
+    if (event.event_type === "website.shop_owner_confirmed_driver_cancel") {
+      shopConfirmedCancelOrderIds.add(event.order_id);
     }
     if (event.event_type === "issue_reported" && event.payload && !cancelMetaByOrderId.has(event.order_id)) {
       const payload = event.payload as Record<string, unknown>;
@@ -315,6 +307,13 @@ export async function listActiveOrders(driverId: string) {
       }
     }
   }
+  const orders = rawOrders.filter((row: any) => {
+    if (row.status !== "canceled") return true;
+    const sourcePayload = row?.source_payload && typeof row.source_payload === "object"
+      ? (row.source_payload as Record<string, unknown>)
+      : null;
+    return !sourcePayload?.shopConfirmedAt && !shopConfirmedCancelOrderIds.has(row.id);
+  });
   const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
   return orders.map((row: any) => {
     const cancelMeta = cancelMetaByOrderId.get(row.id);
@@ -447,13 +446,7 @@ export async function listCompletedOrders(driverId: string, range: "today" | "we
     .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
     .in("id", orderIds)
     .order("created_at", { ascending: false });
-  const orders = (rows ?? []).filter((row: any) => {
-    if (row.status !== "canceled") return true;
-    const sourcePayload = row?.source_payload && typeof row.source_payload === "object"
-      ? (row.source_payload as Record<string, unknown>)
-      : null;
-    return !sourcePayload?.shopConfirmedAt;
-  });
+  const orders = rows ?? [];
   const deliveredAtByOrderId = new Map(events.map((item: any) => [item.order_id, formatDateTime(item.created_at)]));
   const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
   return orders.map((row: any) => ({

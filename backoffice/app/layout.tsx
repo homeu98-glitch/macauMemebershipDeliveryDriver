@@ -8,7 +8,12 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Membership Delivery Driver Backoffice",
   description:
-    "Operations backoffice for rider approvals, orders, callbacks, and settings."
+    "Operations backoffice for rider approvals, orders, callbacks, and settings.",
+  icons: {
+    icon: "/icons/driver-app-logo-v2-192.png",
+    apple: "/icons/driver-app-logo-v2-192.png",
+    shortcut: "/icons/driver-app-logo-v2-192.png"
+  }
 };
 
 export default function RootLayout({

@@ -244,11 +244,20 @@ export async function POST(
         Boolean((order.source_payload as Record<string, unknown>).priceRaisedAt);
 
       if (body.action === "grace_release") {
-        const graceBase = assignment?.accepted_at ?? null;
+        const { data: pickedUpEvent } = await supabase
+          .from("order_events")
+          .select("created_at")
+          .eq("order_id", params.orderId)
+          .eq("event_type", "picked_up")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const graceBase = pickedUpEvent?.created_at ?? null;
         const withinGrace =
           typeof graceBase === "string" &&
           Date.now() - new Date(graceBase).getTime() <= 60 * 1000;
         const canRelease =
+          order.status === "picked_up" &&
           withinGrace &&
           !["delivered", "canceled"].includes(order.status);
 

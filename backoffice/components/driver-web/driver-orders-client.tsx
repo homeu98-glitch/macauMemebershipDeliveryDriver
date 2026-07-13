@@ -205,6 +205,10 @@ export function DriverOrdersClient() {
           cancelHandling
         });
     if (ok) {
+      if (inGrace) {
+        window.location.href = "/driver/home";
+        return;
+      }
       setCancelOrder(null);
       setCancelReason("臨時有事無法配送");
       setCancelOtherReason("");
@@ -236,8 +240,8 @@ export function DriverOrdersClient() {
             const canPickUp = order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop";
             const canDeliver = order.status === "picked_up" || order.status === "arrived_customer";
             const pickupElapsed = order.status === "picked_up" || order.status === "arrived_customer" ? formatPickupElapsed(order.pickedUpAt, nowTick) : null;
-            const graceLeft = graceSecondsLeft(order.acceptedAt);
-            const inGrace = (order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop") && graceLeft > 0;
+            const graceLeft = graceSecondsLeft(order.pickedUpAt);
+            const inGrace = order.status === "picked_up" && graceLeft > 0;
             return (
               <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
                 <div className="active-order-card-topbar with-pickup-timer">
