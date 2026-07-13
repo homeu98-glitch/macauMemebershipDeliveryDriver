@@ -2342,3 +2342,55 @@ html, body {
 .home-empty-orders {
   margin-top: 15px;
 }
+
+
+/* pickup timer middle layout */
+
+.active-order-card-topbar.with-pickup-timer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.pickup-elapsed-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.order-price-top-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.pickup-elapsed-chip {
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #F4F0FF;
+  color: #5A4690;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .active-order-card-topbar.with-pickup-timer {
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+  }
+
+  .pickup-elapsed-chip {
+    font-size: 0.7rem;
+    padding: 3px 7px;
+  }
+}
