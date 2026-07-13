@@ -43,6 +43,15 @@ function NavIcon({ type, active }: { type: (typeof navItems)[number]["icon"]; ac
   return <svg {...common}><circle cx="12" cy="8" r="3.5" stroke={stroke} strokeWidth="2"/><path d="M5 19c1.8-3 4.2-4.5 7-4.5s5.2 1.5 7 4.5" stroke={stroke} strokeWidth="2" strokeLinecap="round"/></svg>;
 }
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
 function isStandaloneMode() {
   if (typeof window === "undefined") return false;
   return window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -73,7 +82,33 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setStandalone(isStandaloneMode());
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/driver-sw.js").catch(() => undefined);
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/driver-sw.js")
+        .then(async (registration) => {
+          try {
+            const configResponse = await fetch("/api/driver/notifications/config", { cache: "no-store" });
+            const config = (await configResponse.json()) as { publicKey?: string | null; vapidPublicKeyConfigured?: boolean };
+            if (typeof Notification !== "undefined" && Notification.permission === "granted" && config?.vapidPublicKeyConfigured && config.publicKey) {
+              let subscription = await registration.pushManager.getSubscription();
+              if (!subscription) {
+                subscription = await registration.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlBase64ToUint8Array(config.publicKey)
+                });
+              }
+              const payload = subscription.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
+              if (payload.endpoint && payload.keys?.p256dh && payload.keys?.auth) {
+                await fetch("/api/driver/notifications/subscribe", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ ...payload, deviceLabel: navigator.userAgent })
+                }).catch(() => undefined);
+              }
+            }
+          } catch {}
+        })
+        .catch(() => undefined);
+    }
 
     Object.entries(DRIVER_SOUND_PATHS).forEach(([key, src]) => {
       const audio = new window.Audio(src);

@@ -335,9 +335,9 @@ export function DriverOrdersClient() {
         <div className="driver-modal-backdrop" onClick={() => setCancelOrder(null)}>
           <div className="driver-modal-card stack gap-3" onClick={(event) => event.stopPropagation()}>
             <div className="driver-screen-title small">取消訂單</div>
-            {(cancelOrder.status === "accepted" || cancelOrder.status === "assigned" || cancelOrder.status === "heading_to_shop") && graceSecondsLeft(cancelOrder.acceptedAt) > 0 ? (
+            {cancelOrder.status === "picked_up" && graceSecondsLeft(cancelOrder.pickedUpAt) > 0 ? (
               <>
-                <div className="muted">可在 {formatGraceCountdown(graceSecondsLeft(cancelOrder.acceptedAt))} 內取消並釋出回首頁，無需填寫原因。</div>
+                <div className="muted">可在 {formatGraceCountdown(graceSecondsLeft(cancelOrder.pickedUpAt))} 內取消並釋出回首頁，無需填寫原因。</div>
               </>
             ) : (
               <>
@@ -368,7 +368,7 @@ export function DriverOrdersClient() {
             )}
             <div className="driver-auth-actions-row single-mobile-row">
               <button className="android-secondary-btn" onClick={() => setCancelOrder(null)} type="button">返回</button>
-              <button className="android-danger-btn" onClick={submitCancel} type="button">確認取消</button>
+              <button className="android-danger-btn" onClick={submitCancel} type="button">{cancelOrder.status === "picked_up" && graceSecondsLeft(cancelOrder.pickedUpAt) > 0 ? "立即取消並釋出" : "確認取消"}</button>
             </div>
           </div>
         </div>

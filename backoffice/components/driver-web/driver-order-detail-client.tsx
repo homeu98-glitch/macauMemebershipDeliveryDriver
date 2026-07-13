@@ -150,7 +150,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const canPickUp = order?.status === "accepted" || order?.status === "assigned" || order?.status === "heading_to_shop";
   const canDeliver = order?.status === "picked_up" || order?.status === "arrived_customer";
   const graceLeft = graceSecondsLeft(order?.pickedUpAt ?? null);
-  const inGraceCancel = Boolean(order && (order.status === "picked_up" || order.status === "arrived_customer") && graceLeft > 0);
+  const inGraceCancel = Boolean(order && order.status === "picked_up" && graceLeft > 0);
 
   async function sendStatus(eventType: string, redirectAfter = false, extra: Record<string, unknown> = {}) {
     setActionBusy(eventType);
@@ -314,7 +314,8 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
             {canAccept ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("accepted")} type="button">{actionBusy === "accepted" ? "接單中..." : "接單"}</button> : null}
             {canPickUp ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("picked_up")} type="button">{actionBusy === "picked_up" ? "處理中..." : "已取貨"}</button> : null}
             {canDeliver ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={handleCompleteClick} type="button">{actionBusy === "proof-deliver" || actionBusy === "delivered" ? "處理中..." : "拍照後完成訂單"}</button> : null}
-            {order.status !== "delivered" ? <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => setShowCancelPanel(true)} type="button">取消訂單</button> : null}
+            {inGraceCancel ? <div className="grace-cancel-hint">可在 {formatGraceCountdown(graceLeft)} 內取消並釋出回首頁</div> : null}
+            {order.status !== "delivered" ? <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => setShowCancelPanel(true)} type="button">{inGraceCancel ? "立即取消並釋出" : "取消訂單"}</button> : null}
           </div>
         </section>
 

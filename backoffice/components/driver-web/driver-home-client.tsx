@@ -116,7 +116,7 @@ export function DriverHomeClient() {
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 15000);
+    const timer = window.setInterval(load, 5000);
     return () => window.clearInterval(timer);
   }, []);
 
@@ -156,6 +156,9 @@ export function DriverHomeClient() {
       const urgentTransitions = data.availableOrders.filter((item) => previousState[item.id] === false && item.isUrgent);
       const newOrders = data.availableOrders.filter((item) => !(item.id in previousState));
       const notificationOrder = urgentTransitions[0] ?? newOrders[0] ?? null;
+      if (document.visibilityState === "visible") {
+        void load();
+      }
 
       if (notificationOrder) {
         const soundKey = notificationOrder.isUrgent ? "urgent_order" : "new_order";
