@@ -57,6 +57,8 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   const [hideInstallBanner, setHideInstallBanner] = useState(false);
   const audioUnlockedRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const pendingSoundRef = useRef<DriverSoundKey | null>(null);
+  const audioPoolRef = useRef<Partial<Record<DriverSoundKey, HTMLAudioElement>>>({});
   const plainMode = useMemo(() => pathname === "/driver/login" || pathname === "/driver/register" || pathname === "/driver/install" || pathname.startsWith("/driver/pending"), [pathname]);
 
   useEffect(() => {
@@ -73,24 +75,42 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
     setStandalone(isStandaloneMode());
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/driver-sw.js").catch(() => undefined);
 
+    Object.entries(DRIVER_SOUND_PATHS).forEach(([key, src]) => {
+      const audio = new window.Audio(src);
+      audio.preload = "auto";
+      audioPoolRef.current[key as DriverSoundKey] = audio;
+      try { audio.load(); } catch {}
+    });
+
     const unlockAudio = () => {
       audioUnlockedRef.current = true;
+      const pending = pendingSoundRef.current;
+      if (pending) {
+        pendingSoundRef.current = null;
+        window.setTimeout(() => playSoundByKey(pending), 0);
+      }
     };
 
     const playSoundByKey = (soundKey: string | undefined) => {
-      if (!audioUnlockedRef.current) return;
       if (typeof window === "undefined" || typeof window.Audio === "undefined") return;
       const key = (soundKey && soundKey in DRIVER_SOUND_PATHS ? soundKey : "new_order") as DriverSoundKey;
       const src = DRIVER_SOUND_PATHS[key];
       try {
+        if (!audioUnlockedRef.current) {
+          pendingSoundRef.current = key;
+          return;
+        }
         if (currentAudioRef.current) {
           currentAudioRef.current.pause();
           currentAudioRef.current.currentTime = 0;
         }
-        const audio = new window.Audio(src);
+        const pooled = audioPoolRef.current[key];
+        const audio = pooled ?? new window.Audio(src);
         audio.preload = "auto";
+        audio.currentTime = 0;
         currentAudioRef.current = audio;
-        void audio.play().catch(() => undefined);
+        void audio.play().catch(() => { pendingSoundRef.current = key; });
+        if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
       } catch {
         // ignore audio runtime issues on unsupported browsers
       }
@@ -118,6 +138,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("driver_play_sound", onWindowSound as EventListener);
     window.addEventListener("pointerdown", unlockAudio, { passive: true });
     window.addEventListener("touchstart", unlockAudio, { passive: true });
+    window.addEventListener("keydown", unlockAudio, { passive: true });
 
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
@@ -141,6 +162,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       window.removeEventListener("driver_play_sound", onWindowSound as EventListener);
       window.removeEventListener("pointerdown", unlockAudio);
       window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
       try {
         currentAudioRef.current?.pause();
       } catch {}

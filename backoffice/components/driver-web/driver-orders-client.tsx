@@ -48,7 +48,7 @@ function graceSecondsLeft(acceptedAt: string | null) {
   if (!acceptedAt) return 0;
   const startedAt = new Date(acceptedAt).getTime();
   if (Number.isNaN(startedAt)) return 0;
-  return Math.max(0, 60 - Math.floor((Date.now() - startedAt) / 1000));
+  return Math.max(0, 180 - Math.floor((Date.now() - startedAt) / 1000));
 }
 
 function formatGraceCountdown(seconds: number) {
@@ -297,7 +297,7 @@ export function DriverOrdersClient() {
                 </div>
 
                 {order.status === "canceled" ? (
-                  <div className="canceled-order-frame">此訂單已取消配送</div>
+                  <div className="canceled-order-frame" style={{ marginTop: 8 }}>此訂單已取消配送</div>
                 ) : null}
 
                 {inGrace ? <div className="grace-cancel-hint">可在 {formatGraceCountdown(graceLeft)} 內取消並釋出回首頁</div> : null}

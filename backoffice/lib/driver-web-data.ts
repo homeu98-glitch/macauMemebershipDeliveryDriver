@@ -312,7 +312,7 @@ export async function listActiveOrders(driverId: string) {
     const sourcePayload = row?.source_payload && typeof row.source_payload === "object"
       ? (row.source_payload as Record<string, unknown>)
       : null;
-    return !sourcePayload?.shopConfirmedAt && !shopConfirmedCancelOrderIds.has(row.id);
+    return !sourcePayload?.shopOwnerCancelConfirmedAt && !shopConfirmedCancelOrderIds.has(row.id);
   });
   const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
   return orders.map((row: any) => {

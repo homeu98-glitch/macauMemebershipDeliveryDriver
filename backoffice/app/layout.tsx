@@ -10,9 +10,9 @@ export const metadata: Metadata = {
   description:
     "Operations backoffice for rider approvals, orders, callbacks, and settings.",
   icons: {
-    icon: "/icons/driver-app-logo-v2-192.png",
-    apple: "/icons/driver-app-logo-v2-192.png",
-    shortcut: "/icons/driver-app-logo-v2-192.png"
+    icon: "/icons/driver-app-logo-v3-192.png",
+    apple: "/icons/driver-app-logo-v3-192.png",
+    shortcut: "/icons/driver-app-logo-v3-192.png"
   }
 };
 

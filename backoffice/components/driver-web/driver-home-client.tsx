@@ -172,8 +172,8 @@ export function DriverHomeClient() {
             .then((registration) =>
               registration.showNotification("會員配送車手", {
                 body: notificationBody,
-                icon: "/icons/driver-app-logo-v2-192.png",
-                badge: "/icons/driver-app-logo-v2-192.png",
+                icon: "/icons/driver-app-logo-v3-192.png",
+                badge: "/icons/driver-app-logo-v3-192.png",
                 data: { url: "/driver/home", soundKey },
                 tag: urgentTransitions.length > 0 ? `foreground-urgent-${notificationOrder.id}` : `foreground-${notificationOrder.id}`
               })
