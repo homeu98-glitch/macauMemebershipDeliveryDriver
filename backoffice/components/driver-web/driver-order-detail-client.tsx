@@ -131,12 +131,25 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const [cancelOtherReason, setCancelOtherReason] = useState("");
   const [cancelHandling, setCancelHandling] = useState<"return_to_shop" | "not_returning">("return_to_shop");
   const proofInputRef = useRef<HTMLInputElement | null>(null);
+  const previousOrderStatusRef = useRef<string | null>(null);
+  const playedCancelSoundRef = useRef(false);
 
   async function load() {
     try {
       const response = await fetch(`/api/driver/orders/${orderId}`, { cache: "no-store" });
       if (!response.ok) throw new Error("detail_failed");
-      setOrder((await response.json()) as OrderDetail);
+      const nextOrder = (await response.json()) as OrderDetail;
+      const prevStatus = previousOrderStatusRef.current;
+      const needsConfirm = nextOrder.status === "canceled" && nextOrder.driverCancelConfirmationRequired && !nextOrder.driverCancelConfirmedAt;
+      if (needsConfirm && prevStatus && prevStatus !== "canceled" && !playedCancelSoundRef.current) {
+        playedCancelSoundRef.current = true;
+        try {
+          window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey: "order_cancelled" } }));
+        } catch {}
+      }
+      if (!needsConfirm) playedCancelSoundRef.current = false;
+      previousOrderStatusRef.current = nextOrder.status;
+      setOrder(nextOrder);
     } catch {
       setOrder(null);
     } finally {

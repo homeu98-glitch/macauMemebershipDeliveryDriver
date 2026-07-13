@@ -110,12 +110,31 @@ export function DriverOrdersClient() {
   const [nowTick, setNowTick] = useState(Date.now());
   const [completeOrderId, setCompleteOrderId] = useState<string | null>(null);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
+  const previousStatusByOrderIdRef = useRef<Record<string, string>>({});
+  const playedCancelSoundRef = useRef<Set<string>>(new Set());
 
   async function load() {
     try {
       const response = await fetch("/api/driver/orders/active", { cache: "no-store" });
       if (!response.ok) throw new Error("active_failed");
-      setOrders(((await response.json()) as { orders: OrderSummary[] }).orders);
+      const nextOrders = ((await response.json()) as { orders: OrderSummary[] }).orders;
+
+      for (const item of nextOrders) {
+        const prevStatus = previousStatusByOrderIdRef.current[item.id];
+        const needsConfirm = item.status === "canceled" && item.driverCancelConfirmationRequired && !item.driverCancelConfirmedAt;
+        if (needsConfirm && prevStatus && prevStatus !== "canceled" && !playedCancelSoundRef.current.has(item.id)) {
+          playedCancelSoundRef.current.add(item.id);
+          try {
+            window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey: "order_cancelled" } }));
+          } catch {}
+        }
+        previousStatusByOrderIdRef.current[item.id] = item.status;
+        if (!needsConfirm) {
+          playedCancelSoundRef.current.delete(item.id);
+        }
+      }
+
+      setOrders(nextOrders);
       setError(null);
     } catch {
       setError("載入進行中訂單失敗。");
