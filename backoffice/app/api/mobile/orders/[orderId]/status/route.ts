@@ -247,7 +247,7 @@ export async function POST(
         const graceBase = assignment?.accepted_at ?? null;
         const withinGrace =
           typeof graceBase === "string" &&
-          Date.now() - new Date(graceBase).getTime() <= 180 * 1000;
+          Date.now() - new Date(graceBase).getTime() <= 60 * 1000;
         const canRelease =
           withinGrace &&
           !["delivered", "canceled"].includes(order.status);

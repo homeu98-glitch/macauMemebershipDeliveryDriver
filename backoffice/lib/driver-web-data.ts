@@ -251,7 +251,13 @@ export async function listAvailableOrders(filters?: { pickupDistrict?: string; d
     .order("created_at", { ascending: false })
     .limit(30);
 
-  const orders = rows ?? [];
+  const orders = (rows ?? []).filter((row: any) => {
+    if (row.status !== "canceled") return true;
+    const sourcePayload = row?.source_payload && typeof row.source_payload === "object"
+      ? (row.source_payload as Record<string, unknown>)
+      : null;
+    return !sourcePayload?.shopConfirmedAt;
+  });
   const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
   const mapped = orders.map((row: any) => toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId));
   return mapped.filter((item) => {
@@ -277,10 +283,16 @@ export async function listActiveOrders(driverId: string) {
     .from("orders")
     .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
     .in("id", orderIds)
-    .not("status", "in", "(\"delivered\",\"canceled\",\"failed\")")
+    .not("status", "in", "(\"delivered\",\"failed\")")
     .order("created_at", { ascending: false });
 
-  const orders = rows ?? [];
+  const orders = (rows ?? []).filter((row: any) => {
+    if (row.status !== "canceled") return true;
+    const sourcePayload = row?.source_payload && typeof row.source_payload === "object"
+      ? (row.source_payload as Record<string, unknown>)
+      : null;
+    return !sourcePayload?.shopConfirmedAt;
+  });
   const acceptedAtByOrderId = new Map((assignments ?? []).map((item: any) => [item.order_id, item.accepted_at ?? null]));
   const { data: events } = await supabase
     .from("order_events")
@@ -435,7 +447,13 @@ export async function listCompletedOrders(driverId: string, range: "today" | "we
     .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
     .in("id", orderIds)
     .order("created_at", { ascending: false });
-  const orders = rows ?? [];
+  const orders = (rows ?? []).filter((row: any) => {
+    if (row.status !== "canceled") return true;
+    const sourcePayload = row?.source_payload && typeof row.source_payload === "object"
+      ? (row.source_payload as Record<string, unknown>)
+      : null;
+    return !sourcePayload?.shopConfirmedAt;
+  });
   const deliveredAtByOrderId = new Map(events.map((item: any) => [item.order_id, formatDateTime(item.created_at)]));
   const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
   return orders.map((row: any) => ({

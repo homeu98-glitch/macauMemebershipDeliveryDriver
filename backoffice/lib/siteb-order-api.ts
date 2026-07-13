@@ -68,7 +68,7 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-async function isWithinThreeMinuteGrace(orderId: string) {
+async function isWithinOneMinuteGrace(orderId: string) {
   const supabase = createServiceRoleSupabaseClient();
   const { data: assignment } = await supabase
     .from("order_assignments")
@@ -485,7 +485,7 @@ export async function cancelOrderByExternalId(
     return { found: true as const, canceled: false as const, status: order.status as string };
   }
 
-  const withinGrace = await isWithinThreeMinuteGrace(order.id as string);
+  const withinGrace = await isWithinOneMinuteGrace(order.id as string);
   if (["picked_up", "arrived_customer"].includes(order.status) && !withinGrace) {
     return { found: true as const, canceled: false as const, status: order.status as string };
   }
@@ -623,7 +623,7 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     .limit(1)
     .maybeSingle();
 
-  const withinGrace = await isWithinThreeMinuteGrace(order.id as string);
+  const withinGrace = await isWithinOneMinuteGrace(order.id as string);
 
   const shouldPlayCancelSound =
     order.status === "picked_up" ||
