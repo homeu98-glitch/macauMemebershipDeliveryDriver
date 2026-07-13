@@ -201,7 +201,7 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     cancelReason: typeof order.cancel_reason === "string" ? order.cancel_reason : null,
     cancelOtherReason: typeof order.cancel_other_reason === "string" ? order.cancel_other_reason : null,
     cancelHandling: order.cancel_handling === "return_to_shop" || order.cancel_handling === "not_returning" ? order.cancel_handling : null,
-    isUrgent: Boolean(urgentFromPayload) || (etaMinutes > 0 && etaMinutes <= 15),
+    isUrgent: Boolean(urgentFromPayload),
     paymentTag: derivePaymentTag(order)
   };
 }
