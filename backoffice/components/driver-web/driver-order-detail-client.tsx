@@ -165,6 +165,12 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
         window.alert(payload.message ?? "更新訂單狀態失敗。");
         return;
       }
+      if (eventType === "canceled" && extra.action === "grace_release") {
+        window.setTimeout(() => {
+          window.location.href = "/driver/home";
+        }, 120);
+        return;
+      }
       if (redirectAfter && eventType === "delivered") {
         try {
           window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey: "order_completed" } }));
