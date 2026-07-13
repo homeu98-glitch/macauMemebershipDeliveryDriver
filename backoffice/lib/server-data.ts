@@ -371,6 +371,187 @@ export async function getOrderById(id: string): Promise<Order | null> {
   };
 }
 
+
+export async function getRiderDetailById(id: string) {
+  const supabase = createServiceRoleSupabaseClient();
+
+  const [{ data: rider, error }, { data: latestApplication }, { data: assignments }] = await Promise.all([
+    supabase
+      .from("driver_profiles")
+      .select("id,full_name,phone,vehicle_type,approval_status,availability,created_at")
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("driver_applications")
+      .select("submitted_at,review_status,review_note,reviewed_at")
+      .eq("driver_id", id)
+      .order("submitted_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("order_assignments")
+      .select("order_id,assigned_at")
+      .eq("driver_id", id)
+      .order("assigned_at", { ascending: false })
+  ]);
+
+  if (error) throw error;
+  if (!rider) return null;
+
+  const latestAssignmentByOrderId = new Map<string, string>();
+  for (const row of assignments ?? []) {
+    if (!latestAssignmentByOrderId.has(row.order_id)) {
+      latestAssignmentByOrderId.set(row.order_id, row.assigned_at);
+    }
+  }
+
+  const orderIds = [...latestAssignmentByOrderId.keys()];
+  if (!orderIds.length) {
+    return {
+      id: rider.id,
+      fullName: rider.full_name,
+      phone: rider.phone,
+      vehicleType: rider.vehicle_type ?? "未提供",
+      approvalStatus: rider.approval_status,
+      availability: rider.availability,
+      createdAt: formatDate((rider as any).created_at),
+      applicationSubmittedAt: latestApplication?.submitted_at ? formatDate(latestApplication.submitted_at) : null,
+      reviewStatus: latestApplication?.review_status ?? null,
+      reviewNote: latestApplication?.review_note ?? null,
+      reviewedAt: latestApplication?.reviewed_at ? formatDate(latestApplication.reviewed_at) : null,
+      orders: []
+    };
+  }
+
+  const [{ data: orders, error: ordersError }, { data: items }, { data: events }] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload")
+      .in("id", orderIds),
+    supabase
+      .from("order_items")
+      .select("order_id,item_name,quantity")
+      .in("order_id", orderIds),
+    supabase
+      .from("order_events")
+      .select("order_id,event_type,created_at,payload")
+      .in("order_id", orderIds)
+      .order("created_at", { ascending: true })
+  ]);
+
+  if (ordersError) throw ordersError;
+
+  const shopIds = [...new Set((orders ?? []).map((item: any) => item.shop_id).filter(Boolean))];
+  const customerIds = [...new Set((orders ?? []).map((item: any) => item.customer_id).filter(Boolean))];
+
+  const [{ data: shops }, { data: customers }] = await Promise.all([
+    shopIds.length ? supabase.from("shops").select("id,name").in("id", shopIds) : Promise.resolve({ data: [] as any[] }),
+    customerIds.length ? supabase.from("customers").select("id,name,address").in("id", customerIds) : Promise.resolve({ data: [] as any[] })
+  ]);
+
+  const shopMap = new Map((shops ?? []).map((item: any) => [item.id, item]));
+  const customerMap = new Map((customers ?? []).map((item: any) => [item.id, item]));
+  const itemsMap = new Map<string, Array<{ item_name: string; quantity: number }>>();
+  const eventsMap = new Map<string, any[]>();
+
+  for (const item of items ?? []) {
+    const current = itemsMap.get(item.order_id) ?? [];
+    current.push(item as any);
+    itemsMap.set(item.order_id, current);
+  }
+
+  for (const event of events ?? []) {
+    const current = eventsMap.get(event.order_id) ?? [];
+    current.push(event as any);
+    eventsMap.set(event.order_id, current);
+  }
+
+  const normalizedOrders = (orders ?? [])
+    .map((order: any) => {
+      const orderEvents = eventsMap.get(order.id) ?? [];
+      const latestCancelEvent = [...orderEvents].reverse().find((event: any) => {
+        const payload = event.payload && typeof event.payload === "object" ? event.payload : {};
+        return Boolean(payload.cancel_reason || payload.cancel_other_reason || payload.cancel_handling);
+      });
+      const cancelPayload =
+        latestCancelEvent?.payload && typeof latestCancelEvent.payload === "object"
+          ? (latestCancelEvent.payload as Record<string, any>)
+          : {};
+      const sourcePayload =
+        order.source_payload && typeof order.source_payload === "object"
+          ? (order.source_payload as Record<string, any>)
+          : {};
+      const shop = shopMap.get(order.shop_id);
+      const customer = customerMap.get(order.customer_id);
+      const assignedAt = latestAssignmentByOrderId.get(order.id) ?? order.created_at;
+
+      return {
+        id: order.id,
+        code: order.transaction_code ?? order.external_order_id,
+        displayOrderNo: order.transaction_code ?? order.external_order_id,
+        externalOrderId: order.external_order_id,
+        isUrgent: Boolean(sourcePayload.priceRaisedAt || sourcePayload.price_raised_at),
+        rawStatus: order.status,
+        status: orderStatusLabel(order.status),
+        customerName: customer?.name ?? "未命名客戶",
+        storeName: shop?.name ?? "未命名店舖",
+        riderName: rider.full_name,
+        amountMop: Number(order.assigned_fee_mop ?? 0),
+        address: customer?.address ?? "未提供地址",
+        createdAt: formatDate(order.created_at),
+        promisedAt: order.promised_at ? formatDate(order.promised_at) : null,
+        assignedAt: formatDate(assignedAt),
+        items: (itemsMap.get(order.id) ?? []).map((item) => `${item.quantity} x ${item.item_name}`),
+        cancelReason:
+          typeof cancelPayload.cancel_reason === "string"
+            ? cancelPayload.cancel_reason
+            : typeof sourcePayload.canceledReason === "string"
+              ? sourcePayload.canceledReason
+              : null,
+        cancelOtherReason:
+          typeof cancelPayload.cancel_other_reason === "string" ? cancelPayload.cancel_other_reason : null,
+        cancelHandling:
+          cancelPayload.cancel_handling === "return_to_shop" || cancelPayload.cancel_handling === "not_returning"
+            ? cancelPayload.cancel_handling
+            : null,
+        shopOwnerCancelConfirmedAt:
+          typeof sourcePayload.shopOwnerCancelConfirmedAt === "string"
+            ? formatDate(sourcePayload.shopOwnerCancelConfirmedAt)
+            : null,
+        shopOwnerCancelConfirmedBy:
+          typeof sourcePayload.shopOwnerCancelConfirmedBy === "string"
+            ? sourcePayload.shopOwnerCancelConfirmedBy
+            : null,
+        timeline: orderEvents.map((event: any) => ({
+          label: event.event_type,
+          timestamp: formatDate(event.created_at),
+          note:
+            typeof event.payload?.note === "string"
+              ? event.payload.note
+              : typeof event.payload?.cancel_reason === "string"
+                ? `取消原因：${event.payload.cancel_reason}`
+                : "系統事件"
+        }))
+      };
+    })
+    .sort((a, b) => new Date(b.assignedAt).getTime() - new Date(a.assignedAt).getTime());
+
+  return {
+    id: rider.id,
+    fullName: rider.full_name,
+    phone: rider.phone,
+    vehicleType: rider.vehicle_type ?? "未提供",
+    approvalStatus: rider.approval_status,
+    availability: rider.availability,
+    createdAt: formatDate((rider as any).created_at),
+    applicationSubmittedAt: latestApplication?.submitted_at ? formatDate(latestApplication.submitted_at) : null,
+    reviewStatus: latestApplication?.review_status ?? null,
+    reviewNote: latestApplication?.review_note ?? null,
+    reviewedAt: latestApplication?.reviewed_at ? formatDate(latestApplication.reviewed_at) : null,
+    orders: normalizedOrders
+  };
+}
+
 export async function listCallbackLogs(): Promise<CallbackLog[]> {
   const supabase = createServiceRoleSupabaseClient();
   const { data, error } = await supabase

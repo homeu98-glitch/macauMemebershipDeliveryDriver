@@ -852,6 +852,7 @@ export function RidersTable({ riders }: { riders: Rider[] }) {
                 <th>審核</th>
                 <th>評分</th>
                 <th>完成訂單</th>
+                <th>明細</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -876,6 +877,11 @@ export function RidersTable({ riders }: { riders: Rider[] }) {
                   </td>
                   <td>{rider.rating > 0 ? `${rider.rating.toFixed(1)} / 5.0` : "尚無"}</td>
                   <td>{rider.completedOrders}</td>
+                  <td>
+                    <Link className="btn btn-secondary" href={`/riders/${rider.id}`}>
+                      明細
+                    </Link>
+                  </td>
                   <td>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       {rider.status === 'suspended' ? (
