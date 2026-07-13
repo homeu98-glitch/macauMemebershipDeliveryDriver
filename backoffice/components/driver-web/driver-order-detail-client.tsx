@@ -144,7 +144,13 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
       if (needsConfirm && prevStatus && prevStatus !== "canceled" && !playedCancelSoundRef.current) {
         playedCancelSoundRef.current = true;
         try {
-          window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey: "order_cancelled" } }));
+          window.dispatchEvent(new CustomEvent("driver_foreground_alert", { detail: {
+            title: "商家已取消訂單",
+            body: "商家已取消訂單，請按確認取消。",
+            soundKey: "order_cancelled",
+            playSound: true,
+            url: `/driver/orders/${orderId}`
+          } }));
         } catch {}
       }
       if (!needsConfirm) playedCancelSoundRef.current = false;

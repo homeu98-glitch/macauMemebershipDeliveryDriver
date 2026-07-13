@@ -228,7 +228,15 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
     };
 
     navigator.serviceWorker?.addEventListener?.("message", onWorkerMessage);
+    const onLocalAlert = (event: Event) => {
+      try {
+        const customEvent = event as CustomEvent<DriverDispatchPayload>;
+        emitDispatchEvent(customEvent.detail || {});
+      } catch {}
+    };
+
     window.addEventListener("driver_play_sound", onWindowSound as EventListener);
+    window.addEventListener("driver_foreground_alert", onLocalAlert as EventListener);
     window.addEventListener("pointerdown", unlockAudio, { passive: true });
     window.addEventListener("touchstart", unlockAudio, { passive: true });
     window.addEventListener("keydown", unlockAudio, { passive: true });
@@ -302,6 +310,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
     return () => {
       navigator.serviceWorker?.removeEventListener?.("message", onWorkerMessage);
       window.removeEventListener("driver_play_sound", onWindowSound as EventListener);
+      window.removeEventListener("driver_foreground_alert", onLocalAlert as EventListener);
       window.removeEventListener("pointerdown", unlockAudio);
       window.removeEventListener("touchstart", unlockAudio);
       window.removeEventListener("keydown", unlockAudio);
