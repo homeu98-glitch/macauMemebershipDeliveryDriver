@@ -119,9 +119,13 @@ export function DriverHomeClient() {
     const onDispatch = () => { void load(); };
     const timer = window.setInterval(load, 5000);
     window.addEventListener("driver_dispatch_event", onDispatch);
+    window.addEventListener("focus", onDispatch);
+    document.addEventListener("visibilitychange", onDispatch);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("driver_dispatch_event", onDispatch);
+      window.removeEventListener("focus", onDispatch);
+      document.removeEventListener("visibilitychange", onDispatch);
     };
   }, []);
 

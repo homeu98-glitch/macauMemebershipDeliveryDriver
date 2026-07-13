@@ -159,10 +159,34 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       }
     };
 
+    const showForegroundNotification = (payload: DriverDispatchPayload) => {
+      try {
+        if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+        if (!("serviceWorker" in navigator)) return;
+        if (document.visibilityState !== "visible") return;
+        navigator.serviceWorker.ready
+          .then((registration) => registration.showNotification(payload.title || "會員配送車手", {
+            body: payload.body || "你有新的派單消息。",
+            icon: "/icons/driver-app-logo-v3-192.png",
+            badge: "/icons/driver-app-logo-v3-192.png",
+            data: { url: payload.url || "/driver/home", soundKey: payload.soundKey || "new_order" },
+            tag: `foreground-realtime-${payload.soundKey || "new_order"}`
+          }))
+          .catch(() => undefined);
+      } catch {}
+    };
+
     const onWorkerMessage = (event: MessageEvent) => {
       try {
         if (event.data?.type !== "driver_push_sound") return;
         playSoundByKey(event.data?.soundKey);
+        showForegroundNotification({
+          title: event.data?.title,
+          body: event.data?.body,
+          soundKey: event.data?.soundKey,
+          url: event.data?.url,
+        });
+        window.dispatchEvent(new CustomEvent("driver_dispatch_event", { detail: event.data }));
       } catch {
         // never let sound handling crash the app
       }
@@ -188,6 +212,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
         window.dispatchEvent(new CustomEvent("driver_dispatch_event", { detail: payload }));
       } catch {}
       playSoundByKey(payload.soundKey);
+      showForegroundNotification(payload);
     };
 
     let mqttClient: any = null;

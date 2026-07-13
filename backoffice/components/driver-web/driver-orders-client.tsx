@@ -44,9 +44,9 @@ function dialHref(phone: string | null) {
   return phone ? `tel:${phone}` : undefined;
 }
 
-function graceSecondsLeft(pickedUpAt: string | null) {
-  if (!pickedUpAt) return 0;
-  const startedAt = new Date(pickedUpAt).getTime();
+function graceSecondsLeft(acceptedAt: string | null) {
+  if (!acceptedAt) return 0;
+  const startedAt = new Date(acceptedAt).getTime();
   if (Number.isNaN(startedAt)) return 0;
   return Math.max(0, 180 - Math.floor((Date.now() - startedAt) / 1000));
 }
@@ -196,7 +196,7 @@ export function DriverOrdersClient() {
 
   async function submitCancel() {
     if (!cancelOrder) return;
-    const inGrace = cancelOrder.status === "picked_up" && graceSecondsLeft(cancelOrder.pickedUpAt) > 0;
+    const inGrace = (cancelOrder.status === "accepted" || cancelOrder.status === "assigned" || cancelOrder.status === "heading_to_shop") && graceSecondsLeft(cancelOrder.acceptedAt) > 0;
     const ok = inGrace
       ? await sendStatus(cancelOrder.id, "canceled", { action: "grace_release" })
       : await sendStatus(cancelOrder.id, "canceled", {
@@ -240,8 +240,8 @@ export function DriverOrdersClient() {
             const canPickUp = order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop";
             const canDeliver = order.status === "picked_up" || order.status === "arrived_customer";
             const pickupElapsed = order.status === "picked_up" || order.status === "arrived_customer" ? formatPickupElapsed(order.pickedUpAt, nowTick) : null;
-            const graceLeft = graceSecondsLeft(order.pickedUpAt);
-            const inGrace = order.status === "picked_up" && graceLeft > 0;
+            const graceLeft = graceSecondsLeft(order.acceptedAt);
+            const inGrace = (order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop") && graceLeft > 0;
             return (
               <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
                 <div className="active-order-card-topbar with-pickup-timer">
@@ -335,9 +335,9 @@ export function DriverOrdersClient() {
         <div className="driver-modal-backdrop" onClick={() => setCancelOrder(null)}>
           <div className="driver-modal-card stack gap-3" onClick={(event) => event.stopPropagation()}>
             <div className="driver-screen-title small">取消訂單</div>
-            {cancelOrder.status === "picked_up" && graceSecondsLeft(cancelOrder.pickedUpAt) > 0 ? (
+            {(cancelOrder.status === "accepted" || cancelOrder.status === "assigned" || cancelOrder.status === "heading_to_shop") && graceSecondsLeft(cancelOrder.acceptedAt) > 0 ? (
               <>
-                <div className="muted">可在 {formatGraceCountdown(graceSecondsLeft(cancelOrder.pickedUpAt))} 內取消並釋出回首頁，無需填寫原因。</div>
+                <div className="muted">可在 {formatGraceCountdown(graceSecondsLeft(cancelOrder.acceptedAt))} 內取消並釋出回首頁，無需填寫原因。</div>
               </>
             ) : (
               <>
@@ -368,7 +368,7 @@ export function DriverOrdersClient() {
             )}
             <div className="driver-auth-actions-row single-mobile-row">
               <button className="android-secondary-btn" onClick={() => setCancelOrder(null)} type="button">返回</button>
-              <button className="android-danger-btn" onClick={submitCancel} type="button">{cancelOrder.status === "picked_up" && graceSecondsLeft(cancelOrder.pickedUpAt) > 0 ? "立即取消並釋出" : "確認取消"}</button>
+              <button className="android-danger-btn" onClick={submitCancel} type="button">{(cancelOrder.status === "accepted" || cancelOrder.status === "assigned" || cancelOrder.status === "heading_to_shop") && graceSecondsLeft(cancelOrder.acceptedAt) > 0 ? "立即取消並釋出" : "確認取消"}</button>
             </div>
           </div>
         </div>

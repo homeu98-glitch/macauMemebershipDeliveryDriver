@@ -52,9 +52,9 @@ function formatCountdown(etaMinutes: number) {
   return `${etaMinutes} 分鐘`;
 }
 
-function graceSecondsLeft(pickedUpAt: string | null) {
-  if (!pickedUpAt) return 0;
-  const time = new Date(pickedUpAt).getTime();
+function graceSecondsLeft(acceptedAt: string | null) {
+  if (!acceptedAt) return 0;
+  const time = new Date(acceptedAt).getTime();
   if (Number.isNaN(time)) return 0;
   return Math.max(0, 180 - Math.floor((Date.now() - time) / 1000));
 }
@@ -152,8 +152,8 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const canAccept = order?.status === "new";
   const canPickUp = order?.status === "accepted" || order?.status === "assigned" || order?.status === "heading_to_shop";
   const canDeliver = order?.status === "picked_up" || order?.status === "arrived_customer";
-  const graceLeft = graceSecondsLeft(order?.pickedUpAt ?? null);
-  const inGraceCancel = Boolean(order && order.status === "picked_up" && graceLeft > 0);
+  const graceLeft = graceSecondsLeft(order?.acceptedAt ?? null);
+  const inGraceCancel = Boolean(order && (order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop") && graceLeft > 0);
 
   async function sendStatus(eventType: string, redirectAfter = false, extra: Record<string, unknown> = {}) {
     setActionBusy(eventType);
