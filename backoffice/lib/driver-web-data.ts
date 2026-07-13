@@ -253,7 +253,7 @@ export async function listAvailableOrders(filters?: { pickupDistrict?: string; d
     .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
     .eq("status", "new")
     .order("created_at", { ascending: false })
-    .limit(30);
+    .limit(100);
 
   const orders = rows ?? [];
   const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
