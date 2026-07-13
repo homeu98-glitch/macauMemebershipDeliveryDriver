@@ -44,9 +44,9 @@ function dialHref(phone: string | null) {
   return phone ? `tel:${phone}` : undefined;
 }
 
-function graceSecondsLeft(acceptedAt: string | null) {
-  if (!acceptedAt) return 0;
-  const startedAt = new Date(acceptedAt).getTime();
+function graceSecondsLeft(pickedUpAt: string | null) {
+  if (!pickedUpAt) return 0;
+  const startedAt = new Date(pickedUpAt).getTime();
   if (Number.isNaN(startedAt)) return 0;
   return Math.max(0, 180 - Math.floor((Date.now() - startedAt) / 1000));
 }
@@ -54,7 +54,7 @@ function graceSecondsLeft(acceptedAt: string | null) {
 function formatGraceCountdown(seconds: number) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
-  return `已取貨 ${mins}:${String(secs).padStart(2, "0")}`;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
 function formatPickupElapsed(startedAt: string | null, nowTick: number) {

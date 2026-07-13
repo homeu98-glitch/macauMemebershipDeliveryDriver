@@ -13,6 +13,14 @@ type BeforeInstallPromptEvent = Event & {
 
 type DriverSoundKey = "new_order" | "urgent_order" | "customer_hurry" | "order_completed" | "order_cancelled";
 
+type DriverDispatchPayload = {
+  title?: string;
+  body?: string;
+  soundKey?: DriverSoundKey;
+  url?: string;
+  [key: string]: unknown;
+};
+
 const DRIVER_SOUND_PATHS: Record<DriverSoundKey, string> = {
   new_order: "/driver-sounds/new_order.mp3",
   urgent_order: "/driver-sounds/urgent_order.mp3",
@@ -175,6 +183,54 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
     window.addEventListener("touchstart", unlockAudio, { passive: true });
     window.addEventListener("keydown", unlockAudio, { passive: true });
 
+    const emitDispatchEvent = (payload: DriverDispatchPayload) => {
+      try {
+        window.dispatchEvent(new CustomEvent("driver_dispatch_event", { detail: payload }));
+      } catch {}
+      playSoundByKey(payload.soundKey);
+    };
+
+    let mqttClient: any = null;
+    let mqttActive = true;
+    fetch("/api/driver/realtime/config", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as {
+          enabled: boolean;
+          wsUrl?: string | null;
+          username?: string;
+          password?: string;
+          clientId?: string;
+          topics?: string[];
+        };
+      })
+      .then(async (config) => {
+        if (!mqttActive || !config?.enabled || !config.wsUrl || !config.topics?.length) return;
+        const mqttLib = await import("mqtt");
+        const client = mqttLib.connect(config.wsUrl, {
+          username: config.username,
+          password: config.password,
+          clientId: config.clientId,
+          protocolVersion: 5,
+          reconnectPeriod: 3000,
+          connectTimeout: 10000,
+          clean: true,
+          keepalive: 30,
+        });
+        mqttClient = client;
+        client.on("connect", () => {
+          client.subscribe(config.topics!, { qos: 1 }, () => undefined);
+        });
+        client.on("message", (_topic: string, payloadBuffer: Uint8Array) => {
+          try {
+            const payload = JSON.parse(new TextDecoder().decode(payloadBuffer)) as DriverDispatchPayload;
+            emitDispatchEvent(payload);
+          } catch {}
+        });
+        client.on("error", () => undefined);
+      })
+      .catch(() => undefined);
+
     const onBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setInstallPromptEvent(event as BeforeInstallPromptEvent);
@@ -203,6 +259,8 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       } catch {}
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onAppInstalled);
+      mqttActive = false;
+      try { mqttClient?.end?.(true); } catch {}
       window.matchMedia?.("(display-mode: standalone)")?.removeEventListener?.("change", onModeChange);
     };
   }, []);

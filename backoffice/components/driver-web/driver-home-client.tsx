@@ -116,8 +116,13 @@ export function DriverHomeClient() {
 
   useEffect(() => {
     load();
+    const onDispatch = () => { void load(); };
     const timer = window.setInterval(load, 5000);
-    return () => window.clearInterval(timer);
+    window.addEventListener("driver_dispatch_event", onDispatch);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("driver_dispatch_event", onDispatch);
+    };
   }, []);
 
   useEffect(() => {

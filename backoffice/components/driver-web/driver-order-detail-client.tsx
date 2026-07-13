@@ -144,6 +144,9 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
 
   useEffect(() => {
     load();
+    const onDispatch = () => { void load(); };
+    window.addEventListener("driver_dispatch_event", onDispatch);
+    return () => window.removeEventListener("driver_dispatch_event", onDispatch);
   }, [orderId]);
 
   const canAccept = order?.status === "new";
