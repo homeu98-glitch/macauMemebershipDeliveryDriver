@@ -197,7 +197,7 @@ export function DriverProfileClient() {
           <span>確認新密碼</span>
           <input inputMode="numeric" maxLength={4} onChange={(event) => setConfirmPassword(event.target.value.replace(/\D/g, "").slice(0, 4))} type="password" value={confirmPassword} />
         </label>
-        <button className="android-primary-btn" disabled={savingPassword} onClick={updatePassword} type="button">{savingPassword ? "處理中..." : "更改密碼"}</button>
+        <button className="android-primary-btn" disabled={savingPassword} onClick={updatePassword} style={{ marginTop: 8 }} type="button">{savingPassword ? "處理中..." : "更改密碼"}</button>
       </section>
 
       <section className="android-card stack gap-3 profile-section">

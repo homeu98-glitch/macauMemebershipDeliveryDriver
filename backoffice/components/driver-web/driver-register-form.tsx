@@ -3,6 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024; // 2MB
+
+function validateUploadSize(file: File, label: string) {
+  if (file.size <= MAX_UPLOAD_BYTES) return null;
+  const mb = (file.size / 1024 / 1024).toFixed(2);
+  return `${label} 圖片太大（${mb}MB），請改用較小/較清晰但檔案較細的照片再試。`;
+}
+
 function prettyFileName(file: File | null) {
   if (!file) return "尚未選擇";
   if (file.name.length <= 18) return file.name;
@@ -26,6 +34,11 @@ export function DriverRegisterForm() {
       setMessage("請上傳自拍照、澳門身份證與駕駛執照。");
       return;
     }
+    const sizeError = validateUploadSize(selfie, "自拍照") || validateUploadSize(macauId, "澳門身份證") || validateUploadSize(drivingLicence, "駕駛執照");
+    if (sizeError) {
+      setMessage(sizeError);
+      return;
+    }
     setSubmitting(true);
     setMessage(null);
     try {
@@ -37,14 +50,25 @@ export function DriverRegisterForm() {
       formData.append("macau_id", macauId);
       formData.append("driving_licence", drivingLicence);
       const response = await fetch("/api/driver/register", { method: "POST", body: formData });
-      const payload = (await response.json()) as { message?: string };
+      let payload: any = {};
+      try {
+        payload = await response.json();
+      } catch {
+        try {
+          const raw = await response.text();
+          payload = { message: raw };
+        } catch {
+          payload = {};
+        }
+      }
       if (!response.ok) {
-        setMessage(payload.message ?? "提交註冊失敗。");
+        const serverMessage = String(payload?.message ?? "").trim();
+        setMessage(serverMessage || `提交註冊失敗（${response.status}），請稍後再試。`);
         return;
       }
       router.replace("/driver/pending");
     } catch {
-      setMessage("提交註冊失敗，請稍後再試。");
+      setMessage("提交註冊失敗，可能是網路不穩或圖片檔案過大。請改用較小的照片再試。");
     } finally {
       setSubmitting(false);
     }

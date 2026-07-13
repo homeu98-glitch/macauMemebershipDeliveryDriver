@@ -276,11 +276,11 @@ export function DriverOrdersClient() {
             <div className="driver-screen-title">訂單</div>
             <div className="muted">進行中的配送訂單</div>
           </div>
-          <button className="android-secondary-btn small" onClick={load} type="button">刷新</button>
+          <div className="muted">下拉更新</div>
         </div>
 
         {orders.length === 0 ? (
-          <div className="android-card muted">目前沒有進行中訂單。</div>
+          <div className="android-card muted" style={{ marginTop: 8 }}>目前沒有進行中訂單。</div>
         ) : (
           orders.map((order, index) => {
             const toShop = buildGoogleNavUrl(order.storeName, order.storeAddress, order.storeLatitude, order.storeLongitude);
