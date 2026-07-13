@@ -3,13 +3,13 @@ import type { Metadata, Viewport } from "next";
 import { DriverShell } from "@/components/driver-web/driver-shell";
 
 export const metadata: Metadata = {
-  title: "會員配送車手工作台",
+  title: "澳門會員車手",
   description: "Driver Web App for Macau Membership Delivery",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "車手工作台"
+    title: "澳門會員車手"
   }
 };
 

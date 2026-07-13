@@ -1,12 +1,15 @@
 {
   "id": "/driver/",
-  "name": "會員配送車手工作台",
-  "short_name": "車手工作台",
+  "name": "澳門會員車手",
+  "short_name": "澳門會員車手",
   "description": "會員配送車手可安裝的 Web App，提供接單、訂單追蹤、通知與收入查詢。",
   "start_url": "/driver/home",
   "scope": "/driver/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "portrait",
   "background_color": "#fff8e8",
   "theme_color": "#f59e0b",
