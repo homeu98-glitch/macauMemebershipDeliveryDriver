@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { createServiceRoleSupabaseClient } from "../../../../../../lib/supabase";
@@ -152,41 +152,71 @@ export async function POST(
       });
     }
 
-    if (body.eventType === "accepted") {
-      if (order.status !== "new") {
-        return NextResponse.json(
-          { message: order.status === "canceled" ? "訂單已取消，不能再接單。" : "訂單已不再可接。" },
-          { status: 409 }
-        );
-      }
+if (body.eventType === "accepted") {
+  const { data: claimedOrder, error: claimError } = await supabase
+    .from("orders")
+    .update({ status: "accepted", updated_at: now })
+    .eq("id", params.orderId)
+    .eq("status", "new")
+    .select("id,status")
+    .maybeSingle();
 
-      await supabase
-        .from("order_assignments")
-        .delete()
-        .eq("order_id", params.orderId)
-        .eq("driver_id", verified.driverId);
+  if (claimError) throw claimError;
 
-      await supabase
-        .from("order_assignments")
-        .update({ canceled_at: now })
-        .eq("order_id", params.orderId)
-        .is("canceled_at", null);
+  if (!claimedOrder) {
+    const { data: latestOrder } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", params.orderId)
+      .maybeSingle();
 
-      await supabase.from("order_assignments").insert({
-        order_id: params.orderId,
-        driver_id: verified.driverId,
-        accepted_at: now
-      });
-      await supabase.from("orders").update({ status: "accepted", updated_at: now }).eq("id", params.orderId);
-      await supabase.from("order_events").insert({
-        order_id: params.orderId,
-        event_type: "accepted",
-        actor_type: "driver",
-        actor_driver_id: verified.driverId,
-        payload: { note: "騎手已接單" }
-      });
-    }
+    return NextResponse.json(
+      {
+        message:
+          latestOrder?.status === "canceled"
+            ? "訂單已取消，不能再接單。"
+            : "訂單已被其他車手接走，請接下一張。"
+      },
+      { status: 409 }
+    );
+  }
 
+  await supabase
+    .from("order_assignments")
+    .delete()
+    .eq("order_id", params.orderId)
+    .eq("driver_id", verified.driverId);
+
+  await supabase
+    .from("order_assignments")
+    .update({ canceled_at: now })
+    .eq("order_id", params.orderId)
+    .is("canceled_at", null)
+    .neq("driver_id", verified.driverId);
+
+  const { error: insertAssignmentError } = await supabase.from("order_assignments").insert({
+    order_id: params.orderId,
+    driver_id: verified.driverId,
+    accepted_at: now
+  });
+
+  if (insertAssignmentError) {
+    await supabase
+      .from("orders")
+      .update({ status: "new", updated_at: now })
+      .eq("id", params.orderId)
+      .eq("status", "accepted");
+    throw insertAssignmentError;
+  }
+
+  await supabase.from("order_events").insert({
+    order_id: params.orderId,
+    event_type: "accepted",
+    actor_type: "driver",
+    actor_driver_id: verified.driverId,
+    payload: { note: "騎手已接單" }
+  });
+}
     if (body.eventType === "picked_up") {
       if (order.status !== "picked_up" && order.status !== "delivered") {
         await supabase.from("orders").update({ status: "picked_up", updated_at: now }).eq("id", params.orderId);
