@@ -401,6 +401,8 @@ export async function getDriverDashboard(driverId: string, _availability: string
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
+  const startOfYesterday = new Date(startOfDay);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
   const startOfWeek = new Date();
   startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
   startOfWeek.setHours(0, 0, 0, 0);
@@ -433,16 +435,19 @@ export async function getDriverDashboard(driverId: string, _availability: string
   } satisfies DriverDashboard;
 }
 
-export async function listCompletedOrders(driverId: string, range: "today" | "week" | "history" = "today") {
+export async function listCompletedOrders(driverId: string, range: "today" | "yesterday" | "week" | "history" = "today") {
   const supabase = createServiceRoleSupabaseClient();
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
+  const startOfYesterday = new Date(startOfDay);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
   const startOfWeek = new Date();
   startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
   startOfWeek.setHours(0, 0, 0, 0);
 
   let query = supabase.from("order_events").select("order_id,created_at").eq("actor_driver_id", driverId).eq("event_type", "delivered").order("created_at", { ascending: false });
   if (range === "today") query = query.gte("created_at", startOfDay.toISOString());
+  if (range === "yesterday") query = query.gte("created_at", startOfYesterday.toISOString()).lt("created_at", startOfDay.toISOString());
   if (range === "week") query = query.gte("created_at", startOfWeek.toISOString());
 
   const { data: deliveredEvents } = await query.limit(range === "history" ? 100 : 50);
