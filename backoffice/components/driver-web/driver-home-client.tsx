@@ -98,7 +98,7 @@ export function DriverHomeClient() {
   const [navOrder, setNavOrder] = useState<OrderSummary | null>(null);
   const [filterModal, setFilterModal] = useState<FilterModalType>(null);
   const [notificationCheck, setNotificationCheck] = useState<NotificationCheck>({ permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission, subscribed: false, vapidConfigured: false });
-  const previousOrderIdsRef = useRef<string[]>([]);
+  const previousOrderStateRef = useRef<Record<string, boolean>>({});
 
   async function load() {
     try {
@@ -148,13 +148,19 @@ export function DriverHomeClient() {
 
   useEffect(() => {
     if (!data) return;
-    const currentIds = data.availableOrders.map((item) => item.id);
-    const previousIds = previousOrderIdsRef.current;
-    if (previousIds.length > 0) {
-      const newOrders = data.availableOrders.filter((item) => !previousIds.includes(item.id));
-      if (newOrders.length > 0) {
-        const firstNew = newOrders[0];
-        const soundKey = firstNew.isUrgent ? "urgent_order" : "new_order";
+    const previousState = previousOrderStateRef.current;
+    const currentState = Object.fromEntries(data.availableOrders.map((item) => [item.id, item.isUrgent]));
+
+    if (Object.keys(previousState).length > 0) {
+      const urgentTransitions = data.availableOrders.filter((item) => previousState[item.id] === false && item.isUrgent);
+      const newOrders = data.availableOrders.filter((item) => !(item.id in previousState));
+      const notificationOrder = urgentTransitions[0] ?? newOrders[0] ?? null;
+
+      if (notificationOrder) {
+        const soundKey = notificationOrder.isUrgent ? "urgent_order" : "new_order";
+        const notificationBody = urgentTransitions.length > 0
+          ? `${notificationOrder.storeName} 已加價為急單，請立即查看。`
+          : `${notificationOrder.storeName} 有新的可接訂單`;
         try {
           window.dispatchEvent(new CustomEvent("driver_play_sound", { detail: { soundKey } }));
         } catch {
@@ -164,16 +170,17 @@ export function DriverHomeClient() {
           navigator.serviceWorker.ready
             .then((registration) =>
               registration.showNotification("會員配送車手", {
-                body: `${firstNew.storeName} 有新的可接訂單`,
+                body: notificationBody,
                 data: { url: "/driver/home", soundKey },
-                tag: `foreground-${firstNew.id}`
+                tag: urgentTransitions.length > 0 ? `foreground-urgent-${notificationOrder.id}` : `foreground-${notificationOrder.id}`
               })
             )
             .catch(() => undefined);
         }
       }
     }
-    previousOrderIdsRef.current = currentIds;
+
+    previousOrderStateRef.current = currentState;
   }, [data]);
 
   async function toggleAvailability() {
