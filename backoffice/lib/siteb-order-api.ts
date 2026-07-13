@@ -626,13 +626,8 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     .limit(1)
     .maybeSingle();
 
-  const withinGrace = await isWithinOneMinuteGrace(order.id as string);
-
-  const shouldPlayCancelSound =
-    order.status === "picked_up" ||
-    order.status === "arrived_customer" ||
-    withinGrace ||
-    order.status === "accepted";
+  const shouldPlayCancelSound = Boolean(assignment?.driver_id);
+  const driverCancelConfirmationRequired = Boolean(assignment?.driver_id);
 
   if (order.status !== "canceled") {
     const canceledAt = nowIso();
@@ -651,7 +646,7 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
           canceledBy: requestedBy,
           canceledAt,
           canceledFrom: "backoffice",
-          driverCancelConfirmationRequired: false,
+          driverCancelConfirmationRequired,
           driverCancelConfirmedAt: null
         }
       })
@@ -659,48 +654,40 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     if (updateError) throw updateError;
 
     await appendEvent(order.id as string, "website.order_canceled", {
-      note: "訂單已由後台取消。",
       reason,
       requestedBy,
       requestedAt: canceledAt
     });
-  }
 
-  if (assignment?.driver_id) {
-    await sendPushToDriver(assignment.driver_id, {
-      title: shouldPlayCancelSound ? "訂單已取消" : "",
-      body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+    if (assignment?.driver_id) {
+      void sendPushToDriver(assignment.driver_id, {
+        title: shouldPlayCancelSound ? "商家已取消訂單" : "",
+        body: shouldPlayCancelSound ? "商家已取消訂單，請按確認取消。" : "",
+        soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
+        data: {
+          type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
+          externalOrderId: order.external_order_id,
+          ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
+          requireCancelConfirm: driverCancelConfirmationRequired ? "true" : "false"
+        }
+      }).catch(() => undefined);
+    }
+
+    void sendPushToOnlineDrivers({
+      title: shouldPlayCancelSound ? "商家已取消訂單" : "",
+      body: shouldPlayCancelSound ? "商家已取消訂單，請按確認取消。" : "",
       soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
       data: {
         type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
         externalOrderId: order.external_order_id,
         ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
-        requireCancelConfirm: "true"
-      }
-    }).catch(() => undefined);
-  } else {
-    await sendPushToOnlineDrivers({
-      title: shouldPlayCancelSound ? "訂單已取消" : "",
-      body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
-      soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
-      data: {
-        type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
-        externalOrderId: order.external_order_id,
-        ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
-          requireCancelConfirm: "true"
+        requireCancelConfirm: driverCancelConfirmationRequired ? "true" : "false"
       }
     }).catch(() => undefined);
   }
-
-  await dispatchOrderCallback({
-    orderId: order.id as string,
-    eventType: "canceled",
-    note: reason
-  }).catch(() => undefined);
 
   return { found: true as const, canceled: true as const, status: "canceled" };
 }
-
 export async function confirmDriverCanceledOrderByShopOwner(orderId: string, confirmedBy: string) {
   const supabase = createServiceRoleSupabaseClient();
   const { data: order, error } = await supabase
