@@ -18,6 +18,9 @@ type DriverDispatchPayload = {
   body?: string;
   soundKey?: DriverSoundKey;
   url?: string;
+  requireCancelConfirm?: string | boolean;
+  playSound?: string | boolean;
+  type?: string;
   [key: string]: unknown;
 };
 
@@ -234,7 +237,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
       try {
         window.dispatchEvent(new CustomEvent("driver_dispatch_event", { detail: payload }));
       } catch {}
-      playSoundByKey(payload.soundKey);
+      if (payload.playSound !== "false" && payload.playSound !== false) playSoundByKey(payload.soundKey);
       showForegroundNotification(payload);
     };
 

@@ -100,6 +100,7 @@ export function DriverHomeClient() {
   const [filterModal, setFilterModal] = useState<FilterModalType>(null);
   const [notificationCheck, setNotificationCheck] = useState<NotificationCheck>({ permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission, subscribed: false, vapidConfigured: false });
   const previousOrderStateRef = useRef<Record<string, boolean>>({});
+  const hasSeenDashboardRef = useRef(false);
 
   async function load() {
     try {
@@ -161,7 +162,7 @@ export function DriverHomeClient() {
     const previousState = previousOrderStateRef.current;
     const currentState = Object.fromEntries(data.availableOrders.map((item) => [item.id, item.isUrgent]));
 
-    if (Object.keys(previousState).length > 0) {
+    if (hasSeenDashboardRef.current) {
       const urgentTransitions = data.availableOrders.filter((item) => previousState[item.id] === false && item.isUrgent);
       const newOrders = data.availableOrders.filter((item) => !(item.id in previousState));
       const notificationOrder = urgentTransitions[0] ?? newOrders[0] ?? null;
@@ -196,6 +197,7 @@ export function DriverHomeClient() {
     }
 
     previousOrderStateRef.current = currentState;
+    hasSeenDashboardRef.current = true;
   }, [data]);
 
   async function toggleAvailability() {

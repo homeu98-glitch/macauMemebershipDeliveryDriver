@@ -50,7 +50,7 @@ function graceSecondsLeft(acceptedAt: string | null) {
   if (!acceptedAt) return 0;
   const startedAt = new Date(acceptedAt).getTime();
   if (Number.isNaN(startedAt)) return 0;
-  return Math.max(0, 180 - Math.floor((Date.now() - startedAt) / 1000));
+  return Math.max(0, 60 - Math.floor((Date.now() - startedAt) / 1000));
 }
 
 function formatGraceCountdown(seconds: number) {
@@ -126,8 +126,17 @@ export function DriverOrdersClient() {
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 15000);
-    return () => window.clearInterval(timer);
+    const onDispatch = () => { void load(); };
+    const timer = window.setInterval(load, 5000);
+    window.addEventListener("driver_dispatch_event", onDispatch);
+    window.addEventListener("focus", onDispatch);
+    document.addEventListener("visibilitychange", onDispatch);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("driver_dispatch_event", onDispatch);
+      window.removeEventListener("focus", onDispatch);
+      document.removeEventListener("visibilitychange", onDispatch);
+    };
   }, []);
 
   useEffect(() => {

@@ -68,7 +68,7 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-async function isWithinThreeMinuteGrace(orderId: string) {
+async function isWithinOneMinuteGrace(orderId: string) {
   const supabase = createServiceRoleSupabaseClient();
   const { data: assignment } = await supabase
     .from("order_assignments")
@@ -485,7 +485,7 @@ export async function cancelOrderByExternalId(
     return { found: true as const, canceled: false as const, status: order.status as string };
   }
 
-  const withinGrace = await isWithinThreeMinuteGrace(order.id as string);
+  const withinGrace = await isWithinOneMinuteGrace(order.id as string);
   if (["picked_up", "arrived_customer"].includes(order.status) && !withinGrace) {
     return { found: true as const, canceled: false as const, status: order.status as string };
   }
@@ -499,14 +499,9 @@ export async function cancelOrderByExternalId(
     .limit(1)
     .maybeSingle();
 
-  const shouldPlayCancelSound =
-    ["picked_up", "arrived_customer"].includes(order.status) ||
-    withinGrace ||
-    order.status === "accepted";
+  const shouldPlayCancelSound = Boolean(assignment?.driver_id) || ["picked_up", "arrived_customer"].includes(order.status) || withinGrace || order.status === "accepted";
   const acceptedAt = assignment?.accepted_at ?? null;
-  const driverCancelConfirmationRequired =
-    typeof acceptedAt === "string" &&
-    Date.now() - new Date(acceptedAt).getTime() > 180 * 1000;
+  const driverCancelConfirmationRequired = Boolean(assignment?.driver_id);
   const canceledAt = requestedAt ?? nowIso();
 
   const { error: updateError } = await supabase
@@ -532,9 +527,6 @@ export async function cancelOrderByExternalId(
     requestedAt: canceledAt
   });
 
-  if (!driverCancelConfirmationRequired && assignment?.id) {
-    await supabase.from("order_assignments").update({ canceled_at: canceledAt }).eq("id", assignment.id);
-  }
 
   if (assignment?.driver_id) {
     await sendPushToDriver(assignment.driver_id, {
@@ -634,7 +626,7 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
     .limit(1)
     .maybeSingle();
 
-  const withinGrace = await isWithinThreeMinuteGrace(order.id as string);
+  const withinGrace = await isWithinOneMinuteGrace(order.id as string);
 
   const shouldPlayCancelSound =
     order.status === "picked_up" ||

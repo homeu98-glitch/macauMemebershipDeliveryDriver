@@ -58,7 +58,7 @@ function graceSecondsLeft(acceptedAt: string | null) {
   if (!acceptedAt) return 0;
   const time = new Date(acceptedAt).getTime();
   if (Number.isNaN(time)) return 0;
-  return Math.max(0, 180 - Math.floor((Date.now() - time) / 1000));
+  return Math.max(0, 60 - Math.floor((Date.now() - time) / 1000));
 }
 
 function formatGraceCountdown(seconds: number) {
