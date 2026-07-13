@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+
+import { DriverInstallAppButton } from "@/components/driver-web/driver-install-app-button";
 import { useState } from "react";
 
 const MAX_COMPRESSED_BYTES = 200 * 1024; // 200KB
@@ -250,6 +252,7 @@ export function DriverRegisterForm() {
 
         {message ? <div className="error">{message}</div> : null}
         <button className="android-primary-btn" disabled={isBusy} type="submit">{isBusy ? "提交中..." : "提交審核"}</button>
+        <DriverInstallAppButton className="android-outline-link" />
       </form>
     </div>
   );

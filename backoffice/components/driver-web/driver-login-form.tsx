@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { DriverInstallAppButton } from "@/components/driver-web/driver-install-app-button";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
@@ -65,6 +67,10 @@ export function DriverLoginForm() {
       <div className="driver-auth-actions-row">
         <Link className="android-outline-link" href="/driver/register">立即註冊</Link>
         <Link className="android-outline-link" href="/driver/pending">查看審核</Link>
+      </div>
+
+      <div className="stack gap-2" style={{ marginTop: 4 }}>
+        <DriverInstallAppButton className="android-outline-link" />
       </div>
     </div>
   );
