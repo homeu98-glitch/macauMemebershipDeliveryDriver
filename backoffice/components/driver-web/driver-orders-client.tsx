@@ -65,7 +65,7 @@ function formatPickupElapsed(startedAt: string | null, nowTick: number) {
   const elapsedSec = Math.max(0, Math.floor((Date.now() - started) / 1000));
   const mins = Math.floor(elapsedSec / 60);
   const secs = elapsedSec % 60;
-  return `已取貨 ${mins}m ${secs}s`;
+  return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
 function StageStrip({ status }: { status: string }) {
@@ -244,7 +244,7 @@ export function DriverOrdersClient() {
                   <div className="order-card-number">訂單 {index + 1}</div>
                   <div className="order-price-top-right">
                     <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
-                    {pickupElapsed ? <div className="pickup-elapsed-chip">{pickupElapsed}</div> : null}
+                    <div className={pickupElapsed ? "pickup-elapsed-chip" : "pickup-elapsed-chip placeholder"}>{pickupElapsed ?? "00:00"}</div>
                   </div>
                 </div>
 

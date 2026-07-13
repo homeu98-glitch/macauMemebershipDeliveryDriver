@@ -306,7 +306,7 @@ export function DriverHomeClient() {
         </section>
 
         {filteredOrders.length === 0 ? (
-          <div className="android-card muted">目前沒有可接訂單</div>
+          <div className="android-card muted home-empty-orders">目前沒有可接訂單</div>
         ) : (
           filteredOrders.map((order) => {
             const distanceLabel = formatDistanceKmFromCurrent(driverLocation, order) ?? "--";

@@ -2337,3 +2337,8 @@ html, body {
   justify-items: end;
   gap: 8px;
 }
+
+
+.home-empty-orders {
+  margin-top: 15px;
+}
