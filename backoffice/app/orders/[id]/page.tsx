@@ -22,7 +22,7 @@ export default async function OrderDetailPage({
           <div>
             <div className="eyebrow">訂單詳情</div>
             <h2 className="page-title" style={{ marginTop: 12, marginBottom: 6 }}>
-              {order.code}
+              {order.displayOrderNo}
             </h2>
             <p className="page-subtitle">
               {order.storeName} → {order.customerName}
@@ -38,7 +38,7 @@ export default async function OrderDetailPage({
             orderId={order.id}
             rawStatus={order.rawStatus}
             shopOwnerCancelConfirmedAt={order.shopOwnerCancelConfirmedAt}
-            externalOrderId={order.code}
+            externalOrderId={order.displayOrderNo}
             currentAmountMop={order.amountMop}
           />
         </div>
@@ -48,6 +48,7 @@ export default async function OrderDetailPage({
           <span className="pill">騎手：{order.riderName}</span>
           <span className="pill">預估：{order.etaMinutes} 分鐘</span>
           <span className="pill">配送費：MOP {order.amountMop}</span>
+          {order.isUrgent ? <span className="pill" style={{ background: "#ffe3e3", color: "#b3261e", borderColor: "#f0b0b0" }}>急單</span> : null}
         </div>
 
         <div className="grid two-column">

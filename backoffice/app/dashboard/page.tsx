@@ -136,9 +136,9 @@ export default async function DashboardPage() {
               liveOrders.slice(0, 6).map((order) => (
                 <div className="list-item" key={order.id}>
                   <div>
-                    <strong>{order.code}</strong>
+                    <strong>{order.displayOrderNo}</strong>
                     <div className="muted">
-                      {order.storeName} → {order.customerName}
+                      {order.storeName} → {order.customerName}{order.isUrgent ? " · 急單" : ""}
                     </div>
                     <div className="muted">{order.address}</div>
                   </div>

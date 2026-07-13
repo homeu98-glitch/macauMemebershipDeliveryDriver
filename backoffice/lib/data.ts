@@ -46,6 +46,9 @@ export type Rider = {
 export type Order = {
   id: string;
   code: string;
+  displayOrderNo: string;
+  externalOrderId: string;
+  isUrgent: boolean;
   rawStatus: string;
   status: "new" | "assigned" | "picked_up" | "delivered" | "issue";
   customerName: string;

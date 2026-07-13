@@ -994,7 +994,7 @@ useEffect(() => {
           <table className="table">
             <thead>
               <tr>
-                <th>訂單</th>
+                <th>訂單號</th>
                 <th>店舖</th>
                 <th>客戶</th>
                 <th>騎手</th>
@@ -1010,9 +1010,9 @@ useEffect(() => {
                 <tr key={order.id}>
                   <td>
                     <Link href={`/orders/${order.id}`}>
-                      <strong>{order.code}</strong>
+                      <strong>{order.displayOrderNo}</strong>
                     </Link>
-                    <div className="muted">{order.createdAt}</div>
+                    <div className="muted">{order.createdAt}</div>{order.isUrgent ? <div><span className="badge badge-warning">急單</span></div> : null}
                   </td>
                   <td>{order.storeName}</td>
                   <td>{order.customerName}</td>
