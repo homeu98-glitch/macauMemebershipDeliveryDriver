@@ -274,7 +274,10 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
               <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
               <div className="order-subvalue tight">發單日期 {order.publishedAt}</div>
             </div>
-            <StatusBadge status={order.status} amount={order.amountMop} urgent={order.isUrgent} />
+            <div className="stack gap-2 align-end">
+              <StatusBadge status={order.status} amount={order.amountMop} urgent={order.isUrgent} />
+              {inGraceCancel ? <div className="pickup-elapsed-chip">可取消 {formatGraceCountdown(graceLeft)}</div> : null}
+            </div>
           </div>
 
           <DetailStageStrip status={order.status} />

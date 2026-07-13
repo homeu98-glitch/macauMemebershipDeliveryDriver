@@ -72,6 +72,7 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
   const [installPromptEvent, setInstallPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [standalone, setStandalone] = useState(false);
   const [hideInstallBanner, setHideInstallBanner] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ title: string; body: string } | null>(null);
   const audioUnlockedRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const pendingSoundRef = useRef<DriverSoundKey | null>(null);
@@ -148,11 +149,19 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
           currentAudioRef.current.currentTime = 0;
         }
         const pooled = audioPoolRef.current[key];
-        const audio = pooled ?? new window.Audio(src);
+        const audio = pooled ? (pooled.cloneNode(true) as HTMLAudioElement) : new window.Audio(src);
         audio.preload = "auto";
         audio.currentTime = 0;
+        audio.volume = 1;
         currentAudioRef.current = audio;
-        void audio.play().catch(() => { pendingSoundRef.current = key; });
+        void audio.play().catch(() => {
+          pendingSoundRef.current = key;
+          try {
+            const retryAudio = new window.Audio(src);
+            retryAudio.volume = 1;
+            void retryAudio.play().catch(() => undefined);
+          } catch {}
+        });
         if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
       } catch {
         // ignore audio runtime issues on unsupported browsers
@@ -161,18 +170,32 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
 
     const showForegroundNotification = (payload: DriverDispatchPayload) => {
       try {
-        if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-        if (!("serviceWorker" in navigator)) return;
-        if (document.visibilityState !== "visible") return;
-        navigator.serviceWorker.ready
-          .then((registration) => registration.showNotification(payload.title || "會員配送車手", {
-            body: payload.body || "你有新的派單消息。",
-            icon: "/icons/driver-app-logo-v3-192.png",
-            badge: "/icons/driver-app-logo-v3-192.png",
-            data: { url: payload.url || "/driver/home", soundKey: payload.soundKey || "new_order" },
-            tag: `foreground-realtime-${payload.soundKey || "new_order"}`
-          }))
-          .catch(() => undefined);
+        setToastMessage({
+          title: payload.title || "會員配送車手",
+          body: payload.body || "你有新的派單消息。"
+        });
+        window.setTimeout(() => setToastMessage(null), 5000);
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          try {
+            new Notification(payload.title || "會員配送車手", {
+              body: payload.body || "你有新的派單消息。",
+              icon: "/icons/driver-app-logo-v3-192.png",
+              tag: `foreground-realtime-${payload.soundKey || "new_order"}`
+            });
+          } catch {}
+        }
+        if ("serviceWorker" in navigator && document.visibilityState !== "visible") {
+          navigator.serviceWorker.ready
+            .then((registration) => registration.showNotification(payload.title || "會員配送車手", {
+              body: payload.body || "你有新的派單消息。",
+              icon: "/icons/driver-app-logo-v3-192.png",
+              badge: "/icons/driver-app-logo-v3-192.png",
+              data: { url: payload.url || "/driver/home", soundKey: payload.soundKey || "new_order" },
+              tag: `foreground-realtime-${payload.soundKey || "new_order"}`,
+              requireInteraction: true
+            }))
+            .catch(() => undefined);
+        }
       } catch {}
     };
 
@@ -367,6 +390,12 @@ export function DriverShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       )}
+      {toastMessage ? (
+        <div className="driver-realtime-toast">
+          <div className="driver-realtime-toast-title">{toastMessage.title}</div>
+          <div className="driver-realtime-toast-body">{toastMessage.body}</div>
+        </div>
+      ) : null}
       {legalState?.mustAccept ? (
         <div className="driver-modal-backdrop">
           <div className="driver-modal-card">

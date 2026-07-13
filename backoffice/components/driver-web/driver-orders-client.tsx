@@ -246,7 +246,7 @@ export function DriverOrdersClient() {
               <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
                 <div className="active-order-card-topbar with-pickup-timer">
                   <div className="order-card-number">訂單 {index + 1}</div>
-                  <div className="pickup-elapsed-slot">{pickupElapsed ? <div className="pickup-elapsed-chip">{pickupElapsed}</div> : null}</div>
+                  <div className="pickup-elapsed-slot">{inGrace ? <div className="pickup-elapsed-chip">可取消 {formatGraceCountdown(graceLeft)}</div> : pickupElapsed ? <div className="pickup-elapsed-chip">{pickupElapsed}</div> : null}</div>
                   <div className="order-price-top-right">
                     <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
                   </div>

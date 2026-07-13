@@ -2395,3 +2395,29 @@ html, body {
     padding: 3px 7px;
   }
 }
+
+
+.driver-realtime-toast {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 9999;
+  border-radius: 18px;
+  background: rgba(34, 28, 18, 0.96);
+  color: #fff;
+  padding: 14px 16px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.24);
+}
+
+.driver-realtime-toast-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.driver-realtime-toast-body {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  opacity: 0.95;
+}

@@ -286,11 +286,15 @@ export async function listActiveOrders(driverId: string) {
     .from("order_events")
     .select("order_id,event_type,created_at,payload")
     .in("order_id", orderIds)
-    .in("event_type", ["picked_up", "issue_reported", "website.shop_owner_confirmed_driver_cancel"]);
+    .in("event_type", ["accepted", "picked_up", "issue_reported", "website.shop_owner_confirmed_driver_cancel"]);
+  const acceptedAtEventByOrderId = new Map<string, string>();
   const pickedUpAtByOrderId = new Map<string, string>();
   const cancelMetaByOrderId = new Map<string, { cancelReason: string | null; cancelOtherReason: string | null; cancelHandling: "return_to_shop" | "not_returning" | null }>();
   const shopConfirmedCancelOrderIds = new Set<string>();
   for (const event of events ?? []) {
+    if (event.event_type === "accepted" && !acceptedAtEventByOrderId.has(event.order_id)) {
+      acceptedAtEventByOrderId.set(event.order_id, event.created_at);
+    }
     if (event.event_type === "picked_up" && !pickedUpAtByOrderId.has(event.order_id)) {
       pickedUpAtByOrderId.set(event.order_id, event.created_at);
     }
@@ -320,7 +324,7 @@ export async function listActiveOrders(driverId: string) {
     return toOrderSummary(
       {
         ...row,
-        accepted_at: acceptedAtByOrderId.get(row.id) ?? null,
+        accepted_at: acceptedAtByOrderId.get(row.id) ?? acceptedAtEventByOrderId.get(row.id) ?? null,
         picked_up_at: pickedUpAtByOrderId.get(row.id) ?? null,
         cancel_reason: cancelMeta?.cancelReason ?? null,
         cancel_other_reason: cancelMeta?.cancelOtherReason ?? null,
@@ -356,11 +360,12 @@ export async function getDriverOrderDetail(driverId: string, orderId: string) {
     loadShopAndCustomerMaps(supabase, [order])
   ]);
 
+  const acceptedEvent = (events ?? []).find((event: any) => event.event_type === "accepted");
   const pickedUpEvent = (events ?? []).find((event: any) => event.event_type === "picked_up");
   const cancelEvent = [...(events ?? [])].reverse().find((event: any) => event.event_type === "issue_reported" && (event.payload?.cancel_handling || event.payload?.cancel_reason));
   const summary = toOrderSummary({
     ...order,
-    accepted_at: assignment?.accepted_at ?? null,
+    accepted_at: assignment?.accepted_at ?? acceptedEvent?.created_at ?? null,
     picked_up_at: pickedUpEvent?.created_at ?? null,
     cancel_reason: cancelEvent?.payload?.cancel_reason ?? null,
     cancel_other_reason: cancelEvent?.payload?.cancel_other_reason ?? null,
