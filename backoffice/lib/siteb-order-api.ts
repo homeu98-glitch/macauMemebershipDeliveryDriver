@@ -492,7 +492,7 @@ export async function cancelOrderByExternalId(
 
   const { data: assignment } = await supabase
     .from("order_assignments")
-    .select("driver_id")
+    .select("id,driver_id,accepted_at")
     .eq("order_id", order.id)
     .is("canceled_at", null)
     .order("assigned_at", { ascending: false })
@@ -503,6 +503,11 @@ export async function cancelOrderByExternalId(
     ["picked_up", "arrived_customer"].includes(order.status) ||
     withinGrace ||
     order.status === "accepted";
+  const acceptedAt = assignment?.accepted_at ?? null;
+  const driverCancelConfirmationRequired =
+    typeof acceptedAt === "string" &&
+    Date.now() - new Date(acceptedAt).getTime() > 180 * 1000;
+  const canceledAt = requestedAt ?? nowIso();
 
   const { error: updateError } = await supabase
     .from("orders")
@@ -513,7 +518,9 @@ export async function cancelOrderByExternalId(
         ...(order.source_payload ?? {}),
         canceledReason: reason,
         canceledBy: requestedBy,
-        canceledAt: requestedAt ?? nowIso()
+        canceledAt,
+        driverCancelConfirmationRequired,
+        driverCancelConfirmedAt: null
       }
     })
     .eq("id", order.id);
@@ -522,31 +529,35 @@ export async function cancelOrderByExternalId(
   await appendEvent(order.id as string, "website.order_canceled", {
     reason,
     requestedBy,
-    requestedAt: requestedAt ?? nowIso()
+    requestedAt: canceledAt
   });
+
+  if (!driverCancelConfirmationRequired && assignment?.id) {
+    await supabase.from("order_assignments").update({ canceled_at: canceledAt }).eq("id", assignment.id);
+  }
 
   if (assignment?.driver_id) {
     await sendPushToDriver(assignment.driver_id, {
-      title: shouldPlayCancelSound ? "訂單已取消" : "",
-      body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+      title: shouldPlayCancelSound ? "商家已取消訂單" : "",
+      body: shouldPlayCancelSound ? (driverCancelConfirmationRequired ? "商家已取消訂單，請按確認取消。" : "商家已取消訂單。") : "",
       soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
       data: {
         type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
         externalOrderId,
         ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
-        requireCancelConfirm: "true"
+        requireCancelConfirm: driverCancelConfirmationRequired ? "true" : "false"
       }
     }).catch(() => undefined);
   } else {
     await sendPushToOnlineDrivers({
-      title: shouldPlayCancelSound ? "訂單已取消" : "",
-      body: shouldPlayCancelSound ? "唔好意思呀, 老闆取消左訂單。" : "",
+      title: shouldPlayCancelSound ? "商家已取消訂單" : "",
+      body: shouldPlayCancelSound ? (driverCancelConfirmationRequired ? "商家已取消訂單，請按確認取消。" : "商家已取消訂單。") : "",
       soundKey: shouldPlayCancelSound ? "order_cancelled" : undefined,
       data: {
         type: shouldPlayCancelSound ? "order_canceled" : "order_invalidated",
         externalOrderId,
         ...(shouldPlayCancelSound ? { playSound: "true" } : {}),
-          requireCancelConfirm: "true"
+        requireCancelConfirm: driverCancelConfirmationRequired ? "true" : "false"
       }
     }).catch(() => undefined);
   }
@@ -616,7 +627,7 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
 
   const { data: assignment } = await supabase
     .from("order_assignments")
-    .select("driver_id")
+    .select("id,driver_id,accepted_at")
     .eq("order_id", order.id)
     .is("canceled_at", null)
     .order("assigned_at", { ascending: false })
@@ -647,7 +658,9 @@ export async function adminCancelOrderById(orderId: string, requestedBy: string,
           canceledReason: reason,
           canceledBy: requestedBy,
           canceledAt,
-          canceledFrom: "backoffice"
+          canceledFrom: "backoffice",
+          driverCancelConfirmationRequired: false,
+          driverCancelConfirmedAt: null
         }
       })
       .eq("id", order.id);
@@ -883,7 +896,7 @@ export async function hurryOrderByExternalId(
   await appendEvent(order.id as string, "website.customer_hurry", {
     message,
     requestedBy,
-    requestedAt: requestedAt ?? nowIso()
+    requestedAt: nowIso()
   });
 
   if (!assignment?.driver_id) {

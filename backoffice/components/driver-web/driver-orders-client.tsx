@@ -33,6 +33,8 @@ type OrderSummary = {
   cancelHandling: "return_to_shop" | "not_returning" | null;
   isUrgent: boolean;
   paymentTag: string;
+  driverCancelConfirmationRequired: boolean;
+  driverCancelConfirmedAt: string | null;
 };
 
 function buildGoogleNavUrl(label: string, address: string, lat: number, lng: number) {
@@ -242,6 +244,7 @@ export function DriverOrdersClient() {
             const pickupElapsed = order.status === "picked_up" || order.status === "arrived_customer" ? formatPickupElapsed(order.pickedUpAt, nowTick) : null;
             const graceLeft = graceSecondsLeft(order.acceptedAt);
             const inGrace = (order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop") && graceLeft > 0;
+            const needsCancelConfirm = order.status === "canceled" && order.driverCancelConfirmationRequired && !order.driverCancelConfirmedAt;
             return (
               <article className="android-card active-order-card stack gap-3 no-overflow-card full-width-card" key={order.id}>
                 <div className="active-order-card-topbar with-pickup-timer">
@@ -297,7 +300,7 @@ export function DriverOrdersClient() {
                 </div>
 
                 {order.status === "canceled" ? (
-                  <div className="canceled-order-frame" style={{ marginTop: 8 }}>此訂單已取消配送</div>
+                  <div className="canceled-order-frame" style={{ marginTop: 8 }}>{needsCancelConfirm ? "商家已取消訂單，請確認取消" : "此訂單已取消配送"}</div>
                 ) : null}
 
                 {inGrace ? <div className="grace-cancel-hint">可在 {formatGraceCountdown(graceLeft)} 內取消並釋出回首頁</div> : null}
@@ -308,6 +311,9 @@ export function DriverOrdersClient() {
                   ) : null}
                   {order.status !== "canceled" && canDeliver ? (
                     <button className="android-primary-btn action-with-margin" disabled={busyOrderId === order.id + "proof-delivered"} onClick={() => triggerComplete(order.id)} type="button">{busyOrderId === order.id + "proof-delivered" ? "上傳中..." : "拍照後完成訂單"}</button>
+                  ) : null}
+                  {needsCancelConfirm ? (
+                    <button className="android-danger-btn action-with-margin" disabled={busyOrderId === order.id + "cancel_confirmed"} onClick={() => sendStatus(order.id, "cancel_confirmed")} type="button">{busyOrderId === order.id + "cancel_confirmed" ? "處理中..." : "確認取消"}</button>
                   ) : null}
                   {order.status !== "canceled" ? (
                     <button

@@ -32,6 +32,8 @@ export type DriverWebOrderSummary = {
   cancelHandling: "return_to_shop" | "not_returning" | null;
   isUrgent: boolean;
   paymentTag: string;
+  driverCancelConfirmationRequired: boolean;
+  driverCancelConfirmedAt: string | null;
 };
 
 export type DriverWebOrderDetail = DriverWebOrderSummary & {
@@ -198,7 +200,9 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     cancelOtherReason: typeof order.cancel_other_reason === "string" ? order.cancel_other_reason : null,
     cancelHandling: order.cancel_handling === "return_to_shop" || order.cancel_handling === "not_returning" ? order.cancel_handling : null,
     isUrgent: Boolean(urgentFromPayload),
-    paymentTag: derivePaymentTag(order)
+    paymentTag: derivePaymentTag(order),
+    driverCancelConfirmationRequired: Boolean(sourcePayload?.driverCancelConfirmationRequired),
+    driverCancelConfirmedAt: typeof sourcePayload?.driverCancelConfirmedAt === "string" ? sourcePayload.driverCancelConfirmedAt : null
   };
 }
 

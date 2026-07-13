@@ -36,6 +36,8 @@ type OrderDetail = {
   items: string[];
   timeline: Array<{ label: string; timestamp: string; note: string }>;
   hasProof: boolean;
+  driverCancelConfirmationRequired: boolean;
+  driverCancelConfirmedAt: string | null;
 };
 
 function buildGoogleNavUrl(label: string, address: string, lat: number, lng: number) {
@@ -154,6 +156,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const canDeliver = order?.status === "picked_up" || order?.status === "arrived_customer";
   const graceLeft = graceSecondsLeft(order?.acceptedAt ?? null);
   const inGraceCancel = Boolean(order && (order.status === "accepted" || order.status === "assigned" || order.status === "heading_to_shop") && graceLeft > 0);
+  const needsCancelConfirm = Boolean(order && order.status === "canceled" && order.driverCancelConfirmationRequired && !order.driverCancelConfirmedAt);
 
   async function sendStatus(eventType: string, redirectAfter = false, extra: Record<string, unknown> = {}) {
     setActionBusy(eventType);
@@ -316,12 +319,13 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
           <div className="order-bottom-meta compact">{order.deliveryDeadlineText} · 請盡快完成本單</div>
 
           <div className="stack gap-2">
-            {order.status === "canceled" ? <div className="muted">此訂單已取消配送。</div> : null}
+            {order.status === "canceled" ? <div className="muted">{needsCancelConfirm ? "商家已取消訂單，請先確認取消。" : "此訂單已取消配送。"}</div> : null}
             {canAccept ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("accepted")} type="button">{actionBusy === "accepted" ? "接單中..." : "接單"}</button> : null}
             {canPickUp ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("picked_up")} type="button">{actionBusy === "picked_up" ? "處理中..." : "已取貨"}</button> : null}
             {canDeliver ? <button className="android-primary-btn" disabled={Boolean(actionBusy)} onClick={handleCompleteClick} type="button">{actionBusy === "proof-deliver" || actionBusy === "delivered" ? "處理中..." : "拍照後完成訂單"}</button> : null}
             {inGraceCancel ? <div className="grace-cancel-hint">可在 {formatGraceCountdown(graceLeft)} 內取消並釋出回首頁</div> : null}
-            {order.status !== "delivered" ? <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => setShowCancelPanel(true)} type="button">{inGraceCancel ? "立即取消並釋出" : "取消訂單"}</button> : null}
+            {needsCancelConfirm ? <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => sendStatus("cancel_confirmed")} type="button">{actionBusy === "cancel_confirmed" ? "處理中..." : "確認取消"}</button> : null}
+            {order.status !== "delivered" && !needsCancelConfirm ? <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => setShowCancelPanel(true)} type="button">{inGraceCancel ? "立即取消並釋出" : "取消訂單"}</button> : null}
           </div>
         </section>
 

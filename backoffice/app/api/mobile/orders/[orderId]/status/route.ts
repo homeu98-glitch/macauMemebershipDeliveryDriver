@@ -134,6 +134,15 @@ export async function POST(
       if (assignment?.id) {
         await supabase.from("order_assignments").delete().eq("id", assignment.id);
       }
+      const sourcePayload = order.source_payload && typeof order.source_payload === "object" ? (order.source_payload as Record<string, unknown>) : {};
+      await supabase.from("orders").update({
+        updated_at: now,
+        source_payload: {
+          ...sourcePayload,
+          driverCancelConfirmedAt: now,
+          driverCancelConfirmedByDriverId: verified.driverId
+        }
+      }).eq("id", params.orderId);
       await supabase.from("order_events").insert({
         order_id: params.orderId,
         event_type: "driver_confirmed_cancel",
