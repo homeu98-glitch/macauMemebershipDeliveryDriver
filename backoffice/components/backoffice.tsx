@@ -13,6 +13,7 @@ const navItems = [
   { href: "/push-tokens", label: "推播裝置" },
   { href: "/riders/applications", label: "騎手審核" },
   { href: "/riders", label: "騎手列表" },
+  { href: "/riders/district-map", label: "地區分佈" },
   { href: "/riders/reset-pin", label: "重設車手密碼" },
   { href: "/orders", label: "訂單管理" },
   { href: "/apk", label: "安裝設置" },

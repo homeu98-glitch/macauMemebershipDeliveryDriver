@@ -1,6 +1,7 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleSupabaseClient } from "./supabase";
 import type { CallbackLog, IncomingCallbackReceipt, Metric, Order, PushTokenRegistration, Rider, RiderApplication } from "./data";
+import { findMacauDistrict, listMacauDistrictNames } from "./districts";
 
 type DriverProfileRow = {
   id: string;
@@ -622,6 +623,68 @@ export async function listCallbackLogs(): Promise<CallbackLog[]> {
           ? `最近回應碼 ${item.http_status}`
           : "尚未收到回應"
   }));
+}
+
+
+export async function getOnlineRiderDistrictCounts(options?: { recentMinutes?: number }) {
+  noStore();
+  const recentMinutes = options?.recentMinutes ?? 15;
+  const since = new Date(Date.now() - recentMinutes * 60 * 1000).toISOString();
+
+  const supabase = createServiceRoleSupabaseClient();
+
+  const { data: onlineDrivers, error: driversError } = await supabase
+    .from("driver_profiles")
+    .select("id")
+    .eq("availability", "online")
+    .eq("approval_status", "approved");
+
+  if (driversError) throw driversError;
+
+  const driverIds = (onlineDrivers ?? []).map((item: any) => item.id);
+  const counts: Record<string, number> = {};
+  const districts = listMacauDistrictNames();
+  for (const name of districts) counts[name] = 0;
+
+  if (!driverIds.length) {
+    return { districts, counts, unknown: 0, totalOnline: 0, recentMinutes };
+  }
+
+  // fetch latest location rows (recent) for these drivers
+  const { data: locations, error: locationsError } = await supabase
+    .from("driver_locations")
+    .select("driver_id,latitude,longitude,captured_at")
+    .in("driver_id", driverIds)
+    .gte("captured_at", since)
+    .order("captured_at", { ascending: false });
+
+  if (locationsError) throw locationsError;
+
+  const latestByDriver = new Map<string, { latitude: number; longitude: number }>();
+  for (const row of locations ?? []) {
+    if (latestByDriver.has(row.driver_id)) continue;
+    latestByDriver.set(row.driver_id, {
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude)
+    });
+  }
+
+  let unknown = 0;
+  for (const driverId of driverIds) {
+    const loc = latestByDriver.get(driverId);
+    if (!loc) {
+      unknown += 1;
+      continue;
+    }
+    const district = findMacauDistrict(loc.latitude, loc.longitude);
+    if (!district || !(district in counts)) {
+      unknown += 1;
+      continue;
+    }
+    counts[district] += 1;
+  }
+
+  return { districts, counts, unknown, totalOnline: driverIds.length, recentMinutes };
 }
 
 export async function listPushTokenRegistrations(): Promise<PushTokenRegistration[]> {
