@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { createServiceRoleSupabaseClient } from "./supabase";
 import type { CallbackLog, IncomingCallbackReceipt, Metric, Order, PushTokenRegistration, Rider, RiderApplication } from "./data";
 
@@ -61,6 +62,7 @@ function callbackStatusFromCode(code?: number | null): CallbackLog["status"] {
 }
 
 export async function listRiderApplications(): Promise<RiderApplication[]> {
+  noStore();
   const supabase = createServiceRoleSupabaseClient();
   const { data: applications, error } = await supabase
     .from("driver_applications")
@@ -137,6 +139,7 @@ export async function listRiderApplications(): Promise<RiderApplication[]> {
 }
 
 export async function listRiders(): Promise<Rider[]> {
+  noStore();
   const supabase = createServiceRoleSupabaseClient();
   const { data, error } = await supabase
     .from("driver_profiles")

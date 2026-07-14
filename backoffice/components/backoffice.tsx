@@ -437,6 +437,7 @@ useEffect(() => {
                 key={item.href}
                 className={`nav-link${active ? " active" : ""}`}
                 href={item.href}
+                prefetch={false}
               >
                 <span>{item.label}{item.href === "/riders/applications" && pendingApprovalCount > 0 ? (
                     <span
