@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type OrderSummary = {
@@ -132,11 +134,35 @@ export function DriverHomeClient() {
 
   useEffect(() => {
     if (!("geolocation" in navigator)) return;
-    navigator.geolocation.getCurrentPosition(
-      (position) => setDriverLocation({ lat: position.coords.latitude, lng: position.coords.longitude }),
-      () => undefined,
-      { enableHighAccuracy: true, timeout: 6000, maximumAge: 120000 }
-    );
+
+    let stopped = false;
+
+    async function syncLocation() {
+      const position = await new Promise<GeolocationPosition | null>((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (nextPosition) => resolve(nextPosition),
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 6000, maximumAge: 120000 }
+        );
+      });
+
+      if (!position || stopped) return;
+      setDriverLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+      await reportDriverLocationOnce();
+    }
+
+    void syncLocation();
+    const timer = window.setInterval(() => { void syncLocation(); }, 30000);
+    const onFocus = () => { void syncLocation(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
   }, []);
 
   useEffect(() => {
@@ -213,6 +239,7 @@ export function DriverHomeClient() {
         body: JSON.stringify({ availability: next })
       });
       if (!response.ok) throw new Error("availability_failed");
+      await reportDriverLocationOnce();
       await load();
     } catch {
       setData((current) => (current ? { ...current, availability: previous } : current));
@@ -236,6 +263,7 @@ export function DriverHomeClient() {
         window.alert(payload.message ?? "接單失敗，請稍後再試。");
         return;
       }
+      await reportDriverLocationOnce();
       await load();
     } catch {
       window.alert("接單失敗，請稍後再試。");

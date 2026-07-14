@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
+
 type OrderDetail = {
   id: string;
   externalOrderId: string;
@@ -182,6 +184,20 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
     return () => window.removeEventListener("driver_dispatch_event", onDispatch);
   }, [orderId]);
 
+  useEffect(() => {
+    void reportDriverLocationOnce();
+    const timer = window.setInterval(() => { void reportDriverLocationOnce(); }, 30000);
+    const onFocus = () => { if (document.visibilityState !== "hidden") void reportDriverLocationOnce(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, []);
+
+
   const canAccept = order?.status === "new";
   const canPickUp = order?.status === "accepted" || order?.status === "assigned" || order?.status === "heading_to_shop";
   const canDeliver = order?.status === "picked_up" || order?.status === "arrived_customer";
@@ -217,6 +233,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
         }, 220);
         return;
       }
+      await reportDriverLocationOnce();
       await load();
     } catch {
       window.alert("更新訂單狀態失敗。");
@@ -240,6 +257,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
         await sendStatus("delivered", true);
         return;
       }
+      await reportDriverLocationOnce();
       await load();
     } catch {
       window.alert("上傳送達證明失敗。");
