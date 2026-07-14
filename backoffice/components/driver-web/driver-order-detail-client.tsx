@@ -2,9 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
+import { captureDriverLocationPayload, reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
 
 type OrderDetail = {
+  orderImages: Array<{ url: string; label: string | null; mimeType: string | null }>;
+  customerAddressProvided: boolean;
+  customerContactProvided: boolean;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -208,10 +211,11 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   async function sendStatus(eventType: string, redirectAfter = false, extra: Record<string, unknown> = {}) {
     setActionBusy(eventType);
     try {
+      const location = eventType === "accepted" ? await captureDriverLocationPayload() : null;
       const response = await fetch(`/api/driver/orders/${orderId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventType, ...extra })
+        body: JSON.stringify({ eventType, ...(location ? { location } : {}), ...extra })
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string };
       if (!response.ok) {
@@ -310,7 +314,9 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   if (!order) return <div className="android-card error">找不到訂單資料。</div>;
 
   const toShop = buildGoogleNavUrl(order.storeName, order.storeAddress, order.storeLatitude, order.storeLongitude);
-  const toCustomer = buildGoogleNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude);
+  const toCustomer = order.customerAddressProvided || (order.customerLatitude && order.customerLongitude)
+    ? buildGoogleNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude)
+    : null;
 
   return (
     <>
@@ -353,10 +359,11 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
                 <div className="driver-soft-label">客戶</div>
                 <div className="location-title">{order.customerName}</div>
                 <div className="address-text compact">{order.customerAddress}</div>
+                {!order.customerAddressProvided ? <div className="order-subvalue tight">此單未提供文字地址，請查看下方圖片內容。</div> : null}
               </div>
               <div className="mini-icon-actions">
-                <IconButtonLink href={dialHref(order.customerPhone)} label="致電客戶" type="call" disabled={!order.customerPhone} />
-                <button className="mini-icon-btn" onClick={() => setNavTarget({ label: `導航到客戶：${order.customerName}`, googleUrl: toCustomer, amapUrl: buildAmapNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude) })} type="button">
+                <IconButtonLink href={dialHref(order.customerPhone)} label="致電客戶" type="call" disabled={!order.customerPhone || !order.customerContactProvided} />
+                <button className="mini-icon-btn" disabled={!toCustomer} onClick={() => setNavTarget({ label: `導航到客戶：${order.customerName}`, googleUrl: toCustomer, amapUrl: buildAmapNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude) })} type="button">
                 <span className="mini-icon" aria-hidden>🧭</span>
               </button>
               </div>
@@ -381,6 +388,21 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
             {order.status !== "delivered" && !needsCancelConfirm ? <button className="android-danger-btn" disabled={Boolean(actionBusy)} onClick={() => setShowCancelPanel(true)} type="button">{inGraceCancel ? "立即取消並釋出" : "取消訂單"}</button> : null}
           </div>
         </section>
+
+        {order.orderImages.length ? (
+          <section className="android-card stack gap-3 full-width-card">
+            <div className="driver-section-title">訂單圖片</div>
+            <div className="muted">商家上傳的圖片可用來查看地址、單據或補充內容。</div>
+            <div className="stack gap-3">
+              {order.orderImages.map((image) => (
+                <div className="stack gap-1" key={image.url}>
+                  <img alt={image.label ?? "order image"} className="driver-proof-preview" src={image.url} />
+                  {image.label ? <div className="order-subvalue tight">{image.label}</div> : null}
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section className="android-card stack gap-3 full-width-card">
           <div className="driver-section-title">商品清單</div>

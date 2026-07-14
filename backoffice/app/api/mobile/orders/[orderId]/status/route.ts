@@ -22,6 +22,14 @@ type AssignmentRow = {
   accepted_at: string | null;
 };
 
+type DriverLocationPayload = {
+  latitude: number;
+  longitude: number;
+  capturedAt: string;
+  speedMps?: number | null;
+  heading?: number | null;
+};
+
 function createDriverUserClient(accessToken: string) {
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? ENV_PLACEHOLDERS.NEXT_PUBLIC_SUPABASE_URL;
@@ -54,6 +62,81 @@ async function verifyDriver(accessToken: string) {
   return { authUserId: userData.user.id, driverId: driver.id as string };
 }
 
+
+function normalizeLocationPayload(location: unknown): DriverLocationPayload | null {
+  if (!location || typeof location !== "object") return null;
+  const row = location as Record<string, unknown>;
+  const latitude = Number(row.latitude);
+  const longitude = Number(row.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {
+    latitude,
+    longitude,
+    capturedAt: typeof row.capturedAt === "string" && row.capturedAt ? row.capturedAt : new Date().toISOString(),
+    speedMps: Number.isFinite(Number(row.speedMps)) ? Number(row.speedMps) : null,
+    heading: Number.isFinite(Number(row.heading)) ? Number(row.heading) : null
+  };
+}
+
+async function resolveAcceptanceSnapshot(
+  supabase: ReturnType<typeof createServiceRoleSupabaseClient>,
+  driverId: string,
+  location: unknown
+) {
+  const providedLocation = normalizeLocationPayload(location);
+  if (providedLocation) {
+    await supabase.from("driver_locations").insert({
+      driver_id: driverId,
+      latitude: providedLocation.latitude,
+      longitude: providedLocation.longitude,
+      speed_mps: providedLocation.speedMps ?? null,
+      heading: providedLocation.heading ?? null,
+      captured_at: providedLocation.capturedAt
+    });
+  }
+
+  const [{ data: driverProfile }, latestLocationResult] = await Promise.all([
+    supabase.from("driver_profiles").select("full_name,phone").eq("id", driverId).maybeSingle(),
+    providedLocation
+      ? Promise.resolve({ data: null as any, error: null as any })
+      : supabase
+          .from("driver_locations")
+          .select("latitude,longitude,captured_at")
+          .eq("driver_id", driverId)
+          .order("captured_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+  ]);
+
+  const fallbackLocation = latestLocationResult?.data ?? null;
+  return {
+    acceptedDriver: {
+      fullName: driverProfile?.full_name ?? "未命名騎手",
+      phone: driverProfile?.phone ?? ""
+    },
+    acceptanceLocation: providedLocation
+      ? {
+          latitude: providedLocation.latitude,
+          longitude: providedLocation.longitude,
+          capturedAt: providedLocation.capturedAt,
+          source: "driver_accept_action"
+        }
+      : fallbackLocation
+        ? {
+            latitude: Number(fallbackLocation.latitude),
+            longitude: Number(fallbackLocation.longitude),
+            capturedAt: fallbackLocation.captured_at,
+            source: "driver_locations_fallback"
+          }
+        : {
+            latitude: null,
+            longitude: null,
+            capturedAt: null,
+            source: "unknown"
+          }
+  };
+}
+
 export async function POST(
   request: Request,
   { params }: { params: { orderId: string } }
@@ -73,6 +156,7 @@ export async function POST(
     cancelReason?: string;
     cancelOtherReason?: string;
     cancelHandling?: "return_to_shop" | "not_returning";
+    location?: DriverLocationPayload;
   };
 
   if (!body.eventType) {
@@ -218,12 +302,27 @@ if (body.eventType === "accepted") {
     throw insertAssignmentError;
   }
 
+  const { acceptedDriver, acceptanceLocation } = await resolveAcceptanceSnapshot(supabase, verified.driverId, body.location);
+  const sourcePayload =
+    order.source_payload && typeof order.source_payload === "object"
+      ? (order.source_payload as Record<string, unknown>)
+      : {};
+
+  await supabase.from("orders").update({
+    updated_at: now,
+    source_payload: {
+      ...sourcePayload,
+      acceptedDriver,
+      acceptanceLocation
+    }
+  }).eq("id", params.orderId);
+
   await supabase.from("order_events").insert({
     order_id: params.orderId,
     event_type: "accepted",
     actor_type: "driver",
     actor_driver_id: verified.driverId,
-    payload: { note: "騎手已接單" }
+    payload: { note: "騎手已接單", driver: acceptedDriver, acceptanceLocation }
   });
 }
     if (body.eventType === "picked_up") {

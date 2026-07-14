@@ -2,6 +2,9 @@ import { getLegalConfig } from "@/lib/legal-config";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase";
 
 export type DriverWebOrderSummary = {
+  orderImages: Array<{ url: string; label: string | null; mimeType: string | null }>;
+  customerAddressProvided: boolean;
+  customerContactProvided: boolean;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -169,8 +172,27 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     order?.source_payload && typeof order.source_payload === "object"
       ? (order.source_payload as Record<string, unknown>)
       : null;
+  const customerSnapshot =
+    sourcePayload?.customerSnapshot && typeof sourcePayload.customerSnapshot === "object"
+      ? (sourcePayload.customerSnapshot as Record<string, unknown>)
+      : null;
+  const orderImages = Array.isArray(sourcePayload?.images)
+    ? (sourcePayload?.images as Array<Record<string, unknown>>)
+        .filter((item) => typeof item?.url === "string" && item.url.trim())
+        .map((item) => ({
+          url: String(item.url),
+          label: typeof item.label === "string" ? item.label : null,
+          mimeType: typeof item.mimeType === "string" ? item.mimeType : null
+        }))
+    : [];
   const urgentFromPayload = sourcePayload?.priceRaisedAt || sourcePayload?.price_raised_at;
+  const customerAddressProvided = Boolean(customerSnapshot?.addressProvided ?? customer?.address);
+  const customerContactProvided = Boolean(customerSnapshot?.contactProvided ?? customer?.phone ?? customer?.name);
+
   return {
+    orderImages,
+    customerAddressProvided,
+    customerContactProvided,
     id: order.id,
     externalOrderId: order.external_order_id,
     transactionCode: order.transaction_code ?? null,
@@ -182,12 +204,14 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     storeLatitude: Number(shop?.latitude ?? 0),
     storeLongitude: Number(shop?.longitude ?? 0),
     totalSentOrders: totalSentOrdersByShopId.get(order.shop_id) ?? 0,
-    customerName: customer?.name ?? "未命名客戶",
-    customerAddress: customer?.address ?? "未提供地址",
-    customerPhone: customer?.phone ?? null,
-    destinationDistrict: customer?.district ?? null,
-    customerLatitude: Number(customer?.latitude ?? 0),
-    customerLongitude: Number(customer?.longitude ?? 0),
+    customerName: (typeof customerSnapshot?.name === "string" ? customerSnapshot.name : customer?.name) ?? "未提供客戶資料",
+    customerAddress: customerAddressProvided
+      ? ((typeof customerSnapshot?.address === "string" ? customerSnapshot.address : customer?.address) ?? "未提供地址")
+      : "請查看訂單圖片中的地址資料",
+    customerPhone: (typeof customerSnapshot?.phone === "string" ? customerSnapshot.phone : customer?.phone) ?? null,
+    destinationDistrict: customerAddressProvided ? customer?.district ?? null : null,
+    customerLatitude: customerAddressProvided ? Number(customer?.latitude ?? customerSnapshot?.latitude ?? 0) : 0,
+    customerLongitude: customerAddressProvided ? Number(customer?.longitude ?? customerSnapshot?.longitude ?? 0) : 0,
     amountMop: Number(order.assigned_fee_mop ?? 0),
     createdAt: formatDateTime(order.created_at),
     publishedAt: formatDateTime(order.created_at),

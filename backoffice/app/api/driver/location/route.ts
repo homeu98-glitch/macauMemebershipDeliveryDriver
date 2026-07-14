@@ -10,12 +10,14 @@ export async function POST(request: Request) {
       longitude?: number;
       speedMps?: number | null;
       heading?: number | null;
+      capturedAt?: string | null;
     };
 
     const latitude = Number(body.latitude);
     const longitude = Number(body.longitude);
     const speedMps = body.speedMps == null ? null : Number(body.speedMps);
     const heading = body.heading == null ? null : Number(body.heading);
+    const capturedAt = typeof body.capturedAt === "string" && body.capturedAt ? body.capturedAt : null;
 
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
       return NextResponse.json({ message: "缺少有效定位資料。" }, { status: 400 });
@@ -27,7 +29,8 @@ export async function POST(request: Request) {
       latitude,
       longitude,
       speed_mps: Number.isFinite(speedMps as number) ? speedMps : null,
-      heading: Number.isFinite(heading as number) ? heading : null
+      heading: Number.isFinite(heading as number) ? heading : null,
+      captured_at: capturedAt ?? undefined
     });
 
     if (error) {

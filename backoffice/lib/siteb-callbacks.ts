@@ -63,10 +63,11 @@ async function loadOrderCallbackContext(orderId: string) {
     throw new Error("Order not found.");
   }
 
-  const callbackMeta =
+  const sourcePayload =
     typeof order.source_payload === "object" && order.source_payload
-      ? (order.source_payload as Record<string, unknown>).callback
-      : null;
+      ? (order.source_payload as Record<string, unknown>)
+      : {};
+  const callbackMeta = sourcePayload.callback ?? null;
 
   const callback =
     callbackMeta && typeof callbackMeta === "object"
@@ -77,56 +78,87 @@ async function loadOrderCallbackContext(orderId: string) {
     throw new Error("Callback URL is missing from order source payload.");
   }
 
-  const [{ data: shop }, { data: customer }, { data: assignment }, { data: location }, { data: proof }] =
-    await Promise.all([
+  const [{ data: shop }, { data: customer }, { data: assignment }, { data: proof }] = await Promise.all([
+    supabase
+      .from("shops")
+      .select("name,address,latitude,longitude,contact_name,contact_phone")
+      .eq("id", order.shop_id)
+      .maybeSingle(),
+    supabase
+      .from("customers")
+      .select("name,address,phone")
+      .eq("id", order.customer_id)
+      .maybeSingle(),
+    supabase
+      .from("order_assignments")
+      .select("driver_id,assigned_at,accepted_at")
+      .eq("order_id", order.id)
+      .order("assigned_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("delivery_proofs")
+      .select("storage_path,created_at")
+      .eq("order_id", order.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+  ]);
+
+  let driver: { full_name: string; phone: string } | null = null;
+  let latestDriverLocation: { latitude: number; longitude: number; captured_at: string } | null = null;
+  if (assignment?.driver_id) {
+    const [{ data: driverRow }, { data: locationRows }] = await Promise.all([
       supabase
-        .from("shops")
-        .select("name,address,latitude,longitude,contact_name,contact_phone")
-        .eq("id", order.shop_id)
-        .maybeSingle(),
-      supabase
-        .from("customers")
-        .select("name,address,phone")
-        .eq("id", order.customer_id)
-        .maybeSingle(),
-      supabase
-        .from("order_assignments")
-        .select("driver_id,assigned_at,accepted_at")
-        .eq("order_id", order.id)
-        .order("assigned_at", { ascending: false })
-        .limit(1)
+        .from("driver_profiles")
+        .select("full_name,phone")
+        .eq("id", assignment.driver_id)
         .maybeSingle(),
       supabase
         .from("driver_locations")
         .select("latitude,longitude,captured_at")
+        .eq("driver_id", assignment.driver_id)
         .order("captured_at", { ascending: false })
-        .limit(1),
-      supabase
-        .from("delivery_proofs")
-        .select("storage_path,created_at")
-        .eq("order_id", order.id)
-        .order("created_at", { ascending: false })
         .limit(1)
     ]);
-
-  let driver: { full_name: string; phone: string } | null = null;
-  if (assignment?.driver_id) {
-    const { data: driverRow } = await supabase
-      .from("driver_profiles")
-      .select("full_name,phone")
-      .eq("id", assignment.driver_id)
-      .maybeSingle();
     driver = driverRow ?? null;
+    latestDriverLocation = locationRows?.[0] ?? null;
   }
+
+  const acceptedDriver =
+    sourcePayload.acceptedDriver && typeof sourcePayload.acceptedDriver === "object"
+      ? (sourcePayload.acceptedDriver as Record<string, unknown>)
+      : null;
+  const acceptanceLocation =
+    sourcePayload.acceptanceLocation && typeof sourcePayload.acceptanceLocation === "object"
+      ? (sourcePayload.acceptanceLocation as Record<string, unknown>)
+      : latestDriverLocation
+        ? {
+            latitude: Number(latestDriverLocation.latitude),
+            longitude: Number(latestDriverLocation.longitude),
+            capturedAt: latestDriverLocation.captured_at,
+            source: "driver_locations_fallback"
+          }
+        : null;
 
   return {
     order,
+    sourcePayload,
     callback,
     shop,
     customer,
     assignment,
-    driver,
-    latestDriverLocation: location?.[0] ?? null,
+    driver: {
+      fullName:
+        typeof acceptedDriver?.fullName === "string"
+          ? acceptedDriver.fullName
+          : driver?.full_name ?? "未命名騎手",
+      phone:
+        typeof acceptedDriver?.phone === "string"
+          ? acceptedDriver.phone
+          : driver?.phone ?? ""
+    },
+    acceptanceLocation,
+    latestDriverLocation,
     latestProof: proof?.[0] ?? null
   };
 }
@@ -138,27 +170,54 @@ function createCallbackPayload(
 ) {
   const eventTime = new Date().toISOString();
   const distanceToShopKm =
-    context.latestDriverLocation &&
+    context.acceptanceLocation &&
+    typeof context.acceptanceLocation.latitude === "number" &&
+    typeof context.acceptanceLocation.longitude === "number" &&
     context.shop?.latitude &&
     context.shop?.longitude
       ? haversineKm(
-          Number(context.latestDriverLocation.latitude),
-          Number(context.latestDriverLocation.longitude),
+          Number(context.acceptanceLocation.latitude),
+          Number(context.acceptanceLocation.longitude),
           Number(context.shop.latitude),
           Number(context.shop.longitude)
         )
       : 0;
 
+  const basePayload = {
+    externalOrderId: context.order.external_order_id,
+    eventTime,
+    driver: {
+      fullName: context.driver.fullName,
+      phone: context.driver.phone
+    },
+    acceptanceLocation: {
+      latitude:
+        context.acceptanceLocation && typeof context.acceptanceLocation.latitude === "number"
+          ? context.acceptanceLocation.latitude
+          : null,
+      longitude:
+        context.acceptanceLocation && typeof context.acceptanceLocation.longitude === "number"
+          ? context.acceptanceLocation.longitude
+          : null,
+      capturedAt:
+        context.acceptanceLocation && typeof context.acceptanceLocation.capturedAt === "string"
+          ? context.acceptanceLocation.capturedAt
+          : null,
+      source:
+        context.acceptanceLocation && typeof context.acceptanceLocation.source === "string"
+          ? context.acceptanceLocation.source
+          : "unknown"
+    }
+  };
+
   switch (input.eventType) {
     case "accepted":
       return {
         eventType: "order.accepted",
-        externalOrderId: context.order.external_order_id,
+        ...basePayload,
         status: "accepted",
-        eventTime,
         driver: {
-          fullName: context.driver?.full_name ?? "未命名騎手",
-          phone: context.driver?.phone ?? "",
+          ...basePayload.driver,
           distanceToShopKm,
           etaMinutes: 0
         },
@@ -167,27 +226,20 @@ function createCallbackPayload(
     case "picked_up":
       return {
         eventType: "order.picked_up",
-        externalOrderId: context.order.external_order_id,
-        status: "picked_up",
-        eventTime,
-        driver: {
-          fullName: context.driver?.full_name ?? "未命名騎手",
-          phone: context.driver?.phone ?? ""
-        }
+        ...basePayload,
+        status: "picked_up"
       };
     case "arrived":
       return {
         eventType: "order.arrived_customer",
-        externalOrderId: context.order.external_order_id,
-        status: "arrived_customer",
-        eventTime
+        ...basePayload,
+        status: "arrived_customer"
       };
     case "delivered":
       return {
         eventType: "order.delivered",
-        externalOrderId: context.order.external_order_id,
+        ...basePayload,
         status: "delivered",
-        eventTime,
         proof: {
           imageUrl: proofUrl,
           storagePath: context.latestProof?.storage_path ?? null,
@@ -197,9 +249,8 @@ function createCallbackPayload(
     case "exception_reported":
       return {
         eventType: "order.exception_reported",
-        externalOrderId: context.order.external_order_id,
+        ...basePayload,
         status: "exception_reported",
-        eventTime,
         exception: {
           reason: input.note ?? "driver_reported_issue",
           action: input.action ?? "pending_review",
@@ -209,9 +260,8 @@ function createCallbackPayload(
     case "canceled":
       return {
         eventType: "order.canceled",
-        externalOrderId: context.order.external_order_id,
+        ...basePayload,
         status: "canceled",
-        eventTime,
         cancel: {
           reason: input.note ?? "unknown",
           note: input.note ?? ""
@@ -220,9 +270,8 @@ function createCallbackPayload(
     case "shop_owner_confirmed_driver_cancel":
       return {
         eventType: "order.shop_owner_confirmed_driver_cancel",
-        externalOrderId: context.order.external_order_id,
+        ...basePayload,
         status: "canceled",
-        eventTime,
         cancelConfirmation: {
           confirmed: true,
           note: input.note ?? "Shop owner confirmed driver cancellation."

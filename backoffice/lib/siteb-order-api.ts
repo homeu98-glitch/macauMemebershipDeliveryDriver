@@ -18,7 +18,7 @@ type NormalizedCoordSet = {
 type ShopInput = {
   externalShopId?: string;
   name: string;
-  address: string;
+  address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   coordSystem?: CoordSystem | null;
@@ -42,6 +42,12 @@ type ItemInput = {
   quantity: number;
 };
 
+type OrderImageInput = {
+  url: string;
+  label?: string | null;
+  mimeType?: string | null;
+};
+
 type CallbackInput = NonNullable<CreateOrderInput["callback"]>;
 
 export type CreateOrderInput = {
@@ -54,7 +60,8 @@ export type CreateOrderInput = {
   urgent?: boolean;
   currency?: string;
   shop: ShopInput;
-  customer: CustomerInput;
+  customer?: CustomerInput | null;
+  images?: OrderImageInput[];
   items?: ItemInput[];
   notes?: Record<string, unknown>;
   callback?: {
@@ -109,6 +116,51 @@ function normalizeCallback(input: CreateOrderInput["callback"]): CallbackInput |
   };
 }
 
+function normalizeText(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function normalizeOrderImages(images: CreateOrderInput["images"]) {
+  return (images ?? [])
+    .map((item) => ({
+      url: normalizeText(item?.url),
+      label: normalizeText(item?.label),
+      mimeType: normalizeText(item?.mimeType)
+    }))
+    .filter((item) => item.url)
+    .map((item) => ({
+      url: item.url!,
+      label: item.label ?? null,
+      mimeType: item.mimeType ?? null
+    }));
+}
+
+function buildCustomerSnapshot(customer: CreateOrderInput["customer"] | undefined | null) {
+  const address = normalizeText(customer?.address);
+  const name = normalizeText(customer?.name);
+  const phone = normalizeText(customer?.phone);
+  const deliveryNote = normalizeText(customer?.deliveryNote);
+  const externalCustomerId = normalizeText(customer?.externalCustomerId);
+  const latitude = Number.isFinite(customer?.latitude as number) ? Number(customer?.latitude) : null;
+  const longitude = Number.isFinite(customer?.longitude as number) ? Number(customer?.longitude) : null;
+  const addressProvided = Boolean(address);
+  const contactProvided = Boolean(name || phone);
+
+  return {
+    externalCustomerId,
+    name,
+    phone,
+    address: address ?? null,
+    latitude,
+    longitude,
+    deliveryNote,
+    addressProvided,
+    contactProvided,
+    isAnonymous: !contactProvided,
+    displayName: name ?? "未提供客戶資料",
+    displayAddress: address ?? "請查看訂單圖片中的地址資料"
+  };
+}
 
 const X_PI = Math.PI * 3000.0 / 180.0;
 const PI = Math.PI;
@@ -242,17 +294,29 @@ export function validateCreateOrderInput(input: CreateOrderInput) {
   validateRequiredString(input.externalOrderId, "externalOrderId");
   validateRequiredString(input.shop?.name, "shop.name");
   validateRequiredString(input.shop?.address, "shop.address");
-  validateRequiredString(input.customer?.address, "customer.address");
   if (!callback?.url?.trim()) {
     throw new Error("callback.url is required");
   }
   if (normalizeDeliveryMode(input.deliveryMode) === "scheduled" && !input.deliveryDeadline?.trim()) {
     throw new Error("deliveryDeadline is required when deliveryMode is scheduled");
   }
+  const normalizedImages = normalizeOrderImages(input.images);
+  const shopHasCoords = Number.isFinite(Number(input.shop?.latitude)) && Number.isFinite(Number(input.shop?.longitude));
+  if (!shopHasCoords) {
+    throw new Error("shop latitude/longitude is required to determine district");
+  }
   const shopCoords = normalizeCoordSet(Number(input.shop?.latitude), Number(input.shop?.longitude), input.shop?.coordSystem);
-  const customerCoords = normalizeCoordSet(Number(input.customer?.latitude), Number(input.customer?.longitude), input.customer?.coordSystem);
   requireResolvedDistrict(shopCoords.wgs84.latitude, shopCoords.wgs84.longitude, "shop");
-  requireResolvedDistrict(customerCoords.wgs84.latitude, customerCoords.wgs84.longitude, "customer");
+
+  const hasCustomerAddress = Boolean(normalizeText(input.customer?.address));
+  const hasCustomerCoords = Number.isFinite(Number(input.customer?.latitude)) && Number.isFinite(Number(input.customer?.longitude));
+  if (!hasCustomerAddress && normalizedImages.length === 0) {
+    throw new Error("customer.address or at least one images[].url is required");
+  }
+  if (hasCustomerCoords) {
+    const customerCoords = normalizeCoordSet(Number(input.customer?.latitude), Number(input.customer?.longitude), input.customer?.coordSystem);
+    requireResolvedDistrict(customerCoords.wgs84.latitude, customerCoords.wgs84.longitude, "customer");
+  }
   if (normalizeDeliveryMode(input.deliveryMode) !== "scheduled") {
     return;
   }
@@ -292,24 +356,31 @@ async function upsertShop(shop: ShopInput) {
 
 
 
-async function upsertCustomer(customer: CustomerInput) {
+async function upsertCustomer(customer: CustomerInput | null | undefined, externalOrderId: string) {
   const supabase = createServiceRoleSupabaseClient();
+  const snapshot = buildCustomerSnapshot(customer);
+  const hasCoords = Number.isFinite(Number(customer?.latitude)) && Number.isFinite(Number(customer?.longitude));
+  const coords = hasCoords
+    ? normalizeCoordSet(Number(customer?.latitude), Number(customer?.longitude), customer?.coordSystem)
+    : null;
   const externalCustomerId =
-    customer.externalCustomerId?.trim() || `customer:${customer.phone ?? "unknown"}:${customer.address}`;
-  const coords = normalizeCoordSet(Number(customer.latitude), Number(customer.longitude), customer.coordSystem);
+    snapshot.externalCustomerId ||
+    (snapshot.phone && snapshot.address
+      ? `customer:${snapshot.phone}:${snapshot.address}`
+      : `customer:order:${externalOrderId}`);
 
   const { data, error } = await supabase
     .from("customers")
     .upsert(
       {
         external_customer_id: externalCustomerId,
-        name: customer.name ?? null,
-        phone: customer.phone ?? null,
-        address: customer.address,
-        latitude: coords.wgs84.latitude,
-        longitude: coords.wgs84.longitude,
-        delivery_note: customer.deliveryNote ?? null,
-        district: findMacauDistrict(coords.wgs84.latitude, coords.wgs84.longitude),
+        name: snapshot.name,
+        phone: snapshot.phone,
+        address: snapshot.displayAddress,
+        latitude: coords?.wgs84.latitude ?? null,
+        longitude: coords?.wgs84.longitude ?? null,
+        delivery_note: snapshot.deliveryNote,
+        district: coords ? findMacauDistrict(coords.wgs84.latitude, coords.wgs84.longitude) : null,
         updated_at: nowIso()
       },
       { onConflict: "external_customer_id" }
@@ -356,6 +427,8 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
   validateCreateOrderInput(input);
   const supabase = createServiceRoleSupabaseClient();
   const normalizedCallback = normalizeCallback(input.callback);
+  const normalizedImages = normalizeOrderImages(input.images);
+  const customerSnapshot = buildCustomerSnapshot(input.customer);
   const existing = await supabase
     .from("orders")
     .select("id,status,source_payload")
@@ -373,16 +446,25 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
         ? JSON.stringify(previousPayload.callback)
         : "";
     const nextCallback = normalizedCallback ? JSON.stringify(normalizedCallback) : "";
+    const customerId = await upsertCustomer(input.customer, input.externalOrderId);
+    const nextPayload = {
+      ...previousPayload,
+      callback: normalizedCallback ?? previousPayload.callback ?? null,
+      images: normalizedImages,
+      customerSnapshot
+    };
 
-    if (nextCallback && previousCallback !== nextCallback) {
+    if (
+      (nextCallback && previousCallback !== nextCallback) ||
+      JSON.stringify(previousPayload.images ?? []) !== JSON.stringify(normalizedImages) ||
+      JSON.stringify(previousPayload.customerSnapshot ?? {}) !== JSON.stringify(customerSnapshot)
+    ) {
       const { error: callbackUpdateError } = await supabase
         .from("orders")
         .update({
           updated_at: nowIso(),
-          source_payload: {
-            ...previousPayload,
-            callback: normalizedCallback
-          }
+          customer_id: customerId,
+          source_payload: nextPayload
         })
         .eq("id", existing.data.id);
       if (callbackUpdateError) throw callbackUpdateError;
@@ -397,11 +479,14 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
   }
 
   const shopCoords = normalizeCoordSet(Number(input.shop.latitude), Number(input.shop.longitude), input.shop.coordSystem);
-  const customerCoords = normalizeCoordSet(Number(input.customer.latitude), Number(input.customer.longitude), input.customer.coordSystem);
+  const hasCustomerCoords = Number.isFinite(Number(input.customer?.latitude)) && Number.isFinite(Number(input.customer?.longitude));
+  const customerCoords = hasCustomerCoords
+    ? normalizeCoordSet(Number(input.customer?.latitude), Number(input.customer?.longitude), input.customer?.coordSystem)
+    : null;
 
   const [shopId, customerId] = await Promise.all([
     upsertShop(input.shop),
-    upsertCustomer(input.customer)
+    upsertCustomer(input.customer, input.externalOrderId)
   ]);
 
   const orderPayload = {
@@ -422,6 +507,8 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       currency: input.currency ?? "MOP",
       notes: input.notes ?? {},
       callback: normalizedCallback,
+      images: normalizedImages,
+      customerSnapshot,
       navigation: {
         shop: shopCoords,
         customer: customerCoords
@@ -440,7 +527,10 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
   await replaceItems(createdOrder.id as string, input.items ?? []);
   await appendEvent(createdOrder.id as string, "website.order_created", {
     externalOrderId: input.externalOrderId,
-    urgent: input.urgent === true
+    urgent: input.urgent === true,
+    imageCount: normalizedImages.length,
+    customerAddressProvided: customerSnapshot.addressProvided,
+    customerContactProvided: customerSnapshot.contactProvided
   });
 
   await sendPushToOnlineDrivers({
@@ -900,11 +990,33 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
   const { data: order, error } = await supabase
     .from("orders")
     .select("id,external_order_id,status,assigned_fee_mop,created_at,promised_at,source_payload,shop_id,customer_id")
-    .or(`external_order_id.eq.${externalOrderId},transaction_code.eq.${externalOrderId}`)
+    .eq("external_order_id", externalOrderId)
     .maybeSingle();
 
   if (error) throw error;
   if (!order) return null;
+
+  const sourcePayload =
+    order.source_payload && typeof order.source_payload === "object"
+      ? (order.source_payload as Record<string, unknown>)
+      : {};
+  const customerSnapshot =
+    sourcePayload.customerSnapshot && typeof sourcePayload.customerSnapshot === "object"
+      ? (sourcePayload.customerSnapshot as Record<string, unknown>)
+      : {};
+  const acceptanceLocation =
+    sourcePayload.acceptanceLocation && typeof sourcePayload.acceptanceLocation === "object"
+      ? (sourcePayload.acceptanceLocation as Record<string, unknown>)
+      : null;
+  const orderImages = Array.isArray(sourcePayload.images)
+    ? (sourcePayload.images as Array<Record<string, unknown>>)
+        .filter((item) => typeof item?.url === "string" && item.url.trim())
+        .map((item) => ({
+          url: String(item.url),
+          label: typeof item.label === "string" ? item.label : null,
+          mimeType: typeof item.mimeType === "string" ? item.mimeType : null
+        }))
+    : [];
 
   const [{ data: shop }, { data: customer }, { data: assignment }, { data: proofs }] = await Promise.all([
     supabase.from("shops").select("name,address,contact_phone").eq("id", order.shop_id).maybeSingle(),
@@ -939,17 +1051,36 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
     externalOrderId: order.external_order_id,
     status: order.status,
     deliveryFeeMop: Number(order.assigned_fee_mop ?? 0),
-    urgent: Boolean((order.source_payload as Record<string, unknown> | null)?.urgent),
+    urgent: Boolean(sourcePayload.urgent),
     promisedAt: order.promised_at,
     createdAt: order.created_at,
     shop,
-    customer,
+    customer: {
+      name: typeof customerSnapshot.name === "string" ? customerSnapshot.name : customer?.name ?? null,
+      phone: typeof customerSnapshot.phone === "string" ? customerSnapshot.phone : customer?.phone ?? null,
+      address: typeof customerSnapshot.address === "string" ? customerSnapshot.address : customer?.address ?? null,
+      latitude: typeof customerSnapshot.latitude === "number" ? customerSnapshot.latitude : null,
+      longitude: typeof customerSnapshot.longitude === "number" ? customerSnapshot.longitude : null,
+      deliveryNote: typeof customerSnapshot.deliveryNote === "string" ? customerSnapshot.deliveryNote : null,
+      isAnonymous: Boolean(customerSnapshot.isAnonymous),
+      addressProvided: Boolean(customerSnapshot.addressProvided),
+      contactProvided: Boolean(customerSnapshot.contactProvided)
+    },
     driver: driver
       ? {
           fullName: driver.full_name,
           phone: driver.phone
         }
       : null,
+    acceptanceLocation: acceptanceLocation
+      ? {
+          latitude: typeof acceptanceLocation.latitude === "number" ? acceptanceLocation.latitude : null,
+          longitude: typeof acceptanceLocation.longitude === "number" ? acceptanceLocation.longitude : null,
+          capturedAt: typeof acceptanceLocation.capturedAt === "string" ? acceptanceLocation.capturedAt : null,
+          source: typeof acceptanceLocation.source === "string" ? acceptanceLocation.source : null
+        }
+      : null,
+    images: orderImages,
     assignment,
     latestProof: proofs?.[0] ?? null
   };

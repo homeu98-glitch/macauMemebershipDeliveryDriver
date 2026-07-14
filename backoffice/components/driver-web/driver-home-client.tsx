@@ -2,10 +2,13 @@
 
 import Link from "next/link";
 
-import { reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
+import { captureDriverLocationPayload, reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type OrderSummary = {
+  orderImages: Array<{ url: string; label: string | null; mimeType: string | null }>;
+  customerAddressProvided: boolean;
+  customerContactProvided: boolean;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -253,10 +256,11 @@ export function DriverHomeClient() {
     if (acceptingOrderId) return;
     setAcceptingOrderId(orderId);
     try {
+      const location = await captureDriverLocationPayload();
       const response = await fetch(`/api/driver/orders/${orderId}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventType: "accepted" })
+        body: JSON.stringify({ eventType: "accepted", ...(location ? { location } : {}) })
       });
       const payload = (await response.json().catch(() => ({}))) as { message?: string };
       if (!response.ok) {
@@ -373,7 +377,15 @@ export function DriverHomeClient() {
                   <div className="address-text compact">{order.storeAddress}</div>
                   <div className="driver-soft-label">客戶地址</div>
                   <div className="address-text compact">{order.customerAddress}</div>
+                  {!order.customerAddressProvided ? <div className="order-subvalue tight">此單未提供文字地址，請打開圖片查看。</div> : null}
                 </div>
+
+                {order.orderImages.length ? (
+                  <div className="android-soft-panel compact stack gap-2">
+                    <div className="driver-soft-label">訂單圖片</div>
+                    <img alt={order.orderImages[0]?.label ?? "order image"} className="driver-proof-preview" src={order.orderImages[0]?.url} />
+                  </div>
+                ) : null}
 
                 <div className="inline-meta-pills compact">
                   <span className="meta-pill green">{order.paymentTag}</span>
