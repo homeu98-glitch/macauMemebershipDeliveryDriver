@@ -8,9 +8,12 @@ export default async function RiderDistrictMapPage() {
   return (
     <RiderDistrictMap
       counts={result.counts}
+      ridersByDistrict={result.ridersByDistrict}
       unknown={result.unknown}
+      unknownRiders={result.unknownRiders}
       totalOnline={result.totalOnline}
       recentMinutes={result.recentMinutes}
+      lastUpdatedAt={result.lastUpdatedAt}
     />
   );
 }

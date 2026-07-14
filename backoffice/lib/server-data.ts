@@ -635,22 +635,36 @@ export async function getOnlineRiderDistrictCounts(options?: { recentMinutes?: n
 
   const { data: onlineDrivers, error: driversError } = await supabase
     .from("driver_profiles")
-    .select("id")
+    .select("id,full_name")
     .eq("availability", "online")
     .eq("approval_status", "approved");
 
   if (driversError) throw driversError;
 
-  const driverIds = (onlineDrivers ?? []).map((item: any) => item.id);
+  const driverRows = onlineDrivers ?? [];
+  const driverIds = driverRows.map((item: any) => item.id);
+  const driverNameMap = new Map(driverRows.map((item: any) => [item.id, item.full_name ?? "未命名車手"]));
   const counts: Record<string, number> = {};
+  const ridersByDistrict: Record<string, Array<{ id: string; name: string; lastCapturedAt: string }>> = {};
   const districts = listMacauDistrictNames();
-  for (const name of districts) counts[name] = 0;
-
-  if (!driverIds.length) {
-    return { districts, counts, unknown: 0, totalOnline: 0, recentMinutes };
+  for (const name of districts) {
+    counts[name] = 0;
+    ridersByDistrict[name] = [];
   }
 
-  // fetch latest location rows (recent) for these drivers
+  if (!driverIds.length) {
+    return {
+      districts,
+      counts,
+      ridersByDistrict,
+      unknown: 0,
+      unknownRiders: [] as Array<{ id: string; name: string }>,
+      totalOnline: 0,
+      recentMinutes,
+      lastUpdatedAt: null as string | null
+    };
+  }
+
   const { data: locations, error: locationsError } = await supabase
     .from("driver_locations")
     .select("driver_id,latitude,longitude,captured_at")
@@ -660,31 +674,63 @@ export async function getOnlineRiderDistrictCounts(options?: { recentMinutes?: n
 
   if (locationsError) throw locationsError;
 
-  const latestByDriver = new Map<string, { latitude: number; longitude: number }>();
+  const latestByDriver = new Map<string, { latitude: number; longitude: number; capturedAt: string }>();
   for (const row of locations ?? []) {
     if (latestByDriver.has(row.driver_id)) continue;
     latestByDriver.set(row.driver_id, {
       latitude: Number(row.latitude),
-      longitude: Number(row.longitude)
+      longitude: Number(row.longitude),
+      capturedAt: row.captured_at
     });
   }
 
   let unknown = 0;
+  const unknownRiders: Array<{ id: string; name: string }> = [];
+  let lastUpdatedAtRaw: string | null = null;
+
   for (const driverId of driverIds) {
     const loc = latestByDriver.get(driverId);
+    const driverName = driverNameMap.get(driverId) ?? "未命名車手";
     if (!loc) {
       unknown += 1;
+      unknownRiders.push({ id: driverId, name: driverName });
       continue;
     }
+
+    if (!lastUpdatedAtRaw || new Date(loc.capturedAt) > new Date(lastUpdatedAtRaw)) {
+      lastUpdatedAtRaw = loc.capturedAt;
+    }
+
     const district = findMacauDistrict(loc.latitude, loc.longitude);
     if (!district || !(district in counts)) {
       unknown += 1;
+      unknownRiders.push({ id: driverId, name: driverName });
       continue;
     }
+
     counts[district] += 1;
+    ridersByDistrict[district].push({
+      id: driverId,
+      name: driverName,
+      lastCapturedAt: formatDate(loc.capturedAt)
+    });
   }
 
-  return { districts, counts, unknown, totalOnline: driverIds.length, recentMinutes };
+  for (const district of districts) {
+    ridersByDistrict[district].sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
+  }
+  unknownRiders.sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
+
+  return {
+    districts,
+    counts,
+    ridersByDistrict,
+    unknown,
+    unknownRiders,
+    totalOnline: driverIds.length,
+    recentMinutes,
+    lastUpdatedAt: lastUpdatedAtRaw ? formatDate(lastUpdatedAtRaw) : null
+  };
 }
 
 export async function listPushTokenRegistrations(): Promise<PushTokenRegistration[]> {
