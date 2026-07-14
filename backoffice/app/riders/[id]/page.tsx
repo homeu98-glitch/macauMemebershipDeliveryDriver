@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { getRiderDetailById } from "@/lib/server-data";
 
+export const dynamic = "force-dynamic";
 function labelStatus(value: string | null | undefined) {
   switch (value) {
     case "approved":

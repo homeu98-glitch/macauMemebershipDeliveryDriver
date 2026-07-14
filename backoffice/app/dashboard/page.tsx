@@ -8,6 +8,8 @@ import {
   listRiders
 } from "../../lib/server-data";
 
+export const dynamic = "force-dynamic";
+
 function riderBadgeClass(status: "online" | "offline" | "suspended") {
   if (status === "online") return "badge badge-positive";
   if (status === "suspended") return "badge badge-danger";

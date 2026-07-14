@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { OrderDetailActions } from "../../../components/backoffice";
 import { getOrderById } from "../../../lib/server-data";
 
+export const dynamic = "force-dynamic";
 export default async function OrderDetailPage({
   params
 }: {
