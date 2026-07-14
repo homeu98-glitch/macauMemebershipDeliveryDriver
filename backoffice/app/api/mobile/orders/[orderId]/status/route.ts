@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { createServiceRoleSupabaseClient } from "../../../../../../lib/supabase";
+import { listActiveOrders } from "@/lib/driver-web-data";
 import { dispatchOrderCallback } from "../../../../../../lib/siteb-callbacks";
 import { ENV_PLACEHOLDERS } from "../../../../../../lib/data";
 import { sendPushToOnlineDrivers } from "../../../../../../lib/push-notifications";
@@ -153,6 +154,14 @@ export async function POST(
     }
 
 if (body.eventType === "accepted") {
+  const activeOrders = await listActiveOrders(verified.driverId);
+  if (activeOrders.length >= 5) {
+    return NextResponse.json(
+      { message: "你已經到了車手搶單極限, 最多一次5張, 送完再接吧" },
+      { status: 409 }
+    );
+  }
+
   const { data: claimedOrder, error: claimError } = await supabase
     .from("orders")
     .update({ status: "accepted", updated_at: now })
