@@ -215,6 +215,7 @@ export async function listRiders(): Promise<Rider[]> {
 }
 
 export async function listOrders(): Promise<Order[]> {
+  noStore();
   const supabase = createServiceRoleSupabaseClient();
   const { data: orders, error } = await supabase
     .from("orders")
