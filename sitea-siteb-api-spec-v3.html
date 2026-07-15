@@ -262,56 +262,55 @@
       <p>查單回應現在會帶 <code>images[]</code>、<code>customer</code> 的匿名標記，以及 <code>acceptanceLocation</code>。</p>
       <h3>Response example</h3>
       <pre><code>{
-  "success": true,
   "siteBOrderId": "4f2835d7-....",
-  "externalOrderId": "LEDGER-20260714-IMG-0001",
+  "externalOrderId": "SITEA-20260706-0001",
   "status": "picked_up",
-  "deliveryFeeMop": 25,
+  "deliveryFeeMop": 38,
   "urgent": false,
-  "promisedAt": null,
-  "createdAt": "2026-07-14T12:03:21.000Z",
+  "promisedAt": "2026-07-06T11:00:00+08:00",
+  "createdAt": "2026-07-06T10:12:21.000Z",
   "shop": {
-    "name": "自送單商戶",
+    "name": "會員茶餐廳",
     "address": "澳門半島 ...",
-    "contact_phone": "63332222"
+    "contact_phone": "66668888"
   },
   "customer": {
-    "name": null,
-    "phone": null,
-    "address": null,
+    "name": "客人 A",
+    "phone": "69990000",
+    "address": "氹仔 ...",
     "latitude": null,
     "longitude": null,
     "deliveryNote": null,
-    "isAnonymous": true,
-    "addressProvided": false,
-    "contactProvided": false
+    "isAnonymous": false,
+    "addressProvided": true,
+    "contactProvided": true
   },
   "driver": {
     "fullName": "車手陳",
     "phone": "68887777"
   },
   "acceptanceLocation": {
-    "latitude": 22.2036,
-    "longitude": 113.5469,
-    "capturedAt": "2026-07-14T12:05:48.000Z",
-    "source": "driver_accept_action"
+    "latitude": 22.1612,
+    "longitude": 113.5608,
+    "capturedAt": "2026-07-06T10:22:00.000Z",
+    "source": "accept_action"
   },
   "images": [
     {
-      "url": "https://cdn.example.com/orders/LEDGER-20260714-IMG-0001.jpg",
-      "label": "商家拍照單據",
+      "url": "https://example.com/order-photo-1.jpg",
+      "label": "門牌",
       "mimeType": "image/jpeg"
     }
   ],
   "assignment": {
-    "driver_id": "...",
-    "assigned_at": "2026-07-14T12:05:49.000Z",
-    "accepted_at": "2026-07-14T12:05:49.000Z"
+    "driver_id": "driver-uuid",
+    "assigned_at": "2026-07-06T10:20:00.000Z",
+    "accepted_at": "2026-07-06T10:22:00.000Z"
   },
   "proof": {
     "imageUrl": "https://...signed-proof-url...",
     "storagePath": "proofs/2026/...jpg",
-    "uploadedAt": "2026-07-15T10:44:59.000Z"
+    "uploadedAt": "2026-07-06T11:18:22.000Z"
   }
 }</code></pre>
     </section>

@@ -20,14 +20,22 @@
 
 ## 查單重點
 
-`GET /api/v1/orders/{externalOrderId}` 現在會多回傳：
+`GET /api/v1/orders/{externalOrderId}` 目前回傳的重點欄位包括：
 
-- `images[]`
-- `customer.isAnonymous`
-- `customer.addressProvided`
-- `customer.contactProvided`
+- `siteBOrderId`
+- `externalOrderId`
+- `status`
+- `deliveryFeeMop`
+- `urgent`
+- `promisedAt`
+- `createdAt`
+- `shop`
+- `customer`（含 `isAnonymous` / `addressProvided` / `contactProvided`）
+- `driver`
 - `acceptanceLocation`
-- `proof.imageUrl`（已完成訂單時可直接顯示 proof 圖片）
+- `images[]`
+- `assignment`
+- `proof`（已完成訂單時可直接顯示 proof 圖片）
 
 ## Callback 重點
 
