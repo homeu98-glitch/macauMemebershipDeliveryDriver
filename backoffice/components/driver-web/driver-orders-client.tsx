@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { PhotoViewerModal } from "@/components/driver-web/photo-viewer-modal";
+
 type OrderSummary = {
   id: string;
   externalOrderId: string;
@@ -35,6 +37,9 @@ type OrderSummary = {
   paymentTag: string;
   driverCancelConfirmationRequired: boolean;
   driverCancelConfirmedAt: string | null;
+  orderImages: Array<{ url: string; label: string | null; mimeType: string | null }>;
+  customerAddressProvided: boolean;
+  customerContactProvided: boolean;
 };
 
 function buildGoogleNavUrl(label: string, address: string, lat: number, lng: number) {
@@ -121,6 +126,7 @@ export function DriverOrdersClient() {
   const [nowTick, setNowTick] = useState(Date.now());
   const [completeOrderId, setCompleteOrderId] = useState<string | null>(null);
   const [navTarget, setNavTarget] = useState<{ label: string; googleUrl: string | null; amapUrl: string | null } | null>(null);
+  const [photoModal, setPhotoModal] = useState<{ images: OrderSummary["orderImages"]; index: number } | null>(null);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const previousStatusByOrderIdRef = useRef<Record<string, string>>({});
   const playedCancelSoundRef = useRef<Set<string>>(new Set());
@@ -314,6 +320,16 @@ export function DriverOrdersClient() {
                   <StageStrip status={order.status} />
                 </div>
 
+                {order.orderImages.length ? (
+                  <div className="android-soft-panel compact stack gap-2 order-block-gap photo-preview-inline">
+                    <div className="driver-soft-label">訂單圖片</div>
+                    <button className="photo-preview-btn" onClick={() => setPhotoModal({ images: order.orderImages, index: 0 })} type="button">
+                      <img alt={order.orderImages[0]?.label ?? "order image"} className="driver-proof-preview" src={order.orderImages[0]?.url} />
+                    </button>
+                    {order.orderImages[0]?.label ? <div className="order-subvalue tight">{order.orderImages[0]?.label}</div> : null}
+                  </div>
+                ) : null}
+
                 <div className="android-soft-panel order-address-panel compact stack gap-2 order-block-gap">
                   <div className="location-row-web">
                     <div className="grow minw-0">
@@ -430,6 +446,10 @@ export function DriverOrdersClient() {
         </div>
       ) : null}
     
+
+      {photoModal ? (
+        <PhotoViewerModal images={photoModal.images} initialIndex={photoModal.index} onClose={() => setPhotoModal(null)} />
+      ) : null}
 
 {navTarget ? (
   <div className="driver-modal-backdrop" onClick={() => setNavTarget(null)}>
