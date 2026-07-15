@@ -30,7 +30,7 @@ type CustomerInput = {
   externalCustomerId?: string;
   name?: string | null;
   phone?: string | null;
-  address: string;
+  address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
   coordSystem?: CoordSystem | null;
@@ -309,12 +309,17 @@ export function validateCreateOrderInput(input: CreateOrderInput) {
   requireResolvedDistrict(shopCoords.wgs84.latitude, shopCoords.wgs84.longitude, "shop");
 
   const hasCustomerAddress = Boolean(normalizeText(input.customer?.address));
-  const hasCustomerCoords = Number.isFinite(Number(input.customer?.latitude)) && Number.isFinite(Number(input.customer?.longitude));
+  const customerLat = Number(input.customer?.latitude);
+  const customerLng = Number(input.customer?.longitude);
+  const hasCustomerCoords =
+    Number.isFinite(customerLat) &&
+    Number.isFinite(customerLng) &&
+    !(customerLat === 0 && customerLng === 0);
   if (!hasCustomerAddress && normalizedImages.length === 0) {
     throw new Error("customer.address or at least one images[].url is required");
   }
   if (hasCustomerCoords) {
-    const customerCoords = normalizeCoordSet(Number(input.customer?.latitude), Number(input.customer?.longitude), input.customer?.coordSystem);
+    const customerCoords = normalizeCoordSet(customerLat, customerLng, input.customer?.coordSystem);
     requireResolvedDistrict(customerCoords.wgs84.latitude, customerCoords.wgs84.longitude, "customer");
   }
   if (normalizeDeliveryMode(input.deliveryMode) !== "scheduled") {
