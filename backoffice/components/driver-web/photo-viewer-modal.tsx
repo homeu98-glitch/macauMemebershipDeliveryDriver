@@ -8,6 +8,15 @@ type ImageItem = {
   mimeType: string | null;
 };
 
+type Point = { x: number; y: number };
+
+type PinchRef = {
+  startDistance: number;
+  startScale: number;
+  startMid: Point;
+  startOffset: Point;
+};
+
 export function PhotoViewerModal({
   images,
   initialIndex = 0,
@@ -20,8 +29,10 @@ export function PhotoViewerModal({
   const safeImages = useMemo(() => images.filter((item) => Boolean(item?.url)), [images]);
   const [index, setIndex] = useState(() => Math.min(Math.max(0, initialIndex), Math.max(0, safeImages.length - 1)));
   const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const pointerRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+  const [offset, setOffset] = useState<Point>({ x: 0, y: 0 });
+  const dragRef = useRef<{ start: Point; origin: Point } | null>(null);
+  const pinchRef = useRef<PinchRef | null>(null);
+  const touchesRef = useRef<Map<number, Point>>(new Map());
 
   useEffect(() => {
     setIndex(Math.min(Math.max(0, initialIndex), Math.max(0, safeImages.length - 1)));
@@ -50,38 +61,72 @@ export function PhotoViewerModal({
     setOffset({ x: 0, y: 0 });
   }
 
-  function zoom(delta: number) {
-    setScale((current) => {
-      const next = clampScale(current + delta);
-      if (next === 1) setOffset({ x: 0, y: 0 });
-      return next;
-    });
+  function distance(a: Point, b: Point) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function midpoint(a: Point, b: Point): Point {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   }
 
   function onPointerDown(event: React.PointerEvent) {
-    if (scale <= 1) return;
-    pointerRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-      ox: offset.x,
-      oy: offset.y
-    };
+    const point = { x: event.clientX, y: event.clientY };
+    touchesRef.current.set(event.pointerId, point);
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+
+    const points = [...touchesRef.current.values()];
+    if (points.length === 1 && scale > 1) {
+      dragRef.current = { start: point, origin: offset };
+    }
+
+    if (points.length === 2) {
+      dragRef.current = null;
+      const [a, b] = points;
+      pinchRef.current = {
+        startDistance: distance(a, b),
+        startScale: scale,
+        startMid: midpoint(a, b),
+        startOffset: offset
+      };
+    }
   }
 
   function onPointerMove(event: React.PointerEvent) {
-    const ref = pointerRef.current;
-    if (!ref) return;
-    const dx = event.clientX - ref.x;
-    const dy = event.clientY - ref.y;
-    setOffset({ x: ref.ox + dx, y: ref.oy + dy });
+    if (!touchesRef.current.has(event.pointerId)) return;
+    touchesRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const points = [...touchesRef.current.values()];
+
+    if (points.length === 2 && pinchRef.current) {
+      const [a, b] = points;
+      const currentDistance = distance(a, b);
+      const currentMid = midpoint(a, b);
+      setScale(clampScale((currentDistance / pinchRef.current.startDistance) * pinchRef.current.startScale));
+      setOffset({
+        x: pinchRef.current.startOffset.x + (currentMid.x - pinchRef.current.startMid.x),
+        y: pinchRef.current.startOffset.y + (currentMid.y - pinchRef.current.startMid.y)
+      });
+      return;
+    }
+
+    if (points.length === 1 && dragRef.current) {
+      const dx = event.clientX - dragRef.current.start.x;
+      const dy = event.clientY - dragRef.current.start.y;
+      setOffset({ x: dragRef.current.origin.x + dx, y: dragRef.current.origin.y + dy });
+    }
   }
 
   function onPointerUp(event: React.PointerEvent) {
-    pointerRef.current = null;
+    touchesRef.current.delete(event.pointerId);
     try {
       (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
     } catch {}
+
+    const points = [...touchesRef.current.values()];
+    if (points.length < 2) pinchRef.current = null;
+    if (points.length === 0) {
+      dragRef.current = null;
+      if (scale <= 1) setOffset({ x: 0, y: 0 });
+    }
   }
 
   if (!current) {
@@ -89,10 +134,8 @@ export function PhotoViewerModal({
       <div className="photo-modal-backdrop" onClick={onClose}>
         <div className="photo-modal-card" onClick={(e) => e.stopPropagation()}>
           <div className="photo-modal-header">
-            <div className="photo-modal-title">圖片</div>
             <button className="photo-modal-close" onClick={onClose} type="button" aria-label="關閉">✕</button>
           </div>
-          <div className="muted">沒有可顯示的圖片。</div>
         </div>
       </div>
     );
@@ -102,39 +145,23 @@ export function PhotoViewerModal({
     <div className="photo-modal-backdrop" onClick={onClose}>
       <div className="photo-modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="photo-modal-header">
-          <div className="photo-modal-title">訂單圖片</div>
+          <div className="photo-modal-title">{current.label ?? "訂單圖片"}</div>
           <button className="photo-modal-close" onClick={onClose} type="button" aria-label="關閉">✕</button>
         </div>
 
-        <div className="photo-modal-stage" onDoubleClick={reset}>
+        <div className="photo-modal-stage">
           <img
             alt={current.label ?? "order image"}
             className={scale > 1 ? "photo-modal-image zoomed" : "photo-modal-image"}
             src={current.url}
             style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }}
+            onDoubleClick={reset}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
             draggable={false}
           />
-        </div>
-
-        <div className="photo-modal-footer">
-          <div className="photo-modal-meta">
-            <div className="photo-modal-counter">{index + 1} / {safeImages.length}</div>
-            {current.label ? <div className="photo-modal-label">{current.label}</div> : <div className="photo-modal-label muted">無標籤</div>}
-          </div>
-
-          <div className="photo-modal-controls">
-            <button className="photo-modal-btn" onClick={() => setIndex((c) => Math.max(0, c - 1))} disabled={index <= 0} type="button">上一張</button>
-            <button className="photo-modal-btn" onClick={() => zoom(-0.5)} disabled={scale <= 1} type="button">縮小</button>
-            <button className="photo-modal-btn" onClick={reset} disabled={scale === 1 && offset.x === 0 && offset.y === 0} type="button">重置</button>
-            <button className="photo-modal-btn" onClick={() => zoom(0.5)} type="button">放大</button>
-            <button className="photo-modal-btn" onClick={() => setIndex((c) => Math.min(safeImages.length - 1, c + 1))} disabled={index >= safeImages.length - 1} type="button">下一張</button>
-          </div>
-
-          <div className="photo-modal-hint muted">提示：雙擊圖片可重置；按 ESC 可關閉；放大後可拖曳。</div>
         </div>
       </div>
     </div>

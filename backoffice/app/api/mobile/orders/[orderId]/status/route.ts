@@ -312,6 +312,11 @@ if (body.eventType === "accepted") {
     updated_at: now,
     source_payload: {
       ...sourcePayload,
+      images: Array.isArray(sourcePayload.images) ? sourcePayload.images : [],
+      customerSnapshot:
+        sourcePayload.customerSnapshot && typeof sourcePayload.customerSnapshot === "object"
+          ? sourcePayload.customerSnapshot
+          : null,
       acceptedDriver,
       acceptanceLocation
     }
