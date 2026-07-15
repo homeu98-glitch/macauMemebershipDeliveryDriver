@@ -152,11 +152,28 @@ export async function listRiderApplications(): Promise<RiderApplication[]> {
 }
 
 export async function listRiders(): Promise<Rider[]> {
+  noStore();
   const supabase = createServiceRoleSupabaseClient();
-  const { data, error } = await supabase
+
+  // 先嘗試讀取 last_heartbeat_at；若資料庫尚未套 migration，回退到舊欄位查詢，避免整頁 server error。
+  let data: any[] | null = null;
+  let error: any = null;
+  const withHeartbeat = await supabase
     .from("driver_profiles")
     .select("id,full_name,phone,availability,approval_status,last_heartbeat_at")
     .order("created_at", { ascending: false });
+
+  if (withHeartbeat.error && String(withHeartbeat.error.message ?? "").includes("last_heartbeat_at")) {
+    const fallback = await supabase
+      .from("driver_profiles")
+      .select("id,full_name,phone,availability,approval_status")
+      .order("created_at", { ascending: false });
+    data = fallback.data as any[] | null;
+    error = fallback.error;
+  } else {
+    data = withHeartbeat.data as any[] | null;
+    error = withHeartbeat.error;
+  }
 
   if (error) {
     throw error;
@@ -165,7 +182,7 @@ export async function listRiders(): Promise<Rider[]> {
   const drivers = (data ?? []) as Array<any>;
   const driverIds = drivers.map((item) => item.id as string);
 
-  // 心跳來源：driver_locations 最新 captured_at（用 24 小時窗口避免掃全表）
+  // 心跳來源回退：driver_locations 最新 captured_at（用 24 小時窗口避免掃全表）
   const since = new Date(Date.now() - RIDER_HEARTBEAT_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
   const { data: locationRows } = driverIds.length
     ? await supabase
