@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { captureDriverLocationPayload, reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
+import { PhotoViewerModal } from "@/components/driver-web/photo-viewer-modal";
 
 type OrderDetail = {
   orderImages: Array<{ url: string; label: string | null; mimeType: string | null }>;
@@ -146,6 +147,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const [cancelReason, setCancelReason] = useState("customer_request");
   const [cancelOtherReason, setCancelOtherReason] = useState("");
   const [navTarget, setNavTarget] = useState<{ label: string; googleUrl: string | null; amapUrl: string | null } | null>(null);
+  const [photoModal, setPhotoModal] = useState<{ images: OrderDetail["orderImages"]; index: number } | null>(null);
   const [cancelHandling, setCancelHandling] = useState<"return_to_shop" | "not_returning">("return_to_shop");
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const previousOrderStatusRef = useRef<string | null>(null);
@@ -348,7 +350,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
                 <div className="address-text compact">{order.storeAddress}</div>
               </div>
               <div className="mini-icon-actions">
-                <IconButtonLink href={dialHref(order.storePhone)} label="致電商戶" type="call" disabled={!order.storePhone} />
+                {order.storePhone ? <IconButtonLink href={dialHref(order.storePhone)} label="致電商戶" type="call" /> : null}
                 <button className="mini-icon-btn" onClick={() => setNavTarget({ label: `導航到商戶：${order.storeName}`, googleUrl: toShop, amapUrl: buildAmapNavUrl(order.storeName, order.storeAddress, order.storeLatitude, order.storeLongitude) })} type="button">
                 <span className="mini-icon" aria-hidden>🧭</span>
               </button>
@@ -362,10 +364,12 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
                 {!order.customerAddressProvided ? <div className="order-subvalue tight">此單未提供文字地址，請查看下方圖片內容。</div> : null}
               </div>
               <div className="mini-icon-actions">
-                <IconButtonLink href={dialHref(order.customerPhone)} label="致電客戶" type="call" disabled={!order.customerPhone || !order.customerContactProvided} />
-                <button className="mini-icon-btn" disabled={!toCustomer} onClick={() => setNavTarget({ label: `導航到客戶：${order.customerName}`, googleUrl: toCustomer, amapUrl: buildAmapNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude) })} type="button">
+                {order.customerContactProvided && order.customerPhone ? <IconButtonLink href={dialHref(order.customerPhone)} label="致電客戶" type="call" /> : null}
+                {toCustomer ? (
+                <button className="mini-icon-btn" onClick={() => setNavTarget({ label: `導航到客戶：${order.customerName}`, googleUrl: toCustomer, amapUrl: buildAmapNavUrl(order.customerName, order.customerAddress, order.customerLatitude, order.customerLongitude) })} type="button">
                 <span className="mini-icon" aria-hidden>🧭</span>
               </button>
+              ) : null}
               </div>
             </div>
           </div>
@@ -396,7 +400,9 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
             <div className="stack gap-3">
               {order.orderImages.map((image) => (
                 <div className="stack gap-1" key={image.url}>
+                  <button className="photo-preview-btn" onClick={() => setPhotoModal({ images: order.orderImages, index: order.orderImages.findIndex((item) => item.url === image.url) })} type="button">
                   <img alt={image.label ?? "order image"} className="driver-proof-preview" src={image.url} />
+                </button>
                   {image.label ? <div className="order-subvalue tight">{image.label}</div> : null}
                 </div>
               ))}
@@ -462,6 +468,10 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
         </div>
       ) : null}
     
+
+      {photoModal ? (
+        <PhotoViewerModal images={photoModal.images} initialIndex={photoModal.index} onClose={() => setPhotoModal(null)} />
+      ) : null}
 
 {navTarget ? (
   <div className="driver-modal-backdrop" onClick={() => setNavTarget(null)}>

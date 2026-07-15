@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 
+import { PhotoViewerModal } from "@/components/driver-web/photo-viewer-modal";
+
 import { captureDriverLocationPayload, reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -103,6 +105,7 @@ export function DriverHomeClient() {
   const [driverLocation, setDriverLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [navOrder, setNavOrder] = useState<OrderSummary | null>(null);
   const [filterModal, setFilterModal] = useState<FilterModalType>(null);
+  const [photoModal, setPhotoModal] = useState<{ images: OrderSummary["orderImages"]; index: number } | null>(null);
   const [notificationCheck, setNotificationCheck] = useState<NotificationCheck>({ permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission, subscribed: false, vapidConfigured: false });
   const previousOrderStateRef = useRef<Record<string, boolean>>({});
   const hasSeenDashboardRef = useRef(false);
@@ -383,7 +386,9 @@ export function DriverHomeClient() {
                 {order.orderImages.length ? (
                   <div className="android-soft-panel compact stack gap-2">
                     <div className="driver-soft-label">訂單圖片</div>
-                    <img alt={order.orderImages[0]?.label ?? "order image"} className="driver-proof-preview" src={order.orderImages[0]?.url} />
+                    <button className="photo-preview-btn" onClick={() => setPhotoModal({ images: order.orderImages, index: 0 })} type="button">
+                      <img alt={order.orderImages[0]?.label ?? "order image"} className="driver-proof-preview" src={order.orderImages[0]?.url} />
+                    </button>
                   </div>
                 ) : null}
 
@@ -443,6 +448,11 @@ export function DriverHomeClient() {
           </div>
         </div>
       ) : null}
+
+      {photoModal ? (
+        <PhotoViewerModal images={photoModal.images} initialIndex={photoModal.index} onClose={() => setPhotoModal(null)} />
+      ) : null}
+
     </>
   );
 }
