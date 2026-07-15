@@ -393,6 +393,46 @@ x-siteb-signature: sha256=&lt;hex&gt;</code></pre>
         <li>callback 接收方請以 additive 方式解析新欄位，不要假設只有舊 payload。</li>
       </ul>
     </section>
-  </div>
+  
+
+    <section class="card">
+      <h2>車手在線 / 地區查詢</h2>
+      <div class="endpoint">GET /api/v1/drivers/presence</div>
+      <p>提供給 <code>macau-ledger</code> / 商家顯示用的「有效在線」與「地區」查詢。</p>
+      <div class="warn">嚴格規則：地區必須在同一個有效在線窗口內（預設 3 分鐘）。車手雖然有效在線，但若 3 分鐘內沒有定位，會歸類到 <code>unknown</code>。</div>
+
+      <h3>Query</h3>
+      <table>
+        <thead><tr><th>欄位</th><th>必要</th><th>型別</th><th>說明</th></tr></thead>
+        <tbody>
+          <tr><td><code>includeDrivers</code></td><td>否</td><td>string</td><td><code>true</code>/<code>false</code>，預設 <code>true</code>。若設為 <code>false</code>，只回傳各區統計。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Response example（includeDrivers=true）</h3>
+      <pre><code>{
+  "success": true,
+  "effectiveWindowMinutes": 3,
+  "totalOnline": 5,
+  "districts": [
+    { "district": "澳門半島", "onlineCount": 2 },
+    { "district": "氹仔", "onlineCount": 2 },
+    { "district": "路環", "onlineCount": 0 },
+    { "district": "unknown", "onlineCount": 1 }
+  ],
+  "drivers": [
+    {
+      "id": "driver_id",
+      "fullName": "車手陳",
+      "phone": "68887777",
+      "effectiveOnline": true,
+      "district": "氹仔",
+      "lastHeartbeatAt": "2026-07-15T10:20:00.000Z",
+      "lastLocationAt": "2026-07-15T10:19:30.000Z"
+    }
+  ]
+}</code></pre>
+    </section>
+</div>
 </body>
 </html>

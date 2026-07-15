@@ -48,3 +48,22 @@
 ## 文檔
 
 請以 repo 根目錄的 `sitea-siteb-api-spec-v3.html` 為最新對接文檔。
+
+
+## 車手在線/地區查詢（給 macau-ledger / 商家顯示用）
+
+### `GET /api/v1/drivers/presence`
+
+用途：讓 `macau-ledger` 查詢「有效在線」車手在各區的分佈。
+
+- 嚴格規則：在線與地區都以同一個窗口（預設 3 分鐘）判定。
+- 若車手有效在線但 3 分鐘內沒有定位，會歸類到 `unknown`。
+
+Query：
+
+- `includeDrivers=true|false`（預設 `true`）
+
+Response 會包含：
+
+- `districts[]`：各區在線人數
+- （可選）`drivers[]`：每位車手的地區與最後心跳/定位時間
