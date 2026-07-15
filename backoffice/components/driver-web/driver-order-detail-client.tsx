@@ -340,7 +340,26 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
             </div>
           </div>
 
-          <DetailStageStrip status={order.status} />
+          
+{order.orderImages.length ? (
+  <div className="android-soft-panel compact stack gap-2 photo-preview-inline">
+    <div className="driver-soft-label">訂單圖片</div>
+    <button
+      className="photo-preview-btn"
+      onClick={() => setPhotoModal({ images: order.orderImages, index: 0 })}
+      type="button"
+    >
+      <img
+        alt={order.orderImages[0]?.label ?? "order image"}
+        className="driver-proof-preview"
+        src={order.orderImages[0]?.url}
+      />
+    </button>
+    {order.orderImages[0]?.label ? <div className="order-subvalue tight">{order.orderImages[0]?.label}</div> : null}
+  </div>
+) : null}
+
+<DetailStageStrip status={order.status} />
 
           <div className="android-soft-panel order-address-panel compact stack gap-2">
             <div className="location-row-web">
@@ -393,22 +412,6 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
           </div>
         </section>
 
-        {order.orderImages.length ? (
-          <section className="android-card stack gap-3 full-width-card">
-            <div className="driver-section-title">訂單圖片</div>
-            <div className="muted">商家上傳的圖片可用來查看地址、單據或補充內容。</div>
-            <div className="stack gap-3">
-              {order.orderImages.map((image) => (
-                <div className="stack gap-1" key={image.url}>
-                  <button className="photo-preview-btn" onClick={() => setPhotoModal({ images: order.orderImages, index: order.orderImages.findIndex((item) => item.url === image.url) })} type="button">
-                  <img alt={image.label ?? "order image"} className="driver-proof-preview" src={image.url} />
-                </button>
-                  {image.label ? <div className="order-subvalue tight">{image.label}</div> : null}
-                </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
 
         <section className="android-card stack gap-3 full-width-card">
           <div className="driver-section-title">商品清單</div>

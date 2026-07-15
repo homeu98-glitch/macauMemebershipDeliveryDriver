@@ -42,6 +42,11 @@
     .warn { background: #fff8eb; border-left: 4px solid var(--warn); }
     ul { margin: 10px 0 0 18px; }
     li { margin: 6px 0; }
+  
+    ul{margin:10px 0 0 18px;}
+    ul li{margin:6px 0;}
+    ul a{color:var(--brand); text-decoration:none;}
+    ul a:hover{text-decoration:underline;}
   </style>
 </head>
 <body>
@@ -58,7 +63,21 @@
     </section>
 
     <section class="card">
-      <h2>更新重點</h2>
+      <h2 id="toc">目錄</h2>
+      <ul>
+        <li><a href="#updates">更新重點</a></li>
+<li><a href="#auth">授權</a></li>
+<li><a href="#create_order">建單</a></li>
+<li><a href="#get_order">查詢訂單</a></li>
+<li><a href="#callback">Callback</a></li>
+<li><a href="#driver_presence">車手在線 / 地區查詢</a></li>
+<li><a href="#tips">實作建議</a></li>
+      </ul>
+    </section>
+
+
+    <section class="card">
+      <h2 id="updates">更新重點</h2>
       <ul>
         <li><code>POST /api/v1/orders</code> 現在支援 <code>images[]</code>，第一版接受公開可下載 URL。</li>
         <li><code>customer</code> 不再要求一定要有完整姓名、電話、文字地址。</li>
@@ -68,7 +87,7 @@
     </section>
 
     <section class="card">
-      <h2>授權</h2>
+      <h2 id="auth">授權</h2>
       <div class="endpoint">POST /api/v1/auth/token</div>
       <p>先用共享憑證換取 JWT，再以 Bearer Token 呼叫其他 v1 API。</p>
       <h3>參數</h3>
@@ -96,7 +115,7 @@
     </section>
 
     <section class="card">
-      <h2>建單</h2>
+      <h2 id="create_order">建單</h2>
       <div class="endpoint">POST /api/v1/orders</div>
       <p>這個 API 依 <code>externalOrderId</code> 做冪等處理。重送同一張單不會重複建單，只會更新 callback / 圖片 / 客戶快照。</p>
       <h3>必要欄位</h3>
@@ -238,7 +257,7 @@
     </section>
 
     <section class="card">
-      <h2>查詢訂單</h2>
+      <h2 id="get_order">查詢訂單</h2>
       <div class="endpoint">GET /api/v1/orders/{externalOrderId}</div>
       <p>查單回應現在會帶 <code>images[]</code>、<code>customer</code> 的匿名標記，以及 <code>acceptanceLocation</code>。</p>
       <h3>Response example</h3>
@@ -294,7 +313,7 @@
     </section>
 
     <section class="card">
-      <h2>Callback</h2>
+      <h2 id="callback">Callback</h2>
       <p>SiteB 在訂單狀態更新後，會對建單時提供的 <code>callback.url</code> 發送 POST。所有 callback 都會統一帶 <code>driver</code> 和 <code>acceptanceLocation</code>。</p>
       <h3>Header</h3>
       <pre><code>Content-Type: application/json
@@ -386,7 +405,7 @@ x-siteb-signature: sha256=&lt;hex&gt;</code></pre>
     </section>
 
     <section class="card">
-      <h2>實作建議</h2>
+      <h2 id="tips">實作建議</h2>
       <ul>
         <li>若是圖片單，請在接單 UI 顯示縮圖，並讓車手可點開圖片查看地址與補充內容。</li>
         <li>若 <code>customer.addressProvided = false</code>，車手端不應強制使用導航，而應提示「請查看圖片」。</li>
@@ -396,7 +415,7 @@ x-siteb-signature: sha256=&lt;hex&gt;</code></pre>
   
 
     <section class="card">
-      <h2>車手在線 / 地區查詢</h2>
+      <h2 id="driver_presence">車手在線 / 地區查詢</h2>
       <div class="endpoint">GET /api/v1/drivers/presence</div>
       <p>提供給 <code>macau-ledger</code> / 商家顯示用的「有效在線」與「地區」查詢。</p>
       <div class="warn">嚴格規則：地區必須在同一個有效在線窗口內（預設 3 分鐘）。車手雖然有效在線，但若 3 分鐘內沒有定位，會歸類到 <code>unknown</code>。</div>
