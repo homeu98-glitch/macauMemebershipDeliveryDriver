@@ -5,6 +5,7 @@ import { findMacauDistrict } from "./districts";
 
 
 type CoordSystem = "wgs84" | "gcj02" | "bd09";
+type DeliveryFeePaidBy = "customer" | "shop";
 
 type NormalizedCoordSet = {
   sourceCoordSystem: CoordSystem;
@@ -57,6 +58,7 @@ export type CreateOrderInput = {
   deliveryMode: "now" | "scheduled" | "asap";
   deliveryDeadline?: string | null;
   deliveryFeeMop: number;
+  deliveryFeePaidBy?: DeliveryFeePaidBy | null;
   urgent?: boolean;
   currency?: string;
   shop: ShopInput;
@@ -100,6 +102,10 @@ async function cancelActiveAssignments(orderId: string) {
 
 function normalizeMoney(value: number) {
   return Number.isFinite(value) ? Number(value) : 0;
+}
+
+function normalizeDeliveryFeePaidBy(value: unknown): DeliveryFeePaidBy | null {
+  return value === "customer" || value === "shop" ? value : null;
 }
 
 function normalizeDeliveryMode(mode: CreateOrderInput["deliveryMode"]) {
@@ -1017,6 +1023,7 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
     sourcePayload.customerSnapshot && typeof sourcePayload.customerSnapshot === "object"
       ? (sourcePayload.customerSnapshot as Record<string, unknown>)
       : {};
+  const deliveryFeePaidBy = normalizeDeliveryFeePaidBy(sourcePayload.deliveryFeePaidBy);
   const acceptanceLocation =
     sourcePayload.acceptanceLocation && typeof sourcePayload.acceptanceLocation === "object"
       ? (sourcePayload.acceptanceLocation as Record<string, unknown>)
@@ -1069,6 +1076,7 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
     externalOrderId: order.external_order_id,
     status: order.status,
     deliveryFeeMop: Number(order.assigned_fee_mop ?? 0),
+    deliveryFeePaidBy,
     urgent: Boolean(sourcePayload.urgent),
     promisedAt: order.promised_at,
     createdAt: order.created_at,

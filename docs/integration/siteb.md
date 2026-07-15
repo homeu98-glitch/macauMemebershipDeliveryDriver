@@ -2,7 +2,7 @@
 
 這版整合重點有三個：
 
-1. `POST /api/v1/orders` 現在支援 `images[]`
+1. `POST /api/v1/orders` 現在支援 `images[]` 與 `deliveryFeePaidBy`
 2. `customer` 欄位可以不完整，甚至沒有文字地址；只要有 `images[].url` 讓車手可從圖片讀資料即可
 3. 所有 callback event 都統一帶：
    - `driver.fullName`
@@ -26,6 +26,7 @@
 - `externalOrderId`
 - `status`
 - `deliveryFeeMop`
+- `deliveryFeePaidBy`（`customer` / `shop`）
 - `urgent`
 - `promisedAt`
 - `createdAt`
@@ -43,6 +44,7 @@
 
 - `driver`
 - `acceptanceLocation`
+- `deliveryFeePaidBy`（`customer` / `shop`）
 - `proof.imageUrl`（已完成訂單時可直接顯示 proof 圖片）
 
 事件仍然沿用：

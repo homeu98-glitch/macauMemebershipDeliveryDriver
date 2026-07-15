@@ -41,6 +41,10 @@ function normalizeEndpoint(url: string) {
   return url.trim().replace(/^['"`\s]+|['"`\s]+$/g, "");
 }
 
+function normalizeDeliveryFeePaidBy(value: unknown): "customer" | "shop" | null {
+  return value === "customer" || value === "shop" ? value : null;
+}
+
 async function buildSignedProofUrl(storagePath: string) {
   const supabase = createServiceRoleSupabaseClient();
   const { data, error } = await supabase.storage
@@ -186,6 +190,7 @@ function createCallbackPayload(
   const basePayload = {
     externalOrderId: context.order.external_order_id,
     eventTime,
+    deliveryFeePaidBy: normalizeDeliveryFeePaidBy(context.sourcePayload.deliveryFeePaidBy),
     driver: {
       fullName: context.driver.fullName,
       phone: context.driver.phone

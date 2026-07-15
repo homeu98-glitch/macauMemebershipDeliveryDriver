@@ -166,6 +166,7 @@
   "deliveryMode": "scheduled",
   "deliveryDeadline": "2026-07-14T20:30:00+08:00",
   "deliveryFeeMop": 38,
+  "deliveryFeePaidBy": "customer",
   "urgent": false,
   "currency": "MOP",
   "shop": {
@@ -210,6 +211,7 @@
   "deliveryMode": "now",
   "deliveryDeadline": null,
   "deliveryFeeMop": 25,
+  "deliveryFeePaidBy": "shop",
   "urgent": false,
   "currency": "MOP",
   "shop": {
@@ -259,13 +261,14 @@
     <section class="card">
       <h2 id="get_order">查詢訂單</h2>
       <div class="endpoint">GET /api/v1/orders/{externalOrderId}</div>
-      <p>查單回應現在會帶 <code>images[]</code>、<code>customer</code> 的匿名標記，以及 <code>acceptanceLocation</code>。</p>
+      <p>查單回應現在會帶 <code>images[]</code>、<code>customer</code> 的匿名標記、<code>acceptanceLocation</code>，以及 <code>deliveryFeePaidBy</code>。</p>
       <h3>Response example</h3>
       <pre><code>{
   "siteBOrderId": "4f2835d7-....",
   "externalOrderId": "SITEA-20260706-0001",
   "status": "picked_up",
   "deliveryFeeMop": 38,
+  "deliveryFeePaidBy": "customer",
   "urgent": false,
   "promisedAt": "2026-07-06T11:00:00+08:00",
   "createdAt": "2026-07-06T10:12:21.000Z",
@@ -317,7 +320,7 @@
 
     <section class="card">
       <h2 id="callback">Callback</h2>
-      <p>SiteB 在訂單狀態更新後，會對建單時提供的 <code>callback.url</code> 發送 POST。所有 callback 都會統一帶 <code>driver</code> 和 <code>acceptanceLocation</code>。</p>
+      <p>SiteB 在訂單狀態更新後，會對建單時提供的 <code>callback.url</code> 發送 POST。所有 callback 都會統一帶 <code>driver</code>、<code>acceptanceLocation</code> 和 <code>deliveryFeePaidBy</code>。</p>
       <h3>Header</h3>
       <pre><code>Content-Type: application/json
 x-siteb-signature: sha256=&lt;hex&gt;</code></pre>
