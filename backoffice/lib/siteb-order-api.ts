@@ -116,6 +116,14 @@ function normalizeCallback(input: CreateOrderInput["callback"]): CallbackInput |
   };
 }
 
+async function buildSignedProofUrlForOrderStatus(storagePath: string | null | undefined) {
+  if (!storagePath) return null;
+  const supabase = createServiceRoleSupabaseClient();
+  const { data, error } = await supabase.storage.from("delivery-proofs").createSignedUrl(storagePath, 60 * 60 * 24);
+  if (error) return null;
+  return data.signedUrl;
+}
+
 function normalizeText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -1051,6 +1059,11 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
     driver = data ?? null;
   }
 
+  const latestProof = proofs?.[0] ?? null;
+  const latestProofImageUrl = latestProof?.storage_path
+    ? await buildSignedProofUrlForOrderStatus(latestProof.storage_path)
+    : null;
+
   return {
     siteBOrderId: order.id,
     externalOrderId: order.external_order_id,
@@ -1087,6 +1100,12 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
       : null,
     images: orderImages,
     assignment,
-    latestProof: proofs?.[0] ?? null
+    latestProof: latestProof
+      ? {
+          imageUrl: latestProofImageUrl,
+          storagePath: latestProof.storage_path ?? null,
+          uploadedAt: latestProof.created_at ?? null
+        }
+      : null
   };
 }
