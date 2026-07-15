@@ -27,7 +27,7 @@
 - `customer.addressProvided`
 - `customer.contactProvided`
 - `acceptanceLocation`
-- `latestProof.imageUrl`（已完成訂單時可直接顯示 proof 圖片）
+- `proof.imageUrl`（已完成訂單時可直接顯示 proof 圖片）
 
 ## Callback 重點
 
@@ -35,7 +35,7 @@
 
 - `driver`
 - `acceptanceLocation`
-- `latestProof.imageUrl`（已完成訂單時可直接顯示 proof 圖片）
+- `proof.imageUrl`（已完成訂單時可直接顯示 proof 圖片）
 
 事件仍然沿用：
 

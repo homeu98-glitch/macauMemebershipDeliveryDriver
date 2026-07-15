@@ -1100,7 +1100,7 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
       : null,
     images: orderImages,
     assignment,
-    latestProof: latestProof
+    proof: latestProof
       ? {
           imageUrl: latestProofImageUrl,
           storagePath: latestProof.storage_path ?? null,
