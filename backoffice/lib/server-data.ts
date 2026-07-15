@@ -154,7 +154,7 @@ export async function listRiders(): Promise<Rider[]> {
   const supabase = createServiceRoleSupabaseClient();
   const { data, error } = await supabase
     .from("driver_profiles")
-    .select("id,full_name,phone,availability,approval_status")
+    .select("id,full_name,phone,availability,approval_status,last_heartbeat_at")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -183,7 +183,12 @@ export async function listRiders(): Promise<Rider[]> {
 
   return drivers.map((item: any) => {
     const manualAvailability = item.availability === "online" ? "online" : "offline";
-    const lastHeartbeatIso = latestHeartbeatByDriver.get(item.id) ?? null;
+    const lastFromProfile = typeof item.last_heartbeat_at === "string" ? item.last_heartbeat_at : null;
+    const lastFromLocations = latestHeartbeatByDriver.get(item.id) ?? null;
+    const lastHeartbeatIso =
+      lastFromProfile && lastFromLocations
+        ? (new Date(lastFromProfile) > new Date(lastFromLocations) ? lastFromProfile : lastFromLocations)
+        : (lastFromProfile ?? lastFromLocations);
     const effectiveOnline = isEffectiveOnline(manualAvailability, lastHeartbeatIso);
 
     return {

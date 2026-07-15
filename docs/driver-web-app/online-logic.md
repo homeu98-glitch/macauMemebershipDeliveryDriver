@@ -22,3 +22,11 @@
 
 - 外部（macau-ledger / SiteB）對接 API 不受影響。
 - 車手端與後台 API 路徑不變；只是後端在回傳「在線狀態」或在挑選推播對象時，改用有效在線判定。
+
+
+## 心跳來源（v1）
+
+- `POST /api/driver/heartbeat`：純心跳，適用於沒有定位權限但前景打開的情況。
+- `POST /api/driver/location`：定位上報同時也會更新 `driver_profiles.last_heartbeat_at`。
+
+有效在線判定會取最新的 `driver_profiles.last_heartbeat_at`。

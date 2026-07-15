@@ -68,7 +68,34 @@ function isStandaloneMode() {
   return window.matchMedia?.("(display-mode: standalone)")?.matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
+
+async function sendHeartbeat() {
+  try {
+    await fetch("/api/driver/heartbeat", { method: "POST" });
+  } catch {
+    // ignore
+  }
+}
+
 export function DriverShell({ children }: { children: React.ReactNode }) {
+
+useEffect(() => {
+  let cancelled = false;
+  const tick = () => { if (!cancelled && document.visibilityState !== "hidden") void sendHeartbeat(); };
+
+  tick();
+  const timer = window.setInterval(tick, 30_000);
+  window.addEventListener("focus", tick);
+  document.addEventListener("visibilitychange", tick);
+
+  return () => {
+    cancelled = true;
+    window.clearInterval(timer);
+    window.removeEventListener("focus", tick);
+    document.removeEventListener("visibilitychange", tick);
+  };
+}, []);
+
   const pathname = usePathname();
   const [legalState, setLegalState] = useState<LegalState | null>(null);
   const [submitting, setSubmitting] = useState(false);

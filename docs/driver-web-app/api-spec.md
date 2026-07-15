@@ -186,6 +186,24 @@ query：
 - 且 `driver_locations` 最近一次 `captured_at` 在 3 分鐘內
 
 這個改動不需要改動對外 API 介面，只是 server 端生成資料時換一個判定方式。
+
+
+#### `POST /api/driver/heartbeat`
+
+用途：前景心跳（不依賴定位權限）。
+
+- 車手端在前景時每 30 秒呼叫一次
+- server 會更新 `driver_profiles.last_heartbeat_at`
+- 後台的「有效在線」會用 `last_heartbeat_at` 判斷（例如 3 分鐘內才算有效在線）
+
+回應 example：
+
+```json
+{
+  "success": true,
+  "lastHeartbeatAt": "2026-07-15T09:00:00.000Z"
+}
+```
 ### 在線狀態
 
 #### `POST /api/driver/availability`

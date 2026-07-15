@@ -98,7 +98,7 @@ async function sendWebPushToOnlineDrivers(payload: SendPushOptions) {
   const supabase = createServiceRoleSupabaseClient();
   const { data: drivers } = await supabase
     .from("driver_profiles")
-    .select("id")
+    .select("id,last_heartbeat_at")
     .eq("availability", "online")
     .eq("approval_status", "approved");
 
@@ -107,21 +107,13 @@ async function sendWebPushToOnlineDrivers(payload: SendPushOptions) {
     return { successCount: 0, failureCount: 0, skipped: false };
   }
 
-  const since = new Date(Date.now() - EFFECTIVE_ONLINE_WINDOW_MINUTES * 60 * 1000).toISOString();
-  const { data: locations } = await supabase
-    .from("driver_locations")
-    .select("driver_id,captured_at")
-    .in("driver_id", manualOnlineIds)
-    .gte("captured_at", since)
-    .order("captured_at", { ascending: false });
 
-  const effectiveOnline = new Set<string>();
-  for (const row of (locations ?? []) as Array<any>) {
-    if (effectiveOnline.has(row.driver_id)) continue;
-    effectiveOnline.add(row.driver_id);
-  }
-
-  const driverIds = manualOnlineIds.filter((id) => effectiveOnline.has(id));
+const since = new Date(Date.now() - EFFECTIVE_ONLINE_WINDOW_MINUTES * 60 * 1000).toISOString();
+const driverIds = manualOnlineIds.filter((id) => {
+  const row = (drivers ?? []).find((item: any) => item.id === id);
+  if (!row?.last_heartbeat_at) return false;
+  return new Date(row.last_heartbeat_at).toISOString() >= since;
+});
   const rows = await listWebSubscriptionsByDriverIds(driverIds);
   return sendWebPushRows(rows.map((row) => ({ endpoint: row.endpoint, p256dh: row.p256dh, auth: row.auth })), payload);
 }

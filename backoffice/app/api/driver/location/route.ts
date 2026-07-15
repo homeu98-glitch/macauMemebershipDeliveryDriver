@@ -37,6 +37,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: error.message }, { status: 500 });
     }
 
+    const heartbeatAt = capturedAt ?? new Date().toISOString();
+    await supabase
+      .from("driver_profiles")
+      .update({ last_heartbeat_at: heartbeatAt })
+      .eq("id", session.driverId);
+
     return NextResponse.json({ success: true });
   });
 }
