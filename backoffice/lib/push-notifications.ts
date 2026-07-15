@@ -3,6 +3,8 @@ import { publishBroadcastDispatchEvent, publishDriverDispatchEvent } from "./mqt
 
 const webpush = require("web-push") as typeof import("web-push");
 
+const EFFECTIVE_ONLINE_WINDOW_MINUTES = 3;
+
 type SendPushOptions = {
   title: string;
   body: string;
@@ -99,7 +101,27 @@ async function sendWebPushToOnlineDrivers(payload: SendPushOptions) {
     .select("id")
     .eq("availability", "online")
     .eq("approval_status", "approved");
-  const driverIds = (drivers ?? []).map((item: any) => item.id as string);
+
+  const manualOnlineIds = (drivers ?? []).map((item: any) => item.id as string);
+  if (!manualOnlineIds.length) {
+    return { successCount: 0, failureCount: 0, skipped: false };
+  }
+
+  const since = new Date(Date.now() - EFFECTIVE_ONLINE_WINDOW_MINUTES * 60 * 1000).toISOString();
+  const { data: locations } = await supabase
+    .from("driver_locations")
+    .select("driver_id,captured_at")
+    .in("driver_id", manualOnlineIds)
+    .gte("captured_at", since)
+    .order("captured_at", { ascending: false });
+
+  const effectiveOnline = new Set<string>();
+  for (const row of (locations ?? []) as Array<any>) {
+    if (effectiveOnline.has(row.driver_id)) continue;
+    effectiveOnline.add(row.driver_id);
+  }
+
+  const driverIds = manualOnlineIds.filter((id) => effectiveOnline.has(id));
   const rows = await listWebSubscriptionsByDriverIds(driverIds);
   return sendWebPushRows(rows.map((row) => ({ endpoint: row.endpoint, p256dh: row.p256dh, auth: row.auth })), payload);
 }

@@ -29,6 +29,17 @@ async function buildSignedStorageUrl(
   return data.signedUrl;
 }
 
+
+const EFFECTIVE_ONLINE_WINDOW_MINUTES = 3;
+const RIDER_HEARTBEAT_LOOKBACK_HOURS = 24;
+
+function isEffectiveOnline(manualAvailability: string, lastHeartbeatIso: string | null) {
+  if (manualAvailability != "online") return false;
+  if (!lastHeartbeatIso) return false;
+  const windowMs = EFFECTIVE_ONLINE_WINDOW_MINUTES * 60 * 1000;
+  return Date.now() - new Date(lastHeartbeatIso).getTime() <= windowMs;
+}
+
 function formatDate(value?: string | null) {
   if (!value) return "未提供";
   return new Intl.DateTimeFormat("zh-Hant-MO", {
@@ -140,7 +151,6 @@ export async function listRiderApplications(): Promise<RiderApplication[]> {
 }
 
 export async function listRiders(): Promise<Rider[]> {
-  noStore();
   const supabase = createServiceRoleSupabaseClient();
   const { data, error } = await supabase
     .from("driver_profiles")
@@ -151,68 +161,54 @@ export async function listRiders(): Promise<Rider[]> {
     throw error;
   }
 
-  const riders = data ?? [];
-  const { data: deliveredOrders, error: deliveredOrdersError } = await supabase
-    .from("orders")
-    .select("id")
-    .eq("status", "delivered");
+  const drivers = (data ?? []) as Array<any>;
+  const driverIds = drivers.map((item) => item.id as string);
 
-  if (deliveredOrdersError) {
-    throw deliveredOrdersError;
-  }
-
-  const deliveredOrderIds = (deliveredOrders ?? []).map((item: any) => item.id);
-  const { data: deliveredAssignments, error: deliveredAssignmentsError } = deliveredOrderIds.length
+  // 心跳來源：driver_locations 最新 captured_at（用 24 小時窗口避免掃全表）
+  const since = new Date(Date.now() - RIDER_HEARTBEAT_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
+  const { data: locationRows } = driverIds.length
     ? await supabase
-        .from("order_assignments")
-        .select("order_id,driver_id,assigned_at,canceled_at")
-        .in("order_id", deliveredOrderIds)
-        .order("assigned_at", { ascending: false })
-    : { data: [], error: null as any };
+        .from("driver_locations")
+        .select("driver_id,captured_at")
+        .in("driver_id", driverIds)
+        .gte("captured_at", since)
+        .order("captured_at", { ascending: false })
+    : { data: [] };
 
-  if (deliveredAssignmentsError) {
-    throw deliveredAssignmentsError;
+  const latestHeartbeatByDriver = new Map<string, string>();
+  for (const row of (locationRows ?? []) as Array<any>) {
+    if (latestHeartbeatByDriver.has(row.driver_id)) continue;
+    latestHeartbeatByDriver.set(row.driver_id, row.captured_at);
   }
 
-  const latestActiveAssignmentByOrderId = new Map<string, { driver_id: string; assigned_at: string }>();
-  for (const assignment of deliveredAssignments ?? []) {
-    if (assignment.canceled_at) continue;
-    if (!latestActiveAssignmentByOrderId.has(assignment.order_id)) {
-      latestActiveAssignmentByOrderId.set(assignment.order_id, {
-        driver_id: assignment.driver_id,
-        assigned_at: assignment.assigned_at
-      });
-    }
-  }
+  return drivers.map((item: any) => {
+    const manualAvailability = item.availability === "online" ? "online" : "offline";
+    const lastHeartbeatIso = latestHeartbeatByDriver.get(item.id) ?? null;
+    const effectiveOnline = isEffectiveOnline(manualAvailability, lastHeartbeatIso);
 
-  const completedCountByDriverId = new Map<string, number>();
-  for (const assignment of latestActiveAssignmentByOrderId.values()) {
-    completedCountByDriverId.set(
-      assignment.driver_id,
-      (completedCountByDriverId.get(assignment.driver_id) ?? 0) + 1
-    );
-  }
-
-  return riders.map((item: any) => ({
-    id: item.id,
-    name: item.full_name,
-    phone: item.phone,
-    zone: "澳門",
-    status:
-      item.approval_status === "suspended"
-        ? "suspended"
-        : item.availability === "online"
-          ? "online"
-          : "offline",
-    approval:
-      item.approval_status === "approved"
-        ? "approved"
-        : item.approval_status === "rejected"
-          ? "rejected"
-          : "pending",
-    rating: 0,
-    completedOrders: completedCountByDriverId.get(item.id) ?? 0
-  }));
+    return {
+      id: item.id,
+      name: item.full_name,
+      phone: item.phone,
+      zone: "澳門",
+      status:
+        item.approval_status === "suspended"
+          ? "suspended"
+          : effectiveOnline
+            ? "online"
+            : "offline",
+      manualAvailability,
+      lastHeartbeatAt: lastHeartbeatIso ? formatDate(lastHeartbeatIso) : null,
+      approval:
+        item.approval_status === "approved"
+          ? "approved"
+          : item.approval_status === "rejected"
+            ? "rejected"
+            : "pending",
+      rating: 0,
+      completedOrders: 0
+    };
+  });
 }
 
 export async function listOrders(): Promise<Order[]> {

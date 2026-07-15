@@ -176,6 +176,16 @@ query：
 - 返回 `review_note`
 - 返回 `reviewed_at`
 
+
+
+## 有效在線（effective online）
+
+在營運場景中，「手動上線」不等於「真的正在前景可接單」。建議在後台統計、派單與推播時使用「有效在線」判定：
+
+- `manualAvailability = online`（車手手動開啟）
+- 且 `driver_locations` 最近一次 `captured_at` 在 3 分鐘內
+
+這個改動不需要改動對外 API 介面，只是 server 端生成資料時換一個判定方式。
 ### 在線狀態
 
 #### `POST /api/driver/availability`
@@ -188,7 +198,14 @@ query：
 }
 ```
 
-功能：切換 `online / offline`，並同步寫入 `driver_shifts`。
+功能：切換「手動上下線」狀態（`driver_profiles.availability`）。
+
+注意：後台與派單建議使用「有效在線」邏輯，而不是單純依賴 `availability=online`。有效在線第一版以 `driver_locations.captured_at` 當作心跳來源：
+
+- 車手手動 `online`
+- 且最近 3 分鐘內有上報定位（可由前景定時上報、回到前景、接單動作觸發）
+
+才視為有效在線。
 
 ### Web Push
 

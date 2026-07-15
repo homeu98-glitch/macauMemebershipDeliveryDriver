@@ -4,7 +4,7 @@ import { getOnlineRiderDistrictCounts } from "@/lib/server-data";
 export const dynamic = "force-dynamic";
 
 export default async function RiderDistrictMapPage() {
-  const result = await getOnlineRiderDistrictCounts({ recentMinutes: 15 });
+  const result = await getOnlineRiderDistrictCounts({ recentMinutes: 3 });
   return (
     <RiderDistrictMap
       counts={result.counts}

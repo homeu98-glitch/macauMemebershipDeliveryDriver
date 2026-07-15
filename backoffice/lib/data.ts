@@ -37,7 +37,17 @@ export type Rider = {
   name: string;
   phone: string;
   zone: string;
+
+  // status: 後台顯示用「有效在線」狀態。
   status: "online" | "offline" | "suspended";
+
+  // manualAvailability: 車手手動切換的原始狀態（不代表一定有效在線）。
+  manualAvailability: "online" | "offline";
+
+  // lastHeartbeatAt: 最後一次「前景心跳」時間。
+  // 第一版以 driver_locations 最新 captured_at 作為心跳來源。
+  lastHeartbeatAt: string | null;
+
   approval: "approved" | "pending" | "rejected";
   rating: number;
   completedOrders: number;
