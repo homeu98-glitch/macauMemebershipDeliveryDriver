@@ -43,6 +43,7 @@ function isEffectiveOnline(manualAvailability: string, lastHeartbeatIso: string 
 function formatDate(value?: string | null) {
   if (!value) return "未提供";
   return new Intl.DateTimeFormat("zh-Hant-MO", {
+    timeZone: "Asia/Macau",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
