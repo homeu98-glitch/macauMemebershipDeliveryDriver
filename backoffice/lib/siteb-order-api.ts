@@ -6,6 +6,10 @@ import { findMacauDistrict } from "./districts";
 
 type CoordSystem = "wgs84" | "gcj02" | "bd09";
 type DeliveryFeePaidBy = "customer" | "shop";
+type OrderChatInput = {
+  enabled?: boolean;
+  messagesUrl?: string | null;
+};
 
 type NormalizedCoordSet = {
   sourceCoordSystem: CoordSystem;
@@ -65,6 +69,7 @@ export type CreateOrderInput = {
   customer?: CustomerInput | null;
   images?: OrderImageInput[];
   items?: ItemInput[];
+  chat?: OrderChatInput | null;
   notes?: Record<string, unknown>;
   callback?: {
     url: string;
@@ -106,6 +111,15 @@ function normalizeMoney(value: number) {
 
 function normalizeDeliveryFeePaidBy(value: unknown): DeliveryFeePaidBy | null {
   return value === "customer" || value === "shop" ? value : null;
+}
+
+function normalizeOrderChat(input: CreateOrderInput["chat"]) {
+  const messagesUrl = normalizeText(input?.messagesUrl);
+  const enabled = input?.enabled === true && Boolean(messagesUrl);
+  return {
+    enabled,
+    messagesUrl: enabled ? messagesUrl : null
+  };
 }
 
 function normalizeDeliveryMode(mode: CreateOrderInput["deliveryMode"]) {
@@ -448,6 +462,7 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
   const normalizedCallback = normalizeCallback(input.callback);
   const normalizedImages = normalizeOrderImages(input.images);
   const customerSnapshot = buildCustomerSnapshot(input.customer);
+  const normalizedChat = normalizeOrderChat(input.chat);
   const existing = await supabase
     .from("orders")
     .select("id,status,source_payload")
@@ -470,7 +485,8 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       ...previousPayload,
       callback: normalizedCallback ?? previousPayload.callback ?? null,
       images: normalizedImages,
-      customerSnapshot
+      customerSnapshot,
+      chat: normalizedChat
     };
 
     if (
@@ -524,6 +540,7 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       deliveryDeadline: input.deliveryDeadline ?? null,
       urgent: input.urgent === true,
       currency: input.currency ?? "MOP",
+      chat: normalizedChat,
       notes: input.notes ?? {},
       callback: normalizedCallback,
       images: normalizedImages,
@@ -1024,6 +1041,10 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
       ? (sourcePayload.customerSnapshot as Record<string, unknown>)
       : {};
   const deliveryFeePaidBy = normalizeDeliveryFeePaidBy(sourcePayload.deliveryFeePaidBy);
+  const chat =
+    sourcePayload.chat && typeof sourcePayload.chat === "object"
+      ? (sourcePayload.chat as Record<string, unknown>)
+      : null;
   const acceptanceLocation =
     sourcePayload.acceptanceLocation && typeof sourcePayload.acceptanceLocation === "object"
       ? (sourcePayload.acceptanceLocation as Record<string, unknown>)
@@ -1077,6 +1098,10 @@ export async function getOrderStatusByExternalId(externalOrderId: string) {
     status: order.status,
     deliveryFeeMop: Number(order.assigned_fee_mop ?? 0),
     deliveryFeePaidBy,
+    chat: {
+      enabled: chat?.enabled === true && typeof chat?.messagesUrl === "string" && Boolean(chat.messagesUrl),
+      messagesUrl: typeof chat?.messagesUrl === "string" ? chat.messagesUrl : null
+    },
     urgent: Boolean(sourcePayload.urgent),
     promisedAt: order.promised_at,
     createdAt: order.created_at,

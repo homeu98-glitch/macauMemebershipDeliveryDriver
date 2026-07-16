@@ -5,6 +5,7 @@ export type DriverWebOrderSummary = {
   orderImages: Array<{ url: string; label: string | null; mimeType: string | null }>;
   customerAddressProvided: boolean;
   customerContactProvided: boolean;
+  chat: { enabled: boolean; messagesUrl: string | null } | null;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -188,11 +189,19 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
   const urgentFromPayload = sourcePayload?.priceRaisedAt || sourcePayload?.price_raised_at;
   const customerAddressProvided = Boolean(customerSnapshot?.addressProvided ?? customer?.address);
   const customerContactProvided = Boolean(customerSnapshot?.contactProvided ?? customer?.phone ?? customer?.name);
+  const chat =
+    sourcePayload?.chat && typeof sourcePayload.chat === "object"
+      ? (sourcePayload.chat as Record<string, unknown>)
+      : null;
 
   return {
     orderImages,
     customerAddressProvided,
     customerContactProvided,
+    chat: {
+      enabled: chat?.enabled === true && typeof chat?.messagesUrl === "string" && Boolean(chat.messagesUrl),
+      messagesUrl: typeof chat?.messagesUrl === "string" ? chat.messagesUrl : null
+    },
     id: order.id,
     externalOrderId: order.external_order_id,
     transactionCode: order.transaction_code ?? null,

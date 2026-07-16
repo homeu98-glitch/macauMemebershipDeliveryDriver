@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { DriverChatIconButton, DriverOrderChatModal, type OrderChatMeta, useDriverChatUnreadMap } from "@/components/driver-web/driver-chat";
 import { PhotoViewerModal } from "@/components/driver-web/photo-viewer-modal";
 
 import { captureDriverLocationPayload, reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
@@ -11,6 +12,7 @@ type OrderSummary = {
   orderImages: Array<{ url: string; label: string | null; mimeType: string | null }>;
   customerAddressProvided: boolean;
   customerContactProvided: boolean;
+  chat: OrderChatMeta;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -106,6 +108,7 @@ export function DriverHomeClient() {
   const [navOrder, setNavOrder] = useState<OrderSummary | null>(null);
   const [filterModal, setFilterModal] = useState<FilterModalType>(null);
   const [photoModal, setPhotoModal] = useState<{ images: OrderSummary["orderImages"]; index: number } | null>(null);
+  const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
   const [notificationCheck, setNotificationCheck] = useState<NotificationCheck>({ permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission, subscribed: false, vapidConfigured: false });
   const previousOrderStateRef = useRef<Record<string, boolean>>({});
   const hasSeenDashboardRef = useRef(false);
@@ -300,6 +303,12 @@ export function DriverHomeClient() {
 
   const filterOptions = filterModal === "pickup" ? data?.pickupDistrictOptions ?? [] : data?.destinationDistrictOptions ?? [];
   const selectedOptions = filterModal === "pickup" ? pickupDistricts : destinationDistricts;
+  const chatUnread = useDriverChatUnreadMap(filteredOrders.map((order) => ({ id: order.id, chat: order.chat })));
+
+  function openChat(order: OrderSummary) {
+    setChatOrder(order);
+    chatUnread.markRead(order.id, order.chat);
+  }
 
   if (loading) return <div className="android-card">首頁載入中...</div>;
   if (error) return <div className="android-card error">{error}</div>;
@@ -372,7 +381,10 @@ export function DriverHomeClient() {
                     <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
                     <div className="order-subvalue tight">發單日期 {order.publishedAt}</div>
                   </div>
-                  <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
+                  <div className="stack gap-2 align-end">
+                    <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
+                    {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton hasUnread={chatUnread.hasUnread(order.id)} onClick={() => openChat(order)} /> : null}
+                  </div>
                 </div>
 
                 <div className="android-soft-panel order-address-panel compact">
@@ -451,6 +463,16 @@ export function DriverHomeClient() {
 
       {photoModal ? (
         <PhotoViewerModal images={photoModal.images} initialIndex={photoModal.index} onClose={() => setPhotoModal(null)} />
+      ) : null}
+
+      {chatOrder ? (
+        <DriverOrderChatModal
+          orderId={chatOrder.id}
+          orderLabel={chatOrder.transactionCode ?? chatOrder.externalOrderId}
+          chat={chatOrder.chat}
+          onClose={() => setChatOrder(null)}
+          onRead={(latestMessageAt) => chatUnread.markRead(chatOrder.id, chatOrder.chat, latestMessageAt)}
+        />
       ) : null}
 
     </>

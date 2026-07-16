@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { DriverChatIconButton, DriverOrderChatModal, type OrderChatMeta, useDriverChatUnreadMap } from "@/components/driver-web/driver-chat";
 import { captureDriverLocationPayload, reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
 import { PhotoViewerModal } from "@/components/driver-web/photo-viewer-modal";
 
@@ -44,6 +45,7 @@ type OrderDetail = {
   hasProof: boolean;
   driverCancelConfirmationRequired: boolean;
   driverCancelConfirmedAt: string | null;
+  chat: OrderChatMeta;
 };
 
 function buildGoogleNavUrl(label: string, address: string, lat: number, lng: number) {
@@ -148,6 +150,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   const [cancelOtherReason, setCancelOtherReason] = useState("");
   const [navTarget, setNavTarget] = useState<{ label: string; googleUrl: string | null; amapUrl: string | null } | null>(null);
   const [photoModal, setPhotoModal] = useState<{ images: OrderDetail["orderImages"]; index: number } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const [cancelHandling, setCancelHandling] = useState<"return_to_shop" | "not_returning">("return_to_shop");
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const previousOrderStatusRef = useRef<string | null>(null);
@@ -311,6 +314,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   }
 
   const proofPreviewUrl = useMemo(() => (order?.hasProof ? `/api/driver/orders/${orderId}/proof?ts=${Date.now()}` : null), [order?.hasProof, orderId]);
+  const chatUnread = useDriverChatUnreadMap(order ? [{ id: order.id, chat: order.chat }] : []);
 
   if (loading) return <div className="android-card">載入訂單中...</div>;
   if (!order) return <div className="android-card error">找不到訂單資料。</div>;
@@ -336,6 +340,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
             </div>
             <div className="stack gap-2 align-end">
               <StatusBadge status={order.status} amount={order.amountMop} urgent={order.isUrgent} />
+              {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton hasUnread={chatUnread.hasUnread(order.id)} onClick={() => { setChatOpen(true); chatUnread.markRead(order.id, order.chat); }} /> : null}
               {inGraceCancel ? <div className="pickup-elapsed-chip">可取消 {formatGraceCountdown(graceLeft)}</div> : null}
             </div>
           </div>
@@ -474,6 +479,16 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
 
       {photoModal ? (
         <PhotoViewerModal images={photoModal.images} initialIndex={photoModal.index} onClose={() => setPhotoModal(null)} />
+      ) : null}
+
+      {chatOpen ? (
+        <DriverOrderChatModal
+          orderId={order.id}
+          orderLabel={order.transactionCode ?? order.externalOrderId}
+          chat={order.chat}
+          onClose={() => setChatOpen(false)}
+          onRead={(latestMessageAt) => chatUnread.markRead(order.id, order.chat, latestMessageAt)}
+        />
       ) : null}
 
 {navTarget ? (

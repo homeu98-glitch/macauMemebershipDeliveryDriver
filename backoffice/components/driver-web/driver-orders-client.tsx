@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { DriverChatIconButton, DriverOrderChatModal, type OrderChatMeta, useDriverChatUnreadMap } from "@/components/driver-web/driver-chat";
 import { PhotoViewerModal } from "@/components/driver-web/photo-viewer-modal";
 
 type OrderSummary = {
@@ -40,6 +41,7 @@ type OrderSummary = {
   orderImages: Array<{ url: string; label: string | null; mimeType: string | null }>;
   customerAddressProvided: boolean;
   customerContactProvided: boolean;
+  chat: OrderChatMeta;
 };
 
 function buildGoogleNavUrl(label: string, address: string, lat: number, lng: number) {
@@ -127,6 +129,7 @@ export function DriverOrdersClient() {
   const [completeOrderId, setCompleteOrderId] = useState<string | null>(null);
   const [navTarget, setNavTarget] = useState<{ label: string; googleUrl: string | null; amapUrl: string | null } | null>(null);
   const [photoModal, setPhotoModal] = useState<{ images: OrderSummary["orderImages"]; index: number } | null>(null);
+  const [chatOrder, setChatOrder] = useState<OrderSummary | null>(null);
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const previousStatusByOrderIdRef = useRef<Record<string, string>>({});
   const playedCancelSoundRef = useRef<Set<string>>(new Set());
@@ -186,6 +189,13 @@ export function DriverOrdersClient() {
     const timer = window.setInterval(() => setNowTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const chatUnread = useDriverChatUnreadMap(orders.map((order) => ({ id: order.id, chat: order.chat })));
+
+  function openChat(order: OrderSummary) {
+    setChatOrder(order);
+    chatUnread.markRead(order.id, order.chat);
+  }
 
   async function sendStatus(orderId: string, eventType: string, extra: Record<string, unknown> = {}) {
     setBusyOrderId(orderId + eventType);
@@ -302,8 +312,9 @@ export function DriverOrdersClient() {
                 <div className="active-order-card-topbar with-pickup-timer">
                   <div className="order-card-number">訂單 {index + 1}</div>
                   <div className="pickup-elapsed-slot">{inGrace ? <div className="pickup-elapsed-chip">可取消 {formatGraceCountdown(graceLeft)}</div> : pickupElapsed ? <div className="pickup-elapsed-chip">{pickupElapsed}</div> : null}</div>
-                  <div className="order-price-top-right">
+                  <div className="order-price-top-right stack gap-2 align-end">
                     <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
+                    {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton hasUnread={chatUnread.hasUnread(order.id)} onClick={() => openChat(order)} /> : null}
                   </div>
                 </div>
 
@@ -449,6 +460,16 @@ export function DriverOrdersClient() {
 
       {photoModal ? (
         <PhotoViewerModal images={photoModal.images} initialIndex={photoModal.index} onClose={() => setPhotoModal(null)} />
+      ) : null}
+
+{chatOrder ? (
+        <DriverOrderChatModal
+          orderId={chatOrder.id}
+          orderLabel={chatOrder.transactionCode ?? chatOrder.externalOrderId}
+          chat={chatOrder.chat}
+          onClose={() => setChatOrder(null)}
+          onRead={(latestMessageAt) => chatUnread.markRead(chatOrder.id, chatOrder.chat, latestMessageAt)}
+        />
       ) : null}
 
 {navTarget ? (

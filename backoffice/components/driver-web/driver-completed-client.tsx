@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { DriverChatIconButton, DriverOrderChatModal, type OrderChatMeta, useDriverChatUnreadMap } from "@/components/driver-web/driver-chat";
+
 type CompletedOrder = {
   id: string;
   externalOrderId: string;
@@ -11,6 +13,7 @@ type CompletedOrder = {
   customerAddress: string;
   amountMop: number;
   deliveredAt: string;
+  chat: OrderChatMeta;
 };
 
 export function DriverCompletedClient() {
@@ -18,6 +21,7 @@ export function DriverCompletedClient() {
   const [previewOrder, setPreviewOrder] = useState<CompletedOrder | null>(null);
   const [hiddenProofIds, setHiddenProofIds] = useState<Record<string, boolean>>({});
   const [range, setRange] = useState<"today" | "yesterday">("today");
+  const [chatOrder, setChatOrder] = useState<CompletedOrder | null>(null);
 
   useEffect(() => {
     fetch(`/api/driver/orders/completed?range=${range}`, { cache: "no-store" })
@@ -25,6 +29,13 @@ export function DriverCompletedClient() {
       .then((payload) => setOrders(((payload as { orders?: CompletedOrder[] }).orders ?? []) as CompletedOrder[]))
       .catch(() => undefined);
   }, [range]);
+
+  const chatUnread = useDriverChatUnreadMap(orders.map((order) => ({ id: order.id, chat: order.chat })));
+
+  function openChat(order: CompletedOrder) {
+    setChatOrder(order);
+    chatUnread.markRead(order.id, order.chat);
+  }
 
   return (
     <>
@@ -65,7 +76,10 @@ export function DriverCompletedClient() {
                 </div>
                 <div className="order-subvalue tight">完成時間 {order.deliveredAt}</div>
               </div>
-              <div className="money-chip large compact">MOP {order.amountMop.toFixed(1)}</div>
+              <div className="stack gap-2 align-end">
+                <div className="money-chip large compact">MOP {order.amountMop.toFixed(1)}</div>
+                {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton hasUnread={chatUnread.hasUnread(order.id)} onClick={() => openChat(order)} /> : null}
+              </div>
             </div>
             {hiddenProofIds[order.id] ? (
               <div className="muted">送達照片：已上傳</div>
@@ -77,6 +91,16 @@ export function DriverCompletedClient() {
           </section>
         ))}
       </div>
+
+      {chatOrder ? (
+        <DriverOrderChatModal
+          orderId={chatOrder.id}
+          orderLabel={chatOrder.transactionCode ?? chatOrder.externalOrderId}
+          chat={chatOrder.chat}
+          onClose={() => setChatOrder(null)}
+          onRead={(latestMessageAt) => chatUnread.markRead(chatOrder.id, chatOrder.chat, latestMessageAt)}
+        />
+      ) : null}
 
       {previewOrder ? (
         <div className="driver-modal-backdrop" onClick={() => setPreviewOrder(null)}>
