@@ -141,6 +141,8 @@ function haversineKm(startLat: number, startLng: number, endLat: number, endLng:
 
 const RELATION_CACHE_TTL_MS = 60_000;
 
+const AVAILABLE_ORDERS_CACHE_TTL_MS = 10_000;
+
 function buildSortedIdKey(values: unknown[]) {
   return [...new Set(values.filter(Boolean).map((value) => String(value)))]
     .sort()
@@ -304,16 +306,20 @@ export async function getDriverLegalState(driverId: string) {
 
 export async function listAvailableOrders(filters?: { pickupDistrict?: string; destinationDistrict?: string }) {
   const supabase = createServiceRoleSupabaseClient();
-  const { data: rows } = await supabase
-    .from("orders")
-    .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
-    .eq("status", "new")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const mapped = await getOrSetMemoryCache("driver-web:available-orders:mapped", AVAILABLE_ORDERS_CACHE_TTL_MS, async () => {
+    const { data: rows } = await supabase
+      .from("orders")
+      .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
+      .eq("status", "new")
+      .order("created_at", { ascending: false })
+      .limit(100);
 
-  const orders = rows ?? [];
-  const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
-  const mapped = orders.map((row: any) => toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId));
+    const orders = rows ?? [];
+    if (orders.length === 0) return [] as DriverWebOrderSummary[];
+    const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
+    return orders.map((row: any) => toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId));
+  });
+
   return mapped.filter((item) => {
     const pickupOk = !filters?.pickupDistrict || item.pickupDistrict === filters.pickupDistrict;
     const destinationOk = !filters?.destinationDistrict || item.destinationDistrict === filters.destinationDistrict;
