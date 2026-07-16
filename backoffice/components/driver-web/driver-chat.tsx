@@ -108,6 +108,12 @@ function latestTimestamp(items: ChatItem[]) {
   return items.length ? items[items.length - 1]?.createdAt ?? null : null;
 }
 
+function isDriverMessage(senderRole: string, senderLabel: string | null) {
+  const role = senderRole.trim().toLowerCase();
+  const label = (senderLabel ?? "").trim().toLowerCase();
+  return role === "driver" || role === "rider" || role === "courier" || role.includes("driver") || role.includes("rider") || label === "你" || label.includes("車手");
+}
+
 async function readFileAsDataUrl(file: File) {
   return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -193,7 +199,7 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
             if (latestIncomingAt) {
               latestFetchedRef.current[order.id] = latestIncomingAt;
             }
-            const hasUnread = items.some((item) => item.senderRole !== "driver" && (!storedReadAt || item.createdAt > storedReadAt));
+            const hasUnread = items.some((item) => !isDriverMessage(item.senderRole, item.senderLabel) && (!storedReadAt || item.createdAt > storedReadAt));
             return {
               orderId: order.id,
               latestMessageAt: latestIncomingAt ?? latestFetchedRef.current[order.id] ?? null,
@@ -262,9 +268,9 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
   };
 }
 
-export function DriverChatIconButton({ hasUnread, onClick, disabled = false }: { hasUnread: boolean; onClick: () => void; disabled?: boolean }) {
+export function DriverChatIconButton({ hasUnread, onClick, disabled = false, className = "" }: { hasUnread: boolean; onClick: () => void; disabled?: boolean; className?: string }) {
   return (
-    <button className="driver-chat-icon-btn" disabled={disabled} onClick={onClick} type="button" aria-label="打開聊天">
+    <button className={className ? `driver-chat-icon-btn ${className}` : "driver-chat-icon-btn"} disabled={disabled} onClick={onClick} type="button" aria-label="打開聊天">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M7 18.5c-1.1 0-2-.9-2-2v-8C5 7.1 5.9 6.2 7 6.2h10c1.1 0 2 .9 2 2v8c0 1.1-.9 2-2 2H10l-3.6 2.6c-.2.1-.4 0-.4-.2V18.5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
         <path d="M8.5 10.5h7M8.5 13.5h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
@@ -314,8 +320,16 @@ export function DriverOrderChatModal({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -475,7 +489,7 @@ export function DriverOrderChatModal({
           {loading ? <div className="muted">載入聊天中...</div> : null}
           {!loading && items.length === 0 ? <div className="muted">暫時沒有聊天訊息。</div> : null}
           {items.map((item) => {
-            const self = item.senderRole === "driver";
+            const self = isDriverMessage(item.senderRole, item.senderLabel);
             return (
               <div className={self ? "driver-chat-row self" : "driver-chat-row"} key={item.id}>
                 <div className={self ? "driver-chat-bubble self" : "driver-chat-bubble"}>

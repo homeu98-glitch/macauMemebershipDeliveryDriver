@@ -314,7 +314,7 @@ export function DriverOrdersClient() {
                   <div className="pickup-elapsed-slot">{inGrace ? <div className="pickup-elapsed-chip">可取消 {formatGraceCountdown(graceLeft)}</div> : pickupElapsed ? <div className="pickup-elapsed-chip">{pickupElapsed}</div> : null}</div>
                   <div className="order-price-top-right stack gap-2 align-end">
                     <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
-                    {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton hasUnread={chatUnread.hasUnread(order.id)} onClick={() => openChat(order)} /> : null}
+                    {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton className="driver-chat-icon-under-price" hasUnread={chatUnread.hasUnread(order.id)} onClick={() => openChat(order)} /> : null}
                   </div>
                 </div>
 

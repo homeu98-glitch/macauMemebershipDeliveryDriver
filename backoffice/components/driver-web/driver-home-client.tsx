@@ -383,7 +383,7 @@ export function DriverHomeClient() {
                   </div>
                   <div className="stack gap-2 align-end">
                     <div className={order.isUrgent ? "money-chip urgent large compact" : "money-chip large compact"}>MOP {order.amountMop.toFixed(1)}</div>
-                    {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton hasUnread={chatUnread.hasUnread(order.id)} onClick={() => openChat(order)} /> : null}
+                    {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton className="driver-chat-icon-under-price" hasUnread={chatUnread.hasUnread(order.id)} onClick={() => openChat(order)} /> : null}
                   </div>
                 </div>
 

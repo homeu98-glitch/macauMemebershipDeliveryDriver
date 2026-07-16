@@ -340,7 +340,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
             </div>
             <div className="stack gap-2 align-end">
               <StatusBadge status={order.status} amount={order.amountMop} urgent={order.isUrgent} />
-              {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton hasUnread={chatUnread.hasUnread(order.id)} onClick={() => { setChatOpen(true); chatUnread.markRead(order.id, order.chat); }} /> : null}
+              {order.chat?.enabled && order.chat.messagesUrl ? <DriverChatIconButton className="driver-chat-icon-under-price" hasUnread={chatUnread.hasUnread(order.id)} onClick={() => { setChatOpen(true); chatUnread.markRead(order.id, order.chat); }} /> : null}
               {inGraceCancel ? <div className="pickup-elapsed-chip">可取消 {formatGraceCountdown(graceLeft)}</div> : null}
             </div>
           </div>

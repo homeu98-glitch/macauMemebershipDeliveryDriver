@@ -2584,6 +2584,11 @@ html, body {
   opacity: 0.45;
 }
 
+.driver-chat-icon-under-price {
+  margin-top: 4px;
+  align-self: flex-end;
+}
+
 .driver-chat-unread-dot {
   position: absolute;
   top: 7px;
@@ -2597,6 +2602,7 @@ html, body {
 
 .driver-chat-backdrop {
   z-index: 9999;
+  overscroll-behavior: contain;
 }
 
 .driver-chat-modal-card {
@@ -2626,6 +2632,10 @@ html, body {
   justify-content: flex-end;
 }
 
+.driver-chat-row.self .driver-chat-bubble {
+  margin-left: auto;
+}
+
 .driver-chat-bubble {
   max-width: 84%;
   border-radius: 16px;
@@ -2638,8 +2648,8 @@ html, body {
 }
 
 .driver-chat-bubble.self {
-  background: #dcf8c6;
-  border-color: #b7e3a4;
+  background: #c9f7b9;
+  border-color: #95d885;
   align-items: flex-end;
 }
 
