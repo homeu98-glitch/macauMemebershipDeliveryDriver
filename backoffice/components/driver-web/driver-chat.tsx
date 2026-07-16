@@ -333,7 +333,7 @@ export function DriverOrderChatModal({
   }
 
   return (
-    <div className="driver-modal-backdrop" onClick={onClose}>
+    <div className="driver-modal-backdrop driver-chat-backdrop" onClick={onClose}>
       <div className="driver-modal-card driver-chat-modal-card stack gap-3" onClick={(event) => event.stopPropagation()}>
         <div className="driver-inline-between align-start gap-2">
           <div className="stack gap-1 grow minw-0">
@@ -347,41 +347,57 @@ export function DriverOrderChatModal({
         <div className="driver-chat-list" ref={listRef}>
           {loading ? <div className="muted">載入聊天中...</div> : null}
           {!loading && items.length === 0 ? <div className="muted">暫時沒有聊天訊息。</div> : null}
-          {items.map((item) => (
-            <div className={item.senderRole === "driver" ? "driver-chat-bubble self" : "driver-chat-bubble"} key={item.id}>
-              <div className="driver-chat-sender">{item.senderLabel ?? item.senderRole}</div>
-              {item.body ? <div className="driver-chat-body">{item.body}</div> : null}
-              {item.imageUrl ? <img alt="chat attachment" className="driver-chat-image" src={item.imageUrl} /> : null}
-              <div className="driver-chat-time">{new Date(item.createdAt).toLocaleString("zh-HK")}</div>
-            </div>
-          ))}
+          {items.map((item) => {
+            const self = item.senderRole === "driver";
+            return (
+              <div className={self ? "driver-chat-row self" : "driver-chat-row"} key={item.id}>
+                <div className={self ? "driver-chat-bubble self" : "driver-chat-bubble"}>
+                  <div className="driver-chat-sender">{self ? "你" : item.senderLabel ?? item.senderRole}</div>
+                  {item.body ? <div className="driver-chat-body">{item.body}</div> : null}
+                  {item.imageUrl ? <img alt="chat attachment" className="driver-chat-image" src={item.imageUrl} /> : null}
+                  <div className="driver-chat-time">{new Date(item.createdAt).toLocaleString("zh-HK")}</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {error ? <div className="android-card error">{error}</div> : null}
 
         {imageName ? (
-          <div className="driver-chat-attachment-row">
+          <div className="driver-chat-attachment-chip">
             <span className="order-subvalue tight">已選圖片：{imageName}</span>
-            <button className="android-secondary-btn small" onClick={() => { setImageBase64(null); setImageName(null); }} type="button">移除</button>
+            <button className="driver-chat-inline-icon danger" onClick={() => { setImageBase64(null); setImageName(null); }} type="button" aria-label="移除圖片">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+              </svg>
+            </button>
           </div>
         ) : null}
 
-        <div className="stack gap-2">
+        <div className="driver-chat-composer">
+          <input accept="image/*" hidden onChange={handleFileChange} ref={fileInputRef} type="file" />
+          <button className="driver-chat-inline-icon" disabled={!writable || sending} onClick={() => fileInputRef.current?.click()} type="button" aria-label="選擇圖片">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M5 7.5A2.5 2.5 0 0 1 7.5 5h9A2.5 2.5 0 0 1 19 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 16.5v-9Z" stroke="currentColor" strokeWidth="1.8"/>
+              <circle cx="9" cy="10" r="1.4" fill="currentColor"/>
+              <path d="m7.5 17 3.3-3.3a1.2 1.2 0 0 1 1.7 0l1 1 1.7-1.7a1.2 1.2 0 0 1 1.7 0L19 15.1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
           <textarea
             className="driver-chat-textarea"
             disabled={!writable || sending}
             onChange={(event) => setMessageText(event.target.value)}
             placeholder={writable ? "輸入訊息…" : "此聊天已關閉，只可查看歷史訊息。"}
-            rows={3}
+            rows={1}
             value={messageText}
           />
-          <div className="driver-inline-between gap-2 wrap-safe">
-            <div className="driver-inline-between gap-2 wrap-safe">
-              <input accept="image/*" hidden onChange={handleFileChange} ref={fileInputRef} type="file" />
-              <button className="android-secondary-btn small" disabled={!writable || sending} onClick={() => fileInputRef.current?.click()} type="button">選擇圖片</button>
-            </div>
-            <button className="android-primary-btn small" disabled={(!messageText.trim() && !imageBase64) || !writable || sending} onClick={handleSend} type="button">{sending ? "發送中..." : "發送"}</button>
-          </div>
+          <button className="driver-chat-inline-icon send" disabled={(!messageText.trim() && !imageBase64) || !writable || sending} onClick={handleSend} type="button" aria-label="發送訊息">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M21 3 10 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M21 3 14 21l-4-7-7-4 18-7Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>

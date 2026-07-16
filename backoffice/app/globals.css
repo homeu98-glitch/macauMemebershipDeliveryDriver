@@ -2595,9 +2595,15 @@ html, body {
   box-shadow: 0 0 0 2px #fff;
 }
 
+.driver-chat-backdrop {
+  z-index: 9999;
+}
+
 .driver-chat-modal-card {
   width: min(92vw, 520px);
   max-height: min(84vh, 760px);
+  position: relative;
+  z-index: 10000;
 }
 
 .driver-chat-list {
@@ -2610,8 +2616,17 @@ html, body {
   padding: 4px 2px;
 }
 
+.driver-chat-row {
+  width: 100%;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.driver-chat-row.self {
+  justify-content: flex-end;
+}
+
 .driver-chat-bubble {
-  align-self: flex-start;
   max-width: 84%;
   border-radius: 16px;
   background: #f8fafc;
@@ -2623,9 +2638,9 @@ html, body {
 }
 
 .driver-chat-bubble.self {
-  align-self: flex-end;
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: #dcf8c6;
+  border-color: #b7e3a4;
+  align-items: flex-end;
 }
 
 .driver-chat-sender {
@@ -2639,6 +2654,7 @@ html, body {
   color: #0f172a;
   font-size: 14px;
   line-height: 1.5;
+  align-self: stretch;
 }
 
 .driver-chat-time {
@@ -2655,19 +2671,61 @@ html, body {
   border: 1px solid #e2e8f0;
 }
 
-.driver-chat-textarea {
-  width: 100%;
-  border-radius: 14px;
+.driver-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
   border: 1px solid #d7deea;
+  border-radius: 18px;
   background: #fff;
-  padding: 12px 14px;
-  font: inherit;
-  resize: vertical;
+  padding: 8px 10px;
 }
 
-.driver-chat-attachment-row {
+.driver-chat-textarea {
+  flex: 1 1 auto;
+  min-height: 24px;
+  max-height: 100px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  padding: 6px 2px;
+  font: inherit;
+  resize: none;
+}
+
+.driver-chat-inline-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.driver-chat-inline-icon.send {
+  color: #2563eb;
+}
+
+.driver-chat-inline-icon.danger {
+  color: #ef4444;
+}
+
+.driver-chat-inline-icon:disabled {
+  opacity: 0.45;
+}
+
+.driver-chat-attachment-chip {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 8px 10px;
 }
+
