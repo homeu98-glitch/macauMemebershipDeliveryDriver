@@ -133,8 +133,15 @@ export function DriverOrdersClient() {
   const proofInputRef = useRef<HTMLInputElement | null>(null);
   const previousStatusByOrderIdRef = useRef<Record<string, string>>({});
   const playedCancelSoundRef = useRef<Set<string>>(new Set());
+  const ordersTimerRef = useRef<number | null>(null);
+  const pendingOrdersReloadRef = useRef<number | null>(null);
+  const ordersLoadingRef = useRef(false);
+  const ordersLastLoadedAtRef = useRef(0);
 
-  async function load() {
+  async function load(force = false) {
+    if (!force && document.visibilityState === "hidden") return;
+    if (ordersLoadingRef.current) return;
+    ordersLoadingRef.current = true;
     try {
       const response = await fetch("/api/driver/orders/active", { cache: "no-store" });
       if (!response.ok) throw new Error("active_failed");
@@ -163,25 +170,78 @@ export function DriverOrdersClient() {
 
       setOrders(nextOrders);
       setError(null);
+      ordersLastLoadedAtRef.current = Date.now();
     } catch {
       setError("載入進行中訂單失敗。");
     } finally {
+      ordersLoadingRef.current = false;
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
-    const onDispatch = () => { void load(); };
-    const timer = window.setInterval(load, 5000);
+    function clearOrdersTimer() {
+      if (ordersTimerRef.current !== null) {
+        window.clearInterval(ordersTimerRef.current);
+        ordersTimerRef.current = null;
+      }
+    }
+
+    function clearPendingReload() {
+      if (pendingOrdersReloadRef.current !== null) {
+        window.clearTimeout(pendingOrdersReloadRef.current);
+        pendingOrdersReloadRef.current = null;
+      }
+    }
+
+    function startOrdersTimer() {
+      clearOrdersTimer();
+      if (document.visibilityState === "hidden") return;
+      ordersTimerRef.current = window.setInterval(() => {
+        void load();
+      }, 20000);
+    }
+
+    function scheduleReload(delay = 250, force = false) {
+      if (!force && document.visibilityState === "hidden") return;
+      clearPendingReload();
+      const elapsed = Date.now() - ordersLastLoadedAtRef.current;
+      const throttledDelay = elapsed < 1200 ? Math.max(delay, 1200 - elapsed) : delay;
+      pendingOrdersReloadRef.current = window.setTimeout(() => {
+        pendingOrdersReloadRef.current = null;
+        void load(force);
+      }, throttledDelay);
+    }
+
+    void load(true);
+    startOrdersTimer();
+
+    const onDispatch = () => {
+      scheduleReload(250);
+    };
+    const onFocus = () => {
+      if (document.visibilityState === "visible") {
+        scheduleReload(120, true);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        startOrdersTimer();
+        scheduleReload(120, true);
+      } else {
+        clearOrdersTimer();
+      }
+    };
+
     window.addEventListener("driver_dispatch_event", onDispatch);
-    window.addEventListener("focus", onDispatch);
-    document.addEventListener("visibilitychange", onDispatch);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.clearInterval(timer);
+      clearOrdersTimer();
+      clearPendingReload();
       window.removeEventListener("driver_dispatch_event", onDispatch);
-      window.removeEventListener("focus", onDispatch);
-      document.removeEventListener("visibilitychange", onDispatch);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);
 

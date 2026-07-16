@@ -112,32 +112,92 @@ export function DriverHomeClient() {
   const [notificationCheck, setNotificationCheck] = useState<NotificationCheck>({ permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission, subscribed: false, vapidConfigured: false });
   const previousOrderStateRef = useRef<Record<string, boolean>>({});
   const hasSeenDashboardRef = useRef(false);
+  const dashboardTimerRef = useRef<number | null>(null);
+  const pendingDashboardReloadRef = useRef<number | null>(null);
+  const dashboardLoadingRef = useRef(false);
+  const dashboardLastLoadedAtRef = useRef(0);
 
-  async function load() {
+  async function load(force = false) {
+    if (!force && document.visibilityState === "hidden") return;
+    if (dashboardLoadingRef.current) return;
+    dashboardLoadingRef.current = true;
     try {
       const response = await fetch("/api/driver/dashboard", { cache: "no-store" });
       if (!response.ok) throw new Error("dashboard_failed");
       setData((await response.json()) as Dashboard);
       setError(null);
+      dashboardLastLoadedAtRef.current = Date.now();
     } catch {
       setError("載入首頁資料失敗。");
     } finally {
+      dashboardLoadingRef.current = false;
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
-    const onDispatch = () => { void load(); };
-    const timer = window.setInterval(load, 10000);
+    function clearDashboardTimer() {
+      if (dashboardTimerRef.current !== null) {
+        window.clearInterval(dashboardTimerRef.current);
+        dashboardTimerRef.current = null;
+      }
+    }
+
+    function clearPendingReload() {
+      if (pendingDashboardReloadRef.current !== null) {
+        window.clearTimeout(pendingDashboardReloadRef.current);
+        pendingDashboardReloadRef.current = null;
+      }
+    }
+
+    function startDashboardTimer() {
+      clearDashboardTimer();
+      if (document.visibilityState === "hidden") return;
+      dashboardTimerRef.current = window.setInterval(() => {
+        void load();
+      }, 10000);
+    }
+
+    function scheduleReload(delay = 250, force = false) {
+      if (!force && document.visibilityState === "hidden") return;
+      clearPendingReload();
+      const elapsed = Date.now() - dashboardLastLoadedAtRef.current;
+      const throttledDelay = elapsed < 1200 ? Math.max(delay, 1200 - elapsed) : delay;
+      pendingDashboardReloadRef.current = window.setTimeout(() => {
+        pendingDashboardReloadRef.current = null;
+        void load(force);
+      }, throttledDelay);
+    }
+
+    void load(true);
+    startDashboardTimer();
+
+    const onDispatch = () => {
+      scheduleReload(250);
+    };
+    const onFocus = () => {
+      if (document.visibilityState === "visible") {
+        scheduleReload(120, true);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        startDashboardTimer();
+        scheduleReload(120, true);
+      } else {
+        clearDashboardTimer();
+      }
+    };
+
     window.addEventListener("driver_dispatch_event", onDispatch);
-    window.addEventListener("focus", onDispatch);
-    document.addEventListener("visibilitychange", onDispatch);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      window.clearInterval(timer);
+      clearDashboardTimer();
+      clearPendingReload();
       window.removeEventListener("driver_dispatch_event", onDispatch);
-      window.removeEventListener("focus", onDispatch);
-      document.removeEventListener("visibilitychange", onDispatch);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, []);
 
@@ -201,10 +261,6 @@ export function DriverHomeClient() {
       const urgentTransitions = data.availableOrders.filter((item) => previousState[item.id] === false && item.isUrgent);
       const newOrders = data.availableOrders.filter((item) => !(item.id in previousState));
       const notificationOrder = urgentTransitions[0] ?? newOrders[0] ?? null;
-      if (document.visibilityState === "visible") {
-        void load();
-      }
-
       if (notificationOrder) {
         const soundKey = notificationOrder.isUrgent ? "urgent_order" : "new_order";
         const notificationBody = urgentTransitions.length > 0
