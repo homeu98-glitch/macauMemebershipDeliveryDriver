@@ -129,7 +129,7 @@ export function DriverHomeClient() {
   useEffect(() => {
     load();
     const onDispatch = () => { void load(); };
-    const timer = window.setInterval(load, 5000);
+    const timer = window.setInterval(load, 3000);
     window.addEventListener("driver_dispatch_event", onDispatch);
     window.addEventListener("focus", onDispatch);
     document.addEventListener("visibilitychange", onDispatch);

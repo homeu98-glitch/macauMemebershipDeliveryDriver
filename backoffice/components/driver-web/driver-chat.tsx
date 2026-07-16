@@ -37,7 +37,8 @@ type CachedChatPayload = {
 
 const READ_STORAGE_PREFIX = "driver_chat_last_read:";
 const CHAT_CACHE_PREFIX = "driver_chat_cache:";
-const CHAT_POLL_INTERVAL_MS = 15000;
+const CHAT_UNREAD_POLL_INTERVAL_MS = 15000;
+const CHAT_MODAL_POLL_INTERVAL_MS = 7000;
 const CHAT_IMAGE_MAX_BYTES = 150 * 1024;
 const CHAT_IMAGE_MAX_EDGE = 1280;
 
@@ -228,7 +229,7 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
     void poll();
     const timer = window.setInterval(() => {
       void poll();
-    }, CHAT_POLL_INTERVAL_MS);
+    }, CHAT_UNREAD_POLL_INTERVAL_MS);
     const onFocus = () => {
       if (document.visibilityState !== "hidden") void poll();
     };
@@ -398,7 +399,7 @@ export function DriverOrderChatModal({
     void load(true);
     const timer = window.setInterval(() => {
       void load(false);
-    }, CHAT_POLL_INTERVAL_MS);
+    }, CHAT_MODAL_POLL_INTERVAL_MS);
     return () => {
       disposed = true;
       window.clearInterval(timer);
