@@ -6,6 +6,7 @@ import { DriverChatIconButton, DriverOrderChatModal, type OrderChatMeta, useDriv
 import { PhotoViewerModal } from "@/components/driver-web/photo-viewer-modal";
 
 import { captureDriverLocationPayload, reportDriverLocationOnce } from "@/components/driver-web/driver-location-client";
+import { fetchJsonWithSessionCache } from "@/lib/client-session-cache";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type OrderSummary = {
@@ -235,8 +236,7 @@ export function DriverHomeClient() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/driver/notifications/config", { cache: "no-store" })
-      .then((res) => res.json())
+    fetchJsonWithSessionCache<{ vapidPublicKeyConfigured?: boolean }>("driver:notifications-config", "/api/driver/notifications/config", 10 * 60_000, { cache: "no-store" })
       .then(async (payload) => {
         let subscribed = false;
         if ("serviceWorker" in navigator) {

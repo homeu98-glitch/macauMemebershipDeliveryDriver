@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { fetchJsonWithSessionCache } from "@/lib/client-session-cache";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type LegalState = { serviceTerms: string; mustAccept: boolean };
@@ -126,8 +127,7 @@ useEffect(() => {
       navigator.serviceWorker.register("/driver-sw.js")
         .then(async (registration) => {
           try {
-            const configResponse = await fetch("/api/driver/notifications/config", { cache: "no-store" });
-            const config = (await configResponse.json()) as { publicKey?: string | null; vapidPublicKeyConfigured?: boolean };
+            const config = await fetchJsonWithSessionCache<{ publicKey?: string | null; vapidPublicKeyConfigured?: boolean }>("driver:notifications-config", "/api/driver/notifications/config", 10 * 60_000, { cache: "no-store" });
             if (typeof Notification !== "undefined" && Notification.permission === "granted" && config?.vapidPublicKeyConfigured && config.publicKey) {
               let subscription = await registration.pushManager.getSubscription();
               if (!subscription) {

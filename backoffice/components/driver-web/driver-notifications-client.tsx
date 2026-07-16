@@ -1,5 +1,6 @@
 "use client";
 
+import { fetchJsonWithSessionCache } from "@/lib/client-session-cache";
 import { useEffect, useState } from "react";
 
 type ConfigPayload = {
@@ -36,8 +37,7 @@ export function DriverNotificationsClient() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/driver/notifications/config", { cache: "no-store" })
-      .then((res) => res.json())
+    fetchJsonWithSessionCache<ConfigPayload>("driver:notifications-config", "/api/driver/notifications/config", 10 * 60_000, { cache: "no-store" })
       .then((payload) => setConfig(payload as ConfigPayload))
       .catch(() => undefined);
 

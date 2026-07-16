@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { fetchJsonWithSessionCache } from "@/lib/client-session-cache";
+import { useMemo, useState, useEffect } from "react";
 
 type AnnouncementItem = {
   id: string;
@@ -56,6 +57,13 @@ type LeaderboardPayload = {
   me?: LeaderboardEntry | null;
 };
 
+type ProfileBootstrapPayload = {
+  me: MePayload;
+  legal: LegalPayload;
+  earnings: EarningsPayload;
+  leaderboard: LeaderboardPayload;
+};
+
 function labelApprovalStatus(value: string | null | undefined) {
   switch ((value ?? "").toLowerCase()) {
     case "approved":
@@ -102,10 +110,19 @@ export function DriverProfileClient() {
   const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
-    fetch("/api/driver/me", { cache: "no-store" }).then((res) => res.json()).then((payload) => setMe(payload as MePayload)).catch(() => undefined);
-    fetch("/api/driver/legal", { cache: "no-store" }).then((res) => res.json()).then((payload) => setLegal(payload as LegalPayload)).catch(() => undefined);
-    fetch("/api/driver/earnings", { cache: "no-store" }).then((res) => res.json()).then((payload) => setEarnings(payload as EarningsPayload)).catch(() => undefined);
-    fetch("/api/driver/leaderboard", { cache: "no-store" }).then((res) => res.json()).then((payload) => setLeaderboard(payload as LeaderboardPayload)).catch(() => undefined);
+    fetchJsonWithSessionCache<ProfileBootstrapPayload>(
+      "driver:profile-bootstrap",
+      "/api/driver/profile/bootstrap",
+      60_000,
+      { cache: "no-store" }
+    )
+      .then((payload) => {
+        setMe(payload.me);
+        setLegal(payload.legal);
+        setEarnings(payload.earnings);
+        setLeaderboard(payload.leaderboard);
+      })
+      .catch(() => undefined);
   }, []);
 
   async function logout() {
