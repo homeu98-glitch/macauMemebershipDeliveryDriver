@@ -1,4 +1,5 @@
 import { getLegalConfig } from "@/lib/legal-config";
+import { getOrSetMemoryCache } from "@/lib/server-memory-cache";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase";
 
 export type DriverWebOrderSummary = {
@@ -138,33 +139,55 @@ function haversineKm(startLat: number, startLng: number, endLat: number, endLng:
   return Math.round(earthRadiusKm * c * 10) / 10;
 }
 
+const RELATION_CACHE_TTL_MS = 60_000;
+
+function buildSortedIdKey(values: unknown[]) {
+  return [...new Set(values.filter(Boolean).map((value) => String(value)))]
+    .sort()
+    .join(",");
+}
+
 async function loadShopAndCustomerMaps(supabase: ReturnType<typeof createServiceRoleSupabaseClient>, rows: any[]) {
   const shopIds = [...new Set(rows.map((row) => row.shop_id).filter(Boolean))];
   const customerIds = [...new Set(rows.map((row) => row.customer_id).filter(Boolean))];
 
-  const [{ data: shops }, { data: customers }, { data: shopOrders }] = await Promise.all([
-    shopIds.length
-      ? supabase.from("shops").select("id,name,address,district,latitude,longitude,contact_phone").in("id", shopIds)
-      : Promise.resolve({ data: [] as any[] }),
-    customerIds.length
-      ? supabase.from("customers").select("id,name,address,district,latitude,longitude,phone").in("id", customerIds)
-      : Promise.resolve({ data: [] as any[] }),
-    shopIds.length
-      ? supabase.from("orders").select("shop_id").in("shop_id", shopIds)
-      : Promise.resolve({ data: [] as any[] })
-  ]);
-
-  const totalSentOrdersByShopId = new Map<string, number>();
-  for (const item of shopOrders ?? []) {
-    if (!item?.shop_id) continue;
-    totalSentOrdersByShopId.set(item.shop_id, (totalSentOrdersByShopId.get(item.shop_id) ?? 0) + 1);
+  if (shopIds.length === 0 && customerIds.length === 0) {
+    return {
+      shopMap: new Map(),
+      customerMap: new Map(),
+      totalSentOrdersByShopId: new Map<string, number>()
+    };
   }
 
-  return {
-    shopMap: new Map((shops ?? []).map((item: any) => [item.id, item])),
-    customerMap: new Map((customers ?? []).map((item: any) => [item.id, item])),
-    totalSentOrdersByShopId
-  };
+  const shopKey = buildSortedIdKey(shopIds);
+  const customerKey = buildSortedIdKey(customerIds);
+  const relationKey = `driver-web:relations:shops=${shopKey}:customers=${customerKey}`;
+
+  return getOrSetMemoryCache(relationKey, RELATION_CACHE_TTL_MS, async () => {
+    const [{ data: shops }, { data: customers }, { data: shopOrders }] = await Promise.all([
+      shopIds.length
+        ? supabase.from("shops").select("id,name,address,district,latitude,longitude,contact_phone").in("id", shopIds)
+        : Promise.resolve({ data: [] as any[] }),
+      customerIds.length
+        ? supabase.from("customers").select("id,name,address,district,latitude,longitude,phone").in("id", customerIds)
+        : Promise.resolve({ data: [] as any[] }),
+      shopIds.length
+        ? supabase.from("orders").select("shop_id").in("shop_id", shopIds)
+        : Promise.resolve({ data: [] as any[] })
+    ]);
+
+    const totalSentOrdersByShopId = new Map<string, number>();
+    for (const item of shopOrders ?? []) {
+      if (!item?.shop_id) continue;
+      totalSentOrdersByShopId.set(item.shop_id, (totalSentOrdersByShopId.get(item.shop_id) ?? 0) + 1);
+    }
+
+    return {
+      shopMap: new Map((shops ?? []).map((item: any) => [item.id, item])),
+      customerMap: new Map((customers ?? []).map((item: any) => [item.id, item])),
+      totalSentOrdersByShopId
+    };
+  });
 }
 
 function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByShopId: Map<string, number>): DriverWebOrderSummary {
