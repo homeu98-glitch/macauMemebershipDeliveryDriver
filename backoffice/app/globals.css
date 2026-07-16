@@ -2351,10 +2351,13 @@ html, body {
 /* pickup timer middle layout */
 
 .active-order-card-topbar.with-pickup-timer {
+  position: relative;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 10px;
+  padding-right: 92px;
+  min-height: 40px;
 }
 
 .pickup-elapsed-slot {
@@ -2589,6 +2592,16 @@ html, body {
   margin-top: 4px;
   justify-self: end;
   align-self: start;
+}
+
+.active-order-card-topbar.with-pickup-timer > .order-price-top-right {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 4px;
 }
 
 .driver-chat-unread-dot {

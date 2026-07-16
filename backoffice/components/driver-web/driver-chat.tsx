@@ -38,7 +38,7 @@ type CachedChatPayload = {
 const READ_STORAGE_PREFIX = "driver_chat_last_read:";
 const CHAT_CACHE_PREFIX = "driver_chat_cache:";
 const CHAT_UNREAD_POLL_INTERVAL_MS = 15000;
-const CHAT_MODAL_POLL_INTERVAL_MS = 7000;
+const CHAT_MODAL_POLL_INTERVAL_MS = 18000;
 const CHAT_IMAGE_MAX_BYTES = 150 * 1024;
 const CHAT_IMAGE_MAX_EDGE = 1280;
 
