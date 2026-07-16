@@ -310,20 +310,22 @@ export async function listActiveOrders(driverId: string) {
   const orderIds = (assignments ?? []).map((item: any) => item.order_id);
   if (orderIds.length === 0) return [] as DriverWebOrderSummary[];
 
-  const { data: rows } = await supabase
-    .from("orders")
-    .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
-    .in("id", orderIds)
-    .not("status", "in", "(\"delivered\",\"failed\")")
-    .order("created_at", { ascending: false });
+  const [{ data: rows }, { data: events }] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
+      .in("id", orderIds)
+      .not("status", "in", "(\"delivered\",\"failed\")")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("order_events")
+      .select("order_id,event_type,created_at,payload")
+      .in("order_id", orderIds)
+      .in("event_type", ["accepted", "picked_up", "issue_reported", "website.shop_owner_confirmed_driver_cancel"])
+  ]);
 
   const rawOrders = rows ?? [];
   const acceptedAtByOrderId = new Map((assignments ?? []).map((item: any) => [item.order_id, item.accepted_at ?? null]));
-  const { data: events } = await supabase
-    .from("order_events")
-    .select("order_id,event_type,created_at,payload")
-    .in("order_id", orderIds)
-    .in("event_type", ["accepted", "picked_up", "issue_reported", "website.shop_owner_confirmed_driver_cancel"]);
   const acceptedAtEventByOrderId = new Map<string, string>();
   const pickedUpAtByOrderId = new Map<string, string>();
   const cancelMetaByOrderId = new Map<string, { cancelReason: string | null; cancelOtherReason: string | null; cancelHandling: "return_to_shop" | "not_returning" | null }>();
@@ -434,32 +436,33 @@ export async function getDriverDashboard(driverId: string, _availability: string
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  const startOfYesterday = new Date(startOfDay);
-  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
   const startOfWeek = new Date();
   startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
   startOfWeek.setHours(0, 0, 0, 0);
 
-  const [{ data: todayEvents }, { data: weekEvents }] = await Promise.all([
-    supabase.from("order_events").select("order_id").eq("actor_driver_id", driverId).eq("event_type", "delivered").gte("created_at", startOfDay.toISOString()),
-    supabase.from("order_events").select("order_id").eq("actor_driver_id", driverId).eq("event_type", "delivered").gte("created_at", startOfWeek.toISOString())
-  ]);
+  const { data: weekEvents } = await supabase
+    .from("order_events")
+    .select("order_id,created_at")
+    .eq("actor_driver_id", driverId)
+    .eq("event_type", "delivered")
+    .gte("created_at", startOfWeek.toISOString());
 
-  async function sumAmounts(eventRows: any[] | null | undefined) {
-    const ids = [...new Set((eventRows ?? []).map((item: any) => item.order_id))];
-    if (ids.length === 0) return 0;
-    const { data } = await supabase.from("orders").select("assigned_fee_mop").in("id", ids);
-    return Number((data ?? []).reduce((sum: number, item: any) => sum + Number(item.assigned_fee_mop ?? 0), 0));
-  }
-
-  const [todayEarningsMop, weekEarningsMop] = await Promise.all([sumAmounts(todayEvents), sumAmounts(weekEvents)]);
+  const weekEventRows = weekEvents ?? [];
+  const todayEventRows = weekEventRows.filter((item: any) => typeof item.created_at === "string" && item.created_at >= startOfDay.toISOString());
+  const weekOrderIds = [...new Set(weekEventRows.map((item: any) => item.order_id))];
+  const { data: weekOrders } = weekOrderIds.length
+    ? await supabase.from("orders").select("id,assigned_fee_mop").in("id", weekOrderIds)
+    : { data: [] as any[] };
+  const amountByOrderId = new Map((weekOrders ?? []).map((item: any) => [item.id, Number(item.assigned_fee_mop ?? 0)]));
+  const sumByIds = (ids: string[]) => ids.reduce((sum, id) => sum + Number(amountByOrderId.get(id) ?? 0), 0);
+  const todayOrderIds = [...new Set(todayEventRows.map((item: any) => item.order_id))];
   const pickupDistrictOptions = [...new Set(availableOrders.map((item) => item.pickupDistrict).filter(Boolean))] as string[];
   const destinationDistrictOptions = [...new Set(availableOrders.map((item) => item.destinationDistrict).filter(Boolean))] as string[];
 
   return {
-    todayEarningsMop,
-    weekEarningsMop,
-    completedToday: [...new Set((todayEvents ?? []).map((item: any) => item.order_id))].length,
+    todayEarningsMop: sumByIds(todayOrderIds),
+    weekEarningsMop: sumByIds(weekOrderIds),
+    completedToday: todayOrderIds.length,
     availability: profile?.availability ?? "offline",
     approvalStatus: profile?.approval_status ?? "pending_review",
     availableOrders,
@@ -503,18 +506,68 @@ export async function listCompletedOrders(driverId: string, range: "today" | "ye
 }
 
 export async function getDriverEarnings(driverId: string) {
-  const [todayOrders, weekOrders, historyOrders] = await Promise.all([
-    listCompletedOrders(driverId, "today"),
-    listCompletedOrders(driverId, "week"),
-    listCompletedOrders(driverId, "history")
+  const supabase = createServiceRoleSupabaseClient();
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const startOfWeek = new Date();
+  startOfWeek.setDate(startOfWeek.getDate() - ((startOfWeek.getDay() + 6) % 7));
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  const [{ data: weekDeliveredEvents }, { data: historyDeliveredEvents }] = await Promise.all([
+    supabase
+      .from("order_events")
+      .select("order_id,created_at")
+      .eq("actor_driver_id", driverId)
+      .eq("event_type", "delivered")
+      .gte("created_at", startOfWeek.toISOString())
+      .order("created_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("order_events")
+      .select("order_id,created_at")
+      .eq("actor_driver_id", driverId)
+      .eq("event_type", "delivered")
+      .order("created_at", { ascending: false })
+      .limit(100)
   ]);
 
-  const sum = (rows: Array<{ amountMop: number }>) => rows.reduce((acc, row) => acc + Number(row.amountMop ?? 0), 0);
+  const weekEvents = weekDeliveredEvents ?? [];
+  const historyEvents = historyDeliveredEvents ?? [];
+  const historyOrderIds = [...new Set(historyEvents.map((item: any) => item.order_id))];
+  const weekOrderIds = [...new Set(weekEvents.map((item: any) => item.order_id))];
+  const todayOrderIds = [...new Set(weekEvents.filter((item: any) => typeof item.created_at === "string" && item.created_at >= startOfDay.toISOString()).map((item: any) => item.order_id))];
+  const unionOrderIds = [...new Set([...historyOrderIds, ...weekOrderIds])];
+  if (unionOrderIds.length === 0) {
+    return {
+      todayTotal: 0,
+      weekTotal: 0,
+      historyTotal: 0,
+      historyOrders: [] as DriverCompletedOrder[]
+    };
+  }
+
+  const { data: rows } = await supabase
+    .from("orders")
+    .select("id,external_order_id,transaction_code,status,assigned_fee_mop,created_at,promised_at,shop_id,customer_id,source_payload,offline_payment_note")
+    .in("id", unionOrderIds)
+    .order("created_at", { ascending: false });
+
+  const orders = rows ?? [];
+  const orderMap = new Map(orders.map((row: any) => [row.id, row]));
+  const amountByOrderId = new Map(orders.map((row: any) => [row.id, Number(row.assigned_fee_mop ?? 0)]));
+  const historyRows = historyOrderIds.map((orderId) => orderMap.get(orderId)).filter(Boolean) as any[];
+  const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, historyRows);
+  const deliveredAtByOrderId = new Map(historyEvents.map((item: any) => [item.order_id, formatDateTime(item.created_at)]));
+  const historyOrders = historyRows.map((row: any) => ({
+    ...toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId),
+    deliveredAt: deliveredAtByOrderId.get(row.id) ?? formatDateTime(row.created_at)
+  })) as DriverCompletedOrder[];
+  const sumByIds = (ids: string[]) => ids.reduce((acc, id) => acc + Number(amountByOrderId.get(id) ?? 0), 0);
 
   return {
-    todayTotal: sum(todayOrders),
-    weekTotal: sum(weekOrders),
-    historyTotal: sum(historyOrders),
+    todayTotal: sumByIds(todayOrderIds),
+    weekTotal: sumByIds(weekOrderIds),
+    historyTotal: historyOrders.reduce((acc, row) => acc + Number(row.amountMop ?? 0), 0),
     historyOrders
   };
 }
