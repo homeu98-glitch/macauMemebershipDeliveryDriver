@@ -28,10 +28,25 @@ type ChatResponse = {
   message?: unknown;
 };
 
+type CachedChatPayload = {
+  roomKind: string | null;
+  writable: boolean;
+  items: ChatItem[];
+  latestFetchedAt: string | null;
+};
+
 const READ_STORAGE_PREFIX = "driver_chat_last_read:";
+const CHAT_CACHE_PREFIX = "driver_chat_cache:";
+const CHAT_POLL_INTERVAL_MS = 15000;
+const CHAT_IMAGE_MAX_BYTES = 150 * 1024;
+const CHAT_IMAGE_MAX_EDGE = 1280;
 
 function buildReadStorageKey(messagesUrl: string) {
   return `${READ_STORAGE_PREFIX}${messagesUrl}`;
+}
+
+function buildChatCacheKey(messagesUrl: string) {
+  return `${CHAT_CACHE_PREFIX}${messagesUrl}`;
 }
 
 function readStoredLastRead(messagesUrl: string | null | undefined) {
@@ -42,6 +57,28 @@ function readStoredLastRead(messagesUrl: string | null | undefined) {
 function writeStoredLastRead(messagesUrl: string | null | undefined, value: string | null) {
   if (!messagesUrl || !value || typeof window === "undefined") return;
   window.localStorage.setItem(buildReadStorageKey(messagesUrl), value);
+}
+
+function readChatCache(messagesUrl: string | null | undefined): CachedChatPayload | null {
+  if (!messagesUrl || typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(buildChatCacheKey(messagesUrl));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedChatPayload;
+    if (!Array.isArray(parsed.items)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeChatCache(messagesUrl: string | null | undefined, payload: CachedChatPayload) {
+  if (!messagesUrl || typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(buildChatCacheKey(messagesUrl), JSON.stringify(payload));
+  } catch {
+    // ignore storage errors
+  }
 }
 
 function normalizeChatItems(items: unknown[]): ChatItem[] {
@@ -71,14 +108,58 @@ function latestTimestamp(items: ChatItem[]) {
   return items.length ? items[items.length - 1]?.createdAt ?? null : null;
 }
 
-async function fileToBase64(file: File) {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
+async function readFileAsDataUrl(file: File) {
+  return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result ?? ""));
     reader.onerror = () => reject(reader.error ?? new Error("file_read_failed"));
     reader.readAsDataURL(file);
   });
-  const [, base64 = ""] = dataUrl.split(",");
+}
+
+async function loadImageFromDataUrl(dataUrl: string) {
+  return await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("image_load_failed"));
+    image.src = dataUrl;
+  });
+}
+
+async function compressImageToBase64(file: File, maxBytes = CHAT_IMAGE_MAX_BYTES) {
+  const originalDataUrl = await readFileAsDataUrl(file);
+  if (file.size <= maxBytes) {
+    const [, base64 = ""] = originalDataUrl.split(",");
+    return base64;
+  }
+
+  const image = await loadImageFromDataUrl(originalDataUrl);
+  const ratio = Math.min(1, CHAT_IMAGE_MAX_EDGE / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * ratio));
+  const height = Math.max(1, Math.round(image.height * ratio));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("canvas_not_supported");
+  }
+  context.drawImage(image, 0, 0, width, height);
+
+  const exportAtQuality = (quality: number) =>
+    canvas.toDataURL(file.type === "image/png" ? "image/webp" : "image/jpeg", quality);
+
+  let best = exportAtQuality(0.82);
+  for (const quality of [0.76, 0.7, 0.62, 0.54, 0.46, 0.38, 0.3]) {
+    const next = exportAtQuality(quality);
+    best = next;
+    const byteSize = Math.ceil((next.split(",")[1]?.length ?? 0) * 3 / 4);
+    if (byteSize <= maxBytes) {
+      break;
+    }
+  }
+
+  const [, base64 = ""] = best.split(",");
   return base64;
 }
 
@@ -129,10 +210,9 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
         const next = { ...current };
         for (const update of updates) {
           if (!update) continue;
-          const prev = current[update.orderId];
           next[update.orderId] = {
             latestMessageAt: update.latestMessageAt,
-            hasUnread: update.hasUnread || Boolean(prev?.hasUnread)
+            hasUnread: update.hasUnread
           };
         }
         return next;
@@ -140,8 +220,12 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
     }
 
     void poll();
-    const timer = window.setInterval(poll, 15000);
-    const onFocus = () => { if (document.visibilityState !== "hidden") void poll(); };
+    const timer = window.setInterval(() => {
+      void poll();
+    }, CHAT_POLL_INTERVAL_MS);
+    const onFocus = () => {
+      if (document.visibilityState !== "hidden") void poll();
+    };
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
     return () => {
@@ -215,6 +299,16 @@ export function DriverOrderChatModal({
   const latestFetchedAtRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const itemsRef = useRef<ChatItem[]>([]);
+  const roomKindRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  useEffect(() => {
+    roomKindRef.current = roomKind;
+  }, [roomKind]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -231,6 +325,21 @@ export function DriverOrderChatModal({
       return;
     }
 
+    const cached = readChatCache(chat.messagesUrl);
+    if (cached) {
+      setItems(cached.items);
+      setRoomKind(cached.roomKind);
+      setWritable(cached.writable);
+      latestFetchedAtRef.current = cached.latestFetchedAt;
+      setLoading(false);
+    } else {
+      setItems([]);
+      setRoomKind(null);
+      setWritable(true);
+      latestFetchedAtRef.current = null;
+      setLoading(true);
+    }
+
     let disposed = false;
 
     async function load(initial = false) {
@@ -244,9 +353,11 @@ export function DriverOrderChatModal({
           throw new Error(payload.message || "載入聊天失敗。");
         }
         const incomingItems = normalizeChatItems(Array.isArray(payload.items) ? payload.items : []);
-        const mergedItems = initial ? incomingItems : mergeChatItems(items, incomingItems);
+        const currentItems = initial ? (cached?.items ?? []) : itemsRef.current;
+        const mergedItems = initial ? mergeChatItems(currentItems, incomingItems) : mergeChatItems(currentItems, incomingItems);
         if (disposed) return;
-        setRoomKind(typeof payload.roomKind === "string" ? payload.roomKind : roomKind);
+        const nextRoomKind = typeof payload.roomKind === "string" ? payload.roomKind : roomKindRef.current;
+        setRoomKind(nextRoomKind);
         setWritable(payload.writable !== false);
         setItems(mergedItems);
         const latestAt = latestTimestamp(mergedItems);
@@ -254,6 +365,12 @@ export function DriverOrderChatModal({
           latestFetchedAtRef.current = latestAt;
           onRead?.(latestAt);
         }
+        writeChatCache(chat?.messagesUrl ?? null, {
+          roomKind: nextRoomKind,
+          writable: payload.writable !== false,
+          items: mergedItems,
+          latestFetchedAt: latestAt
+        });
         setError(null);
       } catch (nextError) {
         if (!disposed) {
@@ -265,12 +382,14 @@ export function DriverOrderChatModal({
     }
 
     void load(true);
-    const timer = window.setInterval(() => void load(false), 15000);
+    const timer = window.setInterval(() => {
+      void load(false);
+    }, CHAT_POLL_INTERVAL_MS);
     return () => {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [chat, orderId, onRead, roomKind, items]);
+  }, [chat, orderId, onRead]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -298,8 +417,9 @@ export function DriverOrderChatModal({
         throw new Error(payload.message || "發送訊息失敗。");
       }
       const message = normalizeChatItems(payload.message ? [payload.message] : []);
-      const merged = mergeChatItems(items, message);
-      setRoomKind(typeof payload.roomKind === "string" ? payload.roomKind : roomKind);
+      const merged = mergeChatItems(itemsRef.current, message);
+      const nextRoomKind = typeof payload.roomKind === "string" ? payload.roomKind : roomKindRef.current;
+      setRoomKind(nextRoomKind);
       setWritable(payload.writable !== false);
       setItems(merged);
       const latestAt = latestTimestamp(merged);
@@ -307,6 +427,12 @@ export function DriverOrderChatModal({
         latestFetchedAtRef.current = latestAt;
         onRead?.(latestAt);
       }
+      writeChatCache(chat?.messagesUrl ?? null, {
+        roomKind: nextRoomKind,
+        writable: payload.writable !== false,
+        items: merged,
+        latestFetchedAt: latestAt
+      });
       setMessageText("");
       setImageBase64(null);
       setImageName(null);
@@ -322,11 +448,12 @@ export function DriverOrderChatModal({
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const nextBase64 = await fileToBase64(file);
+      const nextBase64 = await compressImageToBase64(file, CHAT_IMAGE_MAX_BYTES);
       setImageBase64(nextBase64);
       setImageName(file.name);
+      setError(null);
     } catch {
-      setError("讀取圖片失敗。");
+      setError("讀取或壓縮圖片失敗。");
     } finally {
       event.target.value = "";
     }
