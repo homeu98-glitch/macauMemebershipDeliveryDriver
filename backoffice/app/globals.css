@@ -2365,9 +2365,10 @@ html, body {
 }
 
 .order-price-top-right {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 4px;
 }
 
 .pickup-elapsed-chip {
@@ -2586,7 +2587,8 @@ html, body {
 
 .driver-chat-icon-under-price {
   margin-top: 4px;
-  align-self: flex-end;
+  justify-self: end;
+  align-self: start;
 }
 
 .driver-chat-unread-dot {
