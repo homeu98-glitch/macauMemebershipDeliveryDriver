@@ -7,11 +7,15 @@ type ChatProxyResult = {
   body: unknown;
 };
 
-function buildSignature(timestamp: string, rawBody = "") {
-  const secret = getConfiguredWebhookSecret();
+function resolveWebhookSecret(preferredSecret?: string | null) {
+  const secret = preferredSecret?.trim() || getConfiguredWebhookSecret();
   if (!secret) {
-    throw new Error("SITEB_DELIVERY_WEBHOOK_SECRET 尚未設定。");
+    throw new Error("聊天 HMAC 密鑰尚未設定：請提供建單保存的 callback.secret，或設定 SITEB_DELIVERY_WEBHOOK_SECRET。");
   }
+  return secret;
+}
+
+function buildSignature(secret: string, timestamp: string, rawBody = "") {
   return crypto.createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
 }
 
@@ -30,14 +34,15 @@ async function toProxyResult(response: Response): Promise<ChatProxyResult> {
   }
 }
 
-export async function fetchSiteBChatMessages(messagesUrl: string, since?: string | null) {
+export async function fetchSiteBChatMessages(messagesUrl: string, options?: { since?: string | null; secret?: string | null }) {
   const url = new URL(messagesUrl);
-  if (since) {
-    url.searchParams.set("since", since);
+  if (options?.since) {
+    url.searchParams.set("since", options.since);
   }
 
+  const secret = resolveWebhookSecret(options?.secret);
   const timestamp = new Date().toISOString();
-  const signature = buildSignature(timestamp);
+  const signature = buildSignature(secret, timestamp);
   const response = await fetch(url.toString(), {
     method: "GET",
     cache: "no-store",
@@ -57,11 +62,13 @@ export async function sendSiteBChatMessage(
     imageBase64?: string | null;
     clientMsgId?: string | null;
     driver: { id: string; displayName: string };
-  }
+  },
+  options?: { secret?: string | null }
 ) {
   const rawBody = JSON.stringify(payload);
+  const secret = resolveWebhookSecret(options?.secret);
   const timestamp = new Date().toISOString();
-  const signature = buildSignature(timestamp, rawBody);
+  const signature = buildSignature(secret, timestamp, rawBody);
   const response = await fetch(messagesUrl, {
     method: "POST",
     cache: "no-store",

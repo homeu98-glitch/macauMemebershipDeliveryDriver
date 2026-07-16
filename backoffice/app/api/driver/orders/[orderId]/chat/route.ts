@@ -7,9 +7,11 @@ import { createServiceRoleSupabaseClient } from "@/lib/supabase";
 function normalizeChatMeta(sourcePayload: unknown) {
   const payload = sourcePayload && typeof sourcePayload === "object" ? (sourcePayload as Record<string, unknown>) : null;
   const chat = payload?.chat && typeof payload.chat === "object" ? (payload.chat as Record<string, unknown>) : null;
+  const callback = payload?.callback && typeof payload.callback === "object" ? (payload.callback as Record<string, unknown>) : null;
   const messagesUrl = typeof chat?.messagesUrl === "string" && chat.messagesUrl.trim() ? chat.messagesUrl.trim() : null;
   const enabled = chat?.enabled === true && Boolean(messagesUrl);
-  return enabled ? { enabled, messagesUrl } : null;
+  const callbackSecret = typeof callback?.secret === "string" && callback.secret.trim() ? callback.secret.trim() : null;
+  return enabled ? { enabled, messagesUrl, callbackSecret } : null;
 }
 
 async function resolveDriverOrderChat(session: { driverId: string }, orderId: string) {
@@ -21,11 +23,11 @@ async function resolveDriverOrderChat(session: { driverId: string }, orderId: st
     .maybeSingle();
 
   if (error) throw error;
-  if (!order) return { status: 404, message: "找不到訂單。", messagesUrl: null as string | null };
+  if (!order) return { status: 404, message: "找不到訂單。", messagesUrl: null as string | null, secret: null as string | null };
 
   const chat = normalizeChatMeta(order.source_payload);
   if (!chat?.messagesUrl) {
-    return { status: 404, message: "此訂單未啟用聊天。", messagesUrl: null as string | null };
+    return { status: 404, message: "此訂單未啟用聊天。", messagesUrl: null as string | null, secret: null as string | null };
   }
 
   if (order.status !== "new") {
@@ -40,11 +42,11 @@ async function resolveDriverOrderChat(session: { driverId: string }, orderId: st
 
     if (assignmentError) throw assignmentError;
     if (!assignment) {
-      return { status: 403, message: "你沒有權限查看此訂單聊天。", messagesUrl: null as string | null };
+      return { status: 403, message: "你沒有權限查看此訂單聊天。", messagesUrl: null as string | null, secret: null as string | null };
     }
   }
 
-  return { status: 200, message: null as string | null, messagesUrl: chat.messagesUrl };
+  return { status: 200, message: null as string | null, messagesUrl: chat.messagesUrl, secret: chat.callbackSecret };
 }
 
 export async function GET(request: NextRequest, context: { params: { orderId: string } }) {
@@ -55,7 +57,7 @@ export async function GET(request: NextRequest, context: { params: { orderId: st
         return NextResponse.json({ message: resolved.message }, { status: resolved.status });
       }
       const since = request.nextUrl.searchParams.get("since");
-      const result = await fetchSiteBChatMessages(resolved.messagesUrl, since);
+      const result = await fetchSiteBChatMessages(resolved.messagesUrl, { since, secret: resolved.secret });
       return NextResponse.json(result.body, { status: result.status });
     } catch (error) {
       return NextResponse.json({ message: error instanceof Error ? error.message : "載入聊天失敗。" }, { status: 500 });
@@ -84,15 +86,19 @@ export async function POST(request: NextRequest, context: { params: { orderId: s
         return NextResponse.json({ message: "文字與圖片至少要提供一項。" }, { status: 400 });
       }
 
-      const result = await sendSiteBChatMessage(resolved.messagesUrl, {
-        body: body || null,
-        imageBase64,
-        clientMsgId,
-        driver: {
-          id: session.driverId,
-          displayName: session.fullName
-        }
-      });
+      const result = await sendSiteBChatMessage(
+        resolved.messagesUrl,
+        {
+          body: body || null,
+          imageBase64,
+          clientMsgId,
+          driver: {
+            id: session.driverId,
+            displayName: session.fullName
+          }
+        },
+        { secret: resolved.secret }
+      );
       return NextResponse.json(result.body, { status: result.status });
     } catch (error) {
       return NextResponse.json({ message: error instanceof Error ? error.message : "發送聊天訊息失敗。" }, { status: 500 });
