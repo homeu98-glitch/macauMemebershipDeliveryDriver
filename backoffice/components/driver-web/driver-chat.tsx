@@ -35,6 +35,7 @@ type CachedChatPayload = {
   latestFetchedAt: string | null;
 };
 
+const UNREAD_LOCAL_PREFIX = "driver_chat_unread:";
 const READ_STORAGE_PREFIX = "driver_chat_last_read:";
 const CHAT_CACHE_PREFIX = "driver_chat_cache:";
 const CHAT_MODAL_POLL_INTERVAL_MS = 30000;
@@ -43,6 +44,20 @@ const CHAT_IMAGE_MAX_EDGE = 1280;
 
 function buildReadStorageKey(messagesUrl: string) {
   return `${READ_STORAGE_PREFIX}${messagesUrl}`;
+}
+
+function buildUnreadStorageKey(messagesUrl: string) {
+  return `${UNREAD_LOCAL_PREFIX}${messagesUrl}`;
+}
+
+function readStoredUnread(messagesUrl: string | null | undefined) {
+  if (!messagesUrl || typeof window === "undefined") return false;
+  return window.localStorage.getItem(buildUnreadStorageKey(messagesUrl)) === "1";
+}
+
+function writeStoredUnread(messagesUrl: string | null | undefined, value: boolean) {
+  if (!messagesUrl || typeof window === "undefined") return;
+  window.localStorage.setItem(buildUnreadStorageKey(messagesUrl), value ? "1" : "0");
 }
 
 function buildChatCacheKey(messagesUrl: string) {
@@ -222,43 +237,17 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
     }
   }
 
-  useEffect(() => {
-    if (stableTargets.length === 0) return;
-    void refresh();
-  }, [stableTargets]);
-
-  useEffect(() => {
-    if (stableTargets.length === 0) return;
-    const onFocus = () => {
-      if (document.visibilityState === "visible") {
-        void refresh(true);
-      }
-    };
-    const onDispatch = () => {
-      if (document.visibilityState === "visible") {
-        void refresh(true);
-      }
-    };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void refresh(true);
-      }
-    };
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("driver_dispatch_event", onDispatch);
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("driver_dispatch_event", onDispatch);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
-  }, [stableTargets]);
+  // 注意：未打開聊天室時，紅點不應自行輪詢 unread-summary。
+  // refresh() 只會由外部（例如用戶點開聊天室）顯式觸發。
 
   function markRead(orderId: string, chat: OrderChatMeta, explicitLatestMessageAt?: string | null) {
     if (!chat?.messagesUrl) return;
     const readAt = explicitLatestMessageAt ?? state[orderId]?.latestMessageAt ?? null;
     if (readAt) {
       writeStoredLastRead(chat.messagesUrl, readAt);
+    }
+    if (chat?.messagesUrl) {
+      writeStoredUnread(chat.messagesUrl, false);
     }
     setState((current) => ({
       ...current,
@@ -271,7 +260,10 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
 
   return {
     hasUnread(orderId: string) {
-      return Boolean(state[orderId]?.hasUnread);
+      const direct = state[orderId]?.hasUnread;
+      if (typeof direct === "boolean") return direct;
+      const target = stableTargets.find((item) => item.id === orderId);
+      return Boolean(target?.chat?.messagesUrl && readStoredUnread(target.chat.messagesUrl));
     },
     latestMessageAt(orderId: string) {
       return state[orderId]?.latestMessageAt ?? null;

@@ -362,6 +362,7 @@ export function DriverHomeClient() {
   const chatUnread = useDriverChatUnreadMap(filteredOrders.map((order) => ({ id: order.id, chat: order.chat })));
 
   function openChat(order: OrderSummary) {
+    void chatUnread.refresh(true);
     setChatOrder(order);
     chatUnread.markRead(order.id, order.chat);
   }
