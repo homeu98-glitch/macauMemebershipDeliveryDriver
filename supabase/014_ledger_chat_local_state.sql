@@ -44,17 +44,17 @@ alter table public.driver_chat_read_state enable row level security;
 drop policy if exists admin_manage_ledger_chat_event_inbox on public.ledger_chat_event_inbox;
 create policy admin_manage_ledger_chat_event_inbox on public.ledger_chat_event_inbox
 for all to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (public.is_admin_user())
+with check (public.is_admin_user());
 
 drop policy if exists admin_manage_driver_chat_room_state on public.driver_chat_room_state;
 create policy admin_manage_driver_chat_room_state on public.driver_chat_room_state
 for all to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (public.is_admin_user())
+with check (public.is_admin_user());
 
 drop policy if exists admin_manage_driver_chat_read_state on public.driver_chat_read_state;
 create policy admin_manage_driver_chat_read_state on public.driver_chat_read_state
 for all to authenticated
-using (public.is_admin())
-with check (public.is_admin());
+using (public.is_admin_user())
+with check (public.is_admin_user());
