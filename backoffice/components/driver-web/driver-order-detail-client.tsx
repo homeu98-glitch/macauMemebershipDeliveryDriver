@@ -46,6 +46,7 @@ type OrderDetail = {
   driverCancelConfirmationRequired: boolean;
   driverCancelConfirmedAt: string | null;
   chat: OrderChatMeta;
+  hasUnread: boolean;
 };
 
 function buildGoogleNavUrl(label: string, address: string, lat: number, lng: number) {
@@ -314,7 +315,7 @@ export function DriverOrderDetailClient({ orderId }: { orderId: string }) {
   }
 
   const proofPreviewUrl = useMemo(() => (order?.hasProof ? `/api/driver/orders/${orderId}/proof?ts=${Date.now()}` : null), [order?.hasProof, orderId]);
-  const chatUnread = useDriverChatUnreadMap(order ? [{ id: order.id, chat: order.chat }] : []);
+  const chatUnread = useDriverChatUnreadMap(order ? [{ id: order.id, chat: order.chat, hasUnread: order.hasUnread }] : []);
 
   if (loading) return <div className="android-card">載入訂單中...</div>;
   if (!order) return <div className="android-card error">找不到訂單資料。</div>;

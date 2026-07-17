@@ -1,3 +1,4 @@
+import { loadDriverChatUnreadMap } from "@/lib/driver-chat-state";
 import { getLegalConfig } from "@/lib/legal-config";
 import { getOrSetMemoryCache } from "@/lib/server-memory-cache";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase";
@@ -7,6 +8,7 @@ export type DriverWebOrderSummary = {
   customerAddressProvided: boolean;
   customerContactProvided: boolean;
   chat: { enabled: boolean; messagesUrl: string | null } | null;
+  hasUnread: boolean;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -192,7 +194,7 @@ async function loadShopAndCustomerMaps(supabase: ReturnType<typeof createService
   });
 }
 
-function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByShopId: Map<string, number>): DriverWebOrderSummary {
+function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByShopId: Map<string, number>, hasUnread = false): DriverWebOrderSummary {
   const etaMinutes = calculateEtaMinutes(order.promised_at);
   const sourcePayload =
     order?.source_payload && typeof order.source_payload === "object"
@@ -227,6 +229,7 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
       enabled: chat?.enabled === true && typeof chat?.messagesUrl === "string" && Boolean(chat.messagesUrl),
       messagesUrl: typeof chat?.messagesUrl === "string" ? chat.messagesUrl : null
     },
+    hasUnread,
     id: order.id,
     externalOrderId: order.external_order_id,
     transactionCode: order.transaction_code ?? null,
@@ -304,7 +307,7 @@ export async function getDriverLegalState(driverId: string) {
   };
 }
 
-export async function listAvailableOrders(filters?: { pickupDistrict?: string; destinationDistrict?: string }) {
+export async function listAvailableOrders(driverId?: string, filters?: { pickupDistrict?: string; destinationDistrict?: string }) {
   const supabase = createServiceRoleSupabaseClient();
   const mapped = await getOrSetMemoryCache("driver-web:available-orders:mapped", AVAILABLE_ORDERS_CACHE_TTL_MS, async () => {
     const { data: rows } = await supabase
@@ -316,8 +319,11 @@ export async function listAvailableOrders(filters?: { pickupDistrict?: string; d
 
     const orders = rows ?? [];
     if (orders.length === 0) return [] as DriverWebOrderSummary[];
-    const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
-    return orders.map((row: any) => toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId));
+    const [{ shopMap, customerMap, totalSentOrdersByShopId }, unreadByOrderId] = await Promise.all([
+      loadShopAndCustomerMaps(supabase, orders),
+      driverId ? loadDriverChatUnreadMap(driverId, orders) : Promise.resolve(new Map<string, boolean>())
+    ]);
+    return orders.map((row: any) => toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId, Boolean(unreadByOrderId.get(row.id))));
   });
 
   return mapped.filter((item) => {
@@ -386,7 +392,10 @@ export async function listActiveOrders(driverId: string) {
       : null;
     return !sourcePayload?.shopOwnerCancelConfirmedAt && !shopConfirmedCancelOrderIds.has(row.id);
   });
-  const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
+  const [{ shopMap, customerMap, totalSentOrdersByShopId }, unreadByOrderId] = await Promise.all([
+    loadShopAndCustomerMaps(supabase, orders),
+    loadDriverChatUnreadMap(driverId, orders)
+  ]);
   return orders.map((row: any) => {
     const cancelMeta = cancelMetaByOrderId.get(row.id);
     return toOrderSummary(
@@ -400,7 +409,8 @@ export async function listActiveOrders(driverId: string) {
       },
       shopMap.get(row.shop_id),
       customerMap.get(row.customer_id),
-      totalSentOrdersByShopId
+      totalSentOrdersByShopId,
+      Boolean(unreadByOrderId.get(row.id))
     );
   });
 }
@@ -419,13 +429,14 @@ export async function getDriverOrderDetail(driverId: string, orderId: string) {
   if (!order) return null;
   if (order.status !== "new" && !assignment) return null;
 
-  const [{ data: shop }, { data: customer }, { data: items }, { data: events }, { data: proof }, { totalSentOrdersByShopId }] = await Promise.all([
+  const [{ data: shop }, { data: customer }, { data: items }, { data: events }, { data: proof }, { totalSentOrdersByShopId }, unreadByOrderId] = await Promise.all([
     supabase.from("shops").select("id,name,address,district,latitude,longitude,contact_phone").eq("id", order.shop_id).maybeSingle(),
     supabase.from("customers").select("id,name,address,district,latitude,longitude,phone").eq("id", order.customer_id).maybeSingle(),
     supabase.from("order_items").select("item_name,quantity").eq("order_id", orderId),
     supabase.from("order_events").select("event_type,created_at,payload").eq("order_id", orderId).order("created_at", { ascending: true }),
     supabase.from("delivery_proofs").select("id").eq("order_id", orderId).eq("driver_id", driverId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    loadShopAndCustomerMaps(supabase, [order])
+    loadShopAndCustomerMaps(supabase, [order]),
+    loadDriverChatUnreadMap(driverId, [order])
   ]);
 
   const acceptedEvent = (events ?? []).find((event: any) => event.event_type === "accepted");
@@ -460,7 +471,7 @@ export async function getDriverDashboard(driverId: string, _availability: string
   const supabase = createServiceRoleSupabaseClient();
   const [{ data: profile }, availableOrders] = await Promise.all([
     supabase.from("driver_profiles").select("availability,approval_status").eq("id", driverId).maybeSingle(),
-    listAvailableOrders()
+    listAvailableOrders(driverId)
   ]);
 
   const startOfDay = new Date();
@@ -527,9 +538,12 @@ export async function listCompletedOrders(driverId: string, range: "today" | "ye
     .order("created_at", { ascending: false });
   const orders = rows ?? [];
   const deliveredAtByOrderId = new Map(events.map((item: any) => [item.order_id, formatDateTime(item.created_at)]));
-  const { shopMap, customerMap, totalSentOrdersByShopId } = await loadShopAndCustomerMaps(supabase, orders);
+  const [{ shopMap, customerMap, totalSentOrdersByShopId }, unreadByOrderId] = await Promise.all([
+    loadShopAndCustomerMaps(supabase, orders),
+    loadDriverChatUnreadMap(driverId, orders)
+  ]);
   return orders.map((row: any) => ({
-    ...toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId),
+    ...toOrderSummary(row, shopMap.get(row.shop_id), customerMap.get(row.customer_id), totalSentOrdersByShopId, Boolean(unreadByOrderId.get(row.id))),
     deliveredAt: deliveredAtByOrderId.get(row.id) ?? formatDateTime(row.created_at)
   }));
 }

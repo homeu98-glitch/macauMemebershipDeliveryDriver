@@ -14,6 +14,7 @@ type CompletedOrder = {
   amountMop: number;
   deliveredAt: string;
   chat: OrderChatMeta;
+  hasUnread: boolean;
 };
 
 export function DriverCompletedClient() {
@@ -30,10 +31,9 @@ export function DriverCompletedClient() {
       .catch(() => undefined);
   }, [range]);
 
-  const chatUnread = useDriverChatUnreadMap(orders.map((order) => ({ id: order.id, chat: order.chat })));
+  const chatUnread = useDriverChatUnreadMap(orders.map((order) => ({ id: order.id, chat: order.chat, hasUnread: order.hasUnread })));
 
   function openChat(order: CompletedOrder) {
-    void chatUnread.refresh(true);
     setChatOrder(order);
     chatUnread.markRead(order.id, order.chat);
   }

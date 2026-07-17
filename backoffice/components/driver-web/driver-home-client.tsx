@@ -14,6 +14,7 @@ type OrderSummary = {
   customerAddressProvided: boolean;
   customerContactProvided: boolean;
   chat: OrderChatMeta;
+  hasUnread: boolean;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -359,10 +360,9 @@ export function DriverHomeClient() {
 
   const filterOptions = filterModal === "pickup" ? data?.pickupDistrictOptions ?? [] : data?.destinationDistrictOptions ?? [];
   const selectedOptions = filterModal === "pickup" ? pickupDistricts : destinationDistricts;
-  const chatUnread = useDriverChatUnreadMap(filteredOrders.map((order) => ({ id: order.id, chat: order.chat })));
+  const chatUnread = useDriverChatUnreadMap(filteredOrders.map((order) => ({ id: order.id, chat: order.chat, hasUnread: order.hasUnread })));
 
   function openChat(order: OrderSummary) {
-    void chatUnread.refresh(true);
     setChatOrder(order);
     chatUnread.markRead(order.id, order.chat);
   }

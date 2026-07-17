@@ -10,6 +10,7 @@ export type OrderChatMeta = {
 type ChatOrderTarget = {
   id: string;
   chat: OrderChatMeta;
+  hasUnread?: boolean;
 };
 
 type ChatItem = {
@@ -185,60 +186,31 @@ async function compressImageToBase64(file: File, maxBytes = CHAT_IMAGE_MAX_BYTES
 }
 
 
+
 export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
   const [state, setState] = useState<Record<string, { hasUnread: boolean; latestMessageAt: string | null }>>({});
-  const latestFetchedRef = useRef<Record<string, string | null>>({});
-  const unreadLoadingRef = useRef(false);
 
   const stableTargets = useMemo(
     () => orders.filter((order) => order.chat?.enabled && order.chat?.messagesUrl),
     [orders]
   );
 
-  async function refresh(force = false) {
-    if (stableTargets.length === 0) return;
-    if (!force && document.visibilityState === "hidden") return;
-    if (unreadLoadingRef.current) return;
-    unreadLoadingRef.current = true;
-    try {
-      const response = await fetch("/api/driver/chat/unread-summary", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({
-          orders: stableTargets.map((order) => ({
-            orderId: order.id,
-            since: latestFetchedRef.current[order.id] ?? null,
-            lastReadAt: readStoredLastRead(order.chat?.messagesUrl ?? null)
-          }))
-        })
-      });
-      if (!response.ok) return;
-      const payload = (await response.json().catch(() => ({}))) as { summaries?: Array<{ orderId: string; latestMessageAt: string | null; hasUnread: boolean }> };
-      const updates = Array.isArray(payload.summaries) ? payload.summaries : [];
-      setState((current) => {
-        const next = { ...current };
-        for (const update of updates) {
-          if (!update?.orderId) continue;
-          if (update.latestMessageAt) {
-            latestFetchedRef.current[update.orderId] = update.latestMessageAt;
-          }
-          next[update.orderId] = {
-            latestMessageAt: update.latestMessageAt ?? current[update.orderId]?.latestMessageAt ?? null,
-            hasUnread: update.hasUnread
-          };
-        }
-        return next;
-      });
-    } catch {
-      return;
-    } finally {
-      unreadLoadingRef.current = false;
-    }
-  }
+  useEffect(() => {
+    setState((current) => {
+      const next = { ...current };
+      for (const order of stableTargets) {
+        next[order.id] = {
+          latestMessageAt: current[order.id]?.latestMessageAt ?? null,
+          hasUnread: order.hasUnread === true
+        };
+      }
+      return next;
+    });
+  }, [stableTargets]);
 
-  // 注意：未打開聊天室時，紅點不應自行輪詢 unread-summary。
-  // refresh() 只會由外部（例如用戶點開聊天室）顯式觸發。
+  async function refresh(_force = false) {
+    return;
+  }
 
   function markRead(orderId: string, chat: OrderChatMeta, explicitLatestMessageAt?: string | null) {
     if (!chat?.messagesUrl) return;
@@ -246,9 +218,7 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
     if (readAt) {
       writeStoredLastRead(chat.messagesUrl, readAt);
     }
-    if (chat?.messagesUrl) {
-      writeStoredUnread(chat.messagesUrl, false);
-    }
+    writeStoredUnread(chat.messagesUrl, false);
     setState((current) => ({
       ...current,
       [orderId]: {
@@ -263,7 +233,7 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
       const direct = state[orderId]?.hasUnread;
       if (typeof direct === "boolean") return direct;
       const target = stableTargets.find((item) => item.id === orderId);
-      return Boolean(target?.chat?.messagesUrl && readStoredUnread(target.chat.messagesUrl));
+      return Boolean(target?.hasUnread ?? (target?.chat?.messagesUrl && readStoredUnread(target.chat.messagesUrl)));
     },
     latestMessageAt(orderId: string) {
       return state[orderId]?.latestMessageAt ?? null;

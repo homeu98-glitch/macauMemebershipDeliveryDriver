@@ -42,6 +42,7 @@ type OrderSummary = {
   customerAddressProvided: boolean;
   customerContactProvided: boolean;
   chat: OrderChatMeta;
+  hasUnread: boolean;
 };
 
 function buildGoogleNavUrl(label: string, address: string, lat: number, lng: number) {
@@ -250,10 +251,9 @@ export function DriverOrdersClient() {
     return () => window.clearInterval(timer);
   }, []);
 
-  const chatUnread = useDriverChatUnreadMap(orders.map((order) => ({ id: order.id, chat: order.chat })));
+  const chatUnread = useDriverChatUnreadMap(orders.map((order) => ({ id: order.id, chat: order.chat, hasUnread: order.hasUnread })));
 
   function openChat(order: OrderSummary) {
-    void chatUnread.refresh(true);
     setChatOrder(order);
     chatUnread.markRead(order.id, order.chat);
   }
