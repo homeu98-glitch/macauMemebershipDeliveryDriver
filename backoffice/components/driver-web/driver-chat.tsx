@@ -282,6 +282,7 @@ export function DriverOrderChatModal({
   const listRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<ChatItem[]>([]);
   const roomKindRef = useRef<string | null>(null);
+  const onReadRef = useRef<typeof onRead>(onRead);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -290,6 +291,10 @@ export function DriverOrderChatModal({
   useEffect(() => {
     roomKindRef.current = roomKind;
   }, [roomKind]);
+
+  useEffect(() => {
+    onReadRef.current = onRead;
+  }, [onRead]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -307,14 +312,17 @@ export function DriverOrderChatModal({
     };
   }, [onClose]);
 
+  const chatEnabled = chat?.enabled === true;
+  const chatMessagesUrl = chat?.messagesUrl ?? null;
+
   useEffect(() => {
-    if (!chat?.enabled || !chat.messagesUrl) {
+    if (!chatEnabled || !chatMessagesUrl) {
       setLoading(false);
       setError("此訂單未啟用聊天。");
       return;
     }
 
-    const cached = readChatCache(chat.messagesUrl);
+    const cached = readChatCache(chatMessagesUrl);
     if (cached) {
       setItems(cached.items);
       setRoomKind(cached.roomKind);
@@ -352,9 +360,9 @@ export function DriverOrderChatModal({
         const latestAt = latestTimestamp(mergedItems);
         if (latestAt) {
           latestFetchedAtRef.current = latestAt;
-          onRead?.(latestAt);
+          onReadRef.current?.(latestAt);
         }
-        writeChatCache(chat?.messagesUrl ?? null, {
+        writeChatCache(chatMessagesUrl, {
           roomKind: nextRoomKind,
           writable: payload.writable !== false,
           items: mergedItems,
@@ -387,7 +395,7 @@ export function DriverOrderChatModal({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [chat, orderId, onRead]);
+  }, [chatEnabled, chatMessagesUrl, orderId]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -423,9 +431,9 @@ export function DriverOrderChatModal({
       const latestAt = latestTimestamp(merged);
       if (latestAt) {
         latestFetchedAtRef.current = latestAt;
-        onRead?.(latestAt);
+        onReadRef.current?.(latestAt);
       }
-      writeChatCache(chat?.messagesUrl ?? null, {
+      writeChatCache(chatMessagesUrl, {
         roomKind: nextRoomKind,
         writable: payload.writable !== false,
         items: merged,
