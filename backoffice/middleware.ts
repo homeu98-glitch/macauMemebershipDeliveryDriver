@@ -13,6 +13,7 @@ function isPublicRoute(pathname: string) {
     pathname.startsWith("/api/v1/") ||
     pathname.startsWith("/api/mobile/") ||
     pathname.startsWith("/api/public/") ||
+    pathname.startsWith("/api/integration/") ||
     pathname.startsWith("/_next") ||
     pathname.endsWith(".ico") ||
     pathname.endsWith(".png") ||
