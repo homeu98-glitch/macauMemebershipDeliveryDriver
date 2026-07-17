@@ -37,8 +37,7 @@ type CachedChatPayload = {
 
 const READ_STORAGE_PREFIX = "driver_chat_last_read:";
 const CHAT_CACHE_PREFIX = "driver_chat_cache:";
-const CHAT_UNREAD_POLL_INTERVAL_MS = 20000;
-const CHAT_MODAL_POLL_INTERVAL_MS = 18000;
+const CHAT_MODAL_POLL_INTERVAL_MS = 30000;
 const CHAT_IMAGE_MAX_BYTES = 150 * 1024;
 const CHAT_IMAGE_MAX_EDGE = 1280;
 
@@ -170,95 +169,87 @@ async function compressImageToBase64(file: File, maxBytes = CHAT_IMAGE_MAX_BYTES
   return base64;
 }
 
+
 export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
   const [state, setState] = useState<Record<string, { hasUnread: boolean; latestMessageAt: string | null }>>({});
   const latestFetchedRef = useRef<Record<string, string | null>>({});
-  const unreadTimerRef = useRef<number | null>(null);
+  const unreadLoadingRef = useRef(false);
 
   const stableTargets = useMemo(
     () => orders.filter((order) => order.chat?.enabled && order.chat?.messagesUrl),
     [orders]
   );
 
+  async function refresh(force = false) {
+    if (stableTargets.length === 0) return;
+    if (!force && document.visibilityState === "hidden") return;
+    if (unreadLoadingRef.current) return;
+    unreadLoadingRef.current = true;
+    try {
+      const response = await fetch("/api/driver/chat/unread-summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          orders: stableTargets.map((order) => ({
+            orderId: order.id,
+            since: latestFetchedRef.current[order.id] ?? null,
+            lastReadAt: readStoredLastRead(order.chat?.messagesUrl ?? null)
+          }))
+        })
+      });
+      if (!response.ok) return;
+      const payload = (await response.json().catch(() => ({}))) as { summaries?: Array<{ orderId: string; latestMessageAt: string | null; hasUnread: boolean }> };
+      const updates = Array.isArray(payload.summaries) ? payload.summaries : [];
+      setState((current) => {
+        const next = { ...current };
+        for (const update of updates) {
+          if (!update?.orderId) continue;
+          if (update.latestMessageAt) {
+            latestFetchedRef.current[update.orderId] = update.latestMessageAt;
+          }
+          next[update.orderId] = {
+            latestMessageAt: update.latestMessageAt ?? current[update.orderId]?.latestMessageAt ?? null,
+            hasUnread: update.hasUnread
+          };
+        }
+        return next;
+      });
+    } catch {
+      return;
+    } finally {
+      unreadLoadingRef.current = false;
+    }
+  }
+
   useEffect(() => {
     if (stableTargets.length === 0) return;
-    let disposed = false;
+    void refresh();
+  }, [stableTargets]);
 
-    function clearUnreadTimer() {
-      if (unreadTimerRef.current !== null) {
-        window.clearInterval(unreadTimerRef.current);
-        unreadTimerRef.current = null;
-      }
-    }
-
-    async function poll() {
-      if (document.visibilityState === "hidden") return;
-      try {
-        const response = await fetch("/api/driver/chat/unread-summary", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          cache: "no-store",
-          body: JSON.stringify({
-            orders: stableTargets.map((order) => ({
-              orderId: order.id,
-              since: latestFetchedRef.current[order.id] ?? null,
-              lastReadAt: readStoredLastRead(order.chat?.messagesUrl ?? null)
-            }))
-          })
-        });
-        if (!response.ok) return;
-        const payload = (await response.json().catch(() => ({}))) as { summaries?: Array<{ orderId: string; latestMessageAt: string | null; hasUnread: boolean }> };
-        const updates = Array.isArray(payload.summaries) ? payload.summaries : [];
-        if (disposed) return;
-        setState((current) => {
-          const next = { ...current };
-          for (const update of updates) {
-            if (!update?.orderId) continue;
-            if (update.latestMessageAt) {
-              latestFetchedRef.current[update.orderId] = update.latestMessageAt;
-            }
-            next[update.orderId] = {
-              latestMessageAt: update.latestMessageAt ?? current[update.orderId]?.latestMessageAt ?? null,
-              hasUnread: update.hasUnread || Boolean(current[update.orderId]?.hasUnread)
-            };
-          }
-          return next;
-        });
-      } catch {
-        return;
-      }
-    }
-
-    function startUnreadTimer() {
-      clearUnreadTimer();
-      if (document.visibilityState === "hidden") return;
-      unreadTimerRef.current = window.setInterval(() => {
-        void poll();
-      }, CHAT_UNREAD_POLL_INTERVAL_MS);
-    }
-
-    void poll();
-    startUnreadTimer();
+  useEffect(() => {
+    if (stableTargets.length === 0) return;
     const onFocus = () => {
       if (document.visibilityState === "visible") {
-        startUnreadTimer();
-        void poll();
+        void refresh(true);
+      }
+    };
+    const onDispatch = () => {
+      if (document.visibilityState === "visible") {
+        void refresh(true);
       }
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        startUnreadTimer();
-        void poll();
-      } else {
-        clearUnreadTimer();
+        void refresh(true);
       }
     };
     window.addEventListener("focus", onFocus);
+    window.addEventListener("driver_dispatch_event", onDispatch);
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => {
-      disposed = true;
-      clearUnreadTimer();
       window.removeEventListener("focus", onFocus);
+      window.removeEventListener("driver_dispatch_event", onDispatch);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [stableTargets]);
@@ -285,7 +276,8 @@ export function useDriverChatUnreadMap(orders: ChatOrderTarget[]) {
     latestMessageAt(orderId: string) {
       return state[orderId]?.latestMessageAt ?? null;
     },
-    markRead
+    markRead,
+    refresh
   };
 }
 

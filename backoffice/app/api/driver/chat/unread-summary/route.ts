@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { withDriverSession } from "@/app/api/driver/_shared";
 import { fetchSiteBChatMessages } from "@/lib/siteb-chat-client";
+import { getOrSetMemoryCache } from "@/lib/server-memory-cache";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase";
+
+const CHAT_UNREAD_SUMMARY_CACHE_TTL_MS = 45_000;
 
 type UnreadSummaryRequest = {
   orders?: Array<{
@@ -91,18 +94,24 @@ export async function POST(request: NextRequest) {
           }
 
           try {
-            const result = await fetchSiteBChatMessages(chat.messagesUrl, {
-              since: requestItem.since,
-              secret: chat.callbackSecret
+            const messagesUrl = chat.messagesUrl;
+            const cacheKey = `driver:chat-unread-summary:${messagesUrl}:${requestItem.since ?? "root"}`;
+            const cached = await getOrSetMemoryCache(cacheKey, CHAT_UNREAD_SUMMARY_CACHE_TTL_MS, async () => {
+              const result = await fetchSiteBChatMessages(messagesUrl, {
+                since: requestItem.since,
+                secret: chat.callbackSecret
+              });
+              if (result.status < 200 || result.status >= 300) {
+                return { items: [] as Array<Record<string, unknown>>, latestMessageAt: requestItem.since ?? null };
+              }
+              const body = result.body && typeof result.body === "object" ? (result.body as Record<string, unknown>) : {};
+              const items = Array.isArray(body.items)
+                ? body.items.filter((item) => item && typeof item === "object").map((item) => item as Record<string, unknown>)
+                : [];
+              return { items, latestMessageAt: latestTimestamp(items) ?? requestItem.since ?? null };
             });
-            if (result.status < 200 || result.status >= 300) {
-              return { orderId: order.id, latestMessageAt: requestItem.since ?? null, hasUnread: false };
-            }
-            const body = result.body && typeof result.body === "object" ? (result.body as Record<string, unknown>) : {};
-            const items = Array.isArray(body.items)
-              ? body.items.filter((item) => item && typeof item === "object").map((item) => item as Record<string, unknown>)
-              : [];
-            const latestMessageAt = latestTimestamp(items) ?? requestItem.since ?? null;
+            const items = cached.items;
+            const latestMessageAt = cached.latestMessageAt;
             const hasUnread = items.some((item) => {
               const createdAt = typeof item.created_at === "string" ? item.created_at : null;
               if (!createdAt) return false;
