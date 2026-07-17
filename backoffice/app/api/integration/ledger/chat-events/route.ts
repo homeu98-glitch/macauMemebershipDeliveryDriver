@@ -6,10 +6,18 @@ import { upsertDriverChatRoomState } from "@/lib/driver-chat-state";
 import { createServiceRoleSupabaseClient } from "@/lib/supabase";
 
 type LedgerChatEventPayload = {
+  schemaVersion?: number;
+  eventType?: string;
   eventId?: string;
   externalOrderId?: string;
   chatRoomRef?: string;
   roomKind?: string;
+  messageId?: string;
+  senderRole?: string;
+  senderId?: string;
+  senderLabel?: string | null;
+  createdAt?: string;
+  hasImage?: boolean;
   message?: {
     id?: string;
     createdAt?: string;
@@ -30,9 +38,13 @@ function verifySignature(body: string, timestamp: string, signature: string) {
 }
 
 function normalizeTimestampMs(timestamp: string) {
-  const numeric = Number(timestamp);
+  const trimmed = timestamp.trim();
+  if (!trimmed) return null;
+  const isoMs = Date.parse(trimmed);
+  if (Number.isFinite(isoMs)) return isoMs;
+  const numeric = Number(trimmed);
   if (!Number.isFinite(numeric)) return null;
-  return timestamp.trim().length >= 13 ? numeric : numeric * 1000;
+  return trimmed.length >= 13 ? numeric : numeric * 1000;
 }
 
 async function writeWebhookLog(input: {
@@ -94,27 +106,37 @@ export async function POST(request: NextRequest) {
           normalizedTimestampMs: tsMs,
           nowMs,
           skewMs: tsMs ? Math.abs(nowMs - tsMs) : null,
-          expectedUnit: "unix_seconds_or_milliseconds"
+          expectedFormat: "ISO_8601_UTC_or_legacy_unix"
         }
-      }, { status: 400 });
+      }, { status: 401 });
     }
 
     const payload = (JSON.parse(rawBody) ?? {}) as LedgerChatEventPayload;
     const eventId = typeof payload.eventId === "string" && payload.eventId.trim() ? payload.eventId.trim() : null;
     const externalOrderId = typeof payload.externalOrderId === "string" && payload.externalOrderId.trim() ? payload.externalOrderId.trim() : null;
     const chatRoomRef = typeof payload.chatRoomRef === "string" && payload.chatRoomRef.trim() ? payload.chatRoomRef.trim() : null;
-    const roomKind = typeof payload.roomKind === "string" && payload.roomKind.trim() ? payload.roomKind.trim() : "member_order";
-    const messageId = typeof payload.message?.id === "string" && payload.message.id.trim() ? payload.message.id.trim() : null;
-    const createdAt = typeof payload.message?.createdAt === "string" && payload.message.createdAt.trim() ? payload.message.createdAt.trim() : null;
-    const senderRole = typeof payload.message?.senderRole === "string" && payload.message.senderRole.trim() ? payload.message.senderRole.trim() : null;
+    const roomKind = typeof payload.roomKind === "string" && payload.roomKind.trim() ? payload.roomKind.trim() : "membership_order";
+    const messageId = typeof payload.messageId === "string" && payload.messageId.trim()
+      ? payload.messageId.trim()
+      : (typeof payload.message?.id === "string" && payload.message.id.trim() ? payload.message.id.trim() : null);
+    const createdAt = typeof payload.createdAt === "string" && payload.createdAt.trim()
+      ? payload.createdAt.trim()
+      : (typeof payload.message?.createdAt === "string" && payload.message.createdAt.trim() ? payload.message.createdAt.trim() : null);
+    const senderRole = typeof payload.senderRole === "string" && payload.senderRole.trim()
+      ? payload.senderRole.trim()
+      : (typeof payload.message?.senderRole === "string" && payload.message.senderRole.trim() ? payload.message.senderRole.trim() : null);
+    const senderLabel = typeof payload.senderLabel === "string"
+      ? payload.senderLabel
+      : (typeof payload.message?.senderLabel === "string" ? payload.message.senderLabel : null);
+    const hasImage = payload.hasImage === true || Boolean(payload.message?.imageUrl);
 
     const missingFields = [
       !eventId ? "eventId" : null,
       !externalOrderId ? "externalOrderId" : null,
       !chatRoomRef ? "chatRoomRef" : null,
-      !messageId ? "message.id" : null,
-      !createdAt ? "message.createdAt" : null,
-      !senderRole ? "message.senderRole" : null
+      !messageId ? "messageId" : null,
+      !createdAt ? "createdAt" : null,
+      !senderRole ? "senderRole" : null
     ].filter(Boolean) as string[];
 
     if (missingFields.length > 0) {
@@ -124,13 +146,15 @@ export async function POST(request: NextRequest) {
         externalId: eventId ?? externalOrderId,
         payload: {
           missing_fields: missingFields,
-          parsed_payload: payload
+          parsed_payload: payload,
+          expected_schema: "section_8_payload_v1_flat"
         }
       });
       return NextResponse.json({
         message: "invalid_payload",
         details: {
-          missingFields
+          missingFields,
+          expectedSchema: "section_8_payload_v1_flat"
         }
       }, { status: 400 });
     }
@@ -151,8 +175,8 @@ export async function POST(request: NextRequest) {
       message_id: ensuredMessageId,
       message_created_at: ensuredCreatedAt,
       sender_role: ensuredSenderRole,
-      sender_label: payload.message?.senderLabel ?? null,
-      has_image: Boolean(payload.message?.imageUrl),
+      sender_label: senderLabel,
+      has_image: hasImage,
       payload,
       received_at: new Date().toISOString()
     }, { onConflict: "event_id" });
@@ -164,8 +188,8 @@ export async function POST(request: NextRequest) {
       latestMessageId: ensuredMessageId,
       latestMessageAt: ensuredCreatedAt,
       latestSenderRole: ensuredSenderRole,
-      latestSenderLabel: payload.message?.senderLabel ?? null,
-      hasImage: Boolean(payload.message?.imageUrl)
+      latestSenderLabel: senderLabel,
+      hasImage
     });
 
     await writeWebhookLog({
@@ -173,12 +197,15 @@ export async function POST(request: NextRequest) {
       message: "accepted",
       externalId: ensuredEventId,
       payload: {
+        schemaVersion: payload.schemaVersion ?? null,
+        eventType: payload.eventType ?? null,
         externalOrderId: ensuredExternalOrderId,
         chatRoomRef: ensuredChatRoomRef,
         roomKind,
         messageId: ensuredMessageId,
         createdAt: ensuredCreatedAt,
-        senderRole: ensuredSenderRole
+        senderRole: ensuredSenderRole,
+        hasImage
       }
     });
 
