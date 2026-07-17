@@ -433,10 +433,19 @@ useEffect(() => {
             {navItems.map((item) => {
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
-                <Link key={item.href} href={item.href} className={active ? "driver-nav-item active" : "driver-nav-item"}>
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className={active ? "driver-nav-item active" : "driver-nav-item"}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (window.location.pathname === item.href) return;
+                    window.location.href = item.href;
+                  }}
+                >
                   <span className="driver-nav-icon"><NavIcon type={item.icon} active={active} /></span>
                   <span className="driver-nav-label">{item.label}</span>
-                </Link>
+                </a>
               );
             })}
           </nav>
