@@ -29,19 +29,74 @@ function verifySignature(body: string, timestamp: string, signature: string) {
   return timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-export async function POST(request: NextRequest) {
+function normalizeTimestampMs(timestamp: string) {
+  const numeric = Number(timestamp);
+  if (!Number.isFinite(numeric)) return null;
+  return timestamp.trim().length >= 13 ? numeric : numeric * 1000;
+}
+
+async function writeWebhookLog(input: {
+  status: string;
+  message: string;
+  externalId?: string | null;
+  payload: Record<string, unknown>;
+}) {
   try {
-    const timestamp = request.headers.get("x-ledger-timestamp") ?? request.headers.get("x-siteb-timestamp") ?? "";
-    const signature = request.headers.get("x-ledger-signature") ?? request.headers.get("x-siteb-signature") ?? "";
-    const rawBody = await request.text();
+    const supabase = createServiceRoleSupabaseClient();
+    await supabase.from("sync_logs").insert({
+      source: "ledger_chat_events_webhook",
+      external_id: input.externalId ?? null,
+      status: input.status,
+      message: input.message,
+      payload: input.payload,
+      processed_at: new Date().toISOString()
+    });
+  } catch {
+    // ignore logging failures
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const timestamp = request.headers.get("x-ledger-timestamp") ?? request.headers.get("x-siteb-timestamp") ?? "";
+  const signature = request.headers.get("x-ledger-signature") ?? request.headers.get("x-siteb-signature") ?? "";
+  const rawBody = await request.text();
+
+  try {
     if (!timestamp || !signature || !verifySignature(rawBody, timestamp, signature)) {
+      await writeWebhookLog({
+        status: "rejected",
+        message: "invalid_signature",
+        payload: {
+          timestamp_present: Boolean(timestamp),
+          signature_present: Boolean(signature)
+        }
+      });
       return NextResponse.json({ message: "invalid_signature" }, { status: 401 });
     }
 
     const nowMs = Date.now();
-    const tsMs = Number(timestamp) * 1000;
-    if (!Number.isFinite(tsMs) || Math.abs(nowMs - tsMs) > 5 * 60 * 1000) {
-      return NextResponse.json({ message: "stale_timestamp" }, { status: 400 });
+    const tsMs = normalizeTimestampMs(timestamp);
+    if (!tsMs || Math.abs(nowMs - tsMs) > 5 * 60 * 1000) {
+      await writeWebhookLog({
+        status: "rejected",
+        message: "stale_timestamp",
+        payload: {
+          timestamp,
+          normalized_timestamp_ms: tsMs,
+          now_ms: nowMs,
+          skew_ms: tsMs ? Math.abs(nowMs - tsMs) : null
+        }
+      });
+      return NextResponse.json({
+        message: "stale_timestamp",
+        details: {
+          timestamp,
+          normalizedTimestampMs: tsMs,
+          nowMs,
+          skewMs: tsMs ? Math.abs(nowMs - tsMs) : null,
+          expectedUnit: "unix_seconds_or_milliseconds"
+        }
+      }, { status: 400 });
     }
 
     const payload = (JSON.parse(rawBody) ?? {}) as LedgerChatEventPayload;
@@ -52,19 +107,50 @@ export async function POST(request: NextRequest) {
     const messageId = typeof payload.message?.id === "string" && payload.message.id.trim() ? payload.message.id.trim() : null;
     const createdAt = typeof payload.message?.createdAt === "string" && payload.message.createdAt.trim() ? payload.message.createdAt.trim() : null;
     const senderRole = typeof payload.message?.senderRole === "string" && payload.message.senderRole.trim() ? payload.message.senderRole.trim() : null;
-    if (!eventId || !externalOrderId || !chatRoomRef || !messageId || !createdAt || !senderRole) {
-      return NextResponse.json({ message: "invalid_payload" }, { status: 400 });
+
+    const missingFields = [
+      !eventId ? "eventId" : null,
+      !externalOrderId ? "externalOrderId" : null,
+      !chatRoomRef ? "chatRoomRef" : null,
+      !messageId ? "message.id" : null,
+      !createdAt ? "message.createdAt" : null,
+      !senderRole ? "message.senderRole" : null
+    ].filter(Boolean) as string[];
+
+    if (missingFields.length > 0) {
+      await writeWebhookLog({
+        status: "rejected",
+        message: "invalid_payload",
+        externalId: eventId ?? externalOrderId,
+        payload: {
+          missing_fields: missingFields,
+          parsed_payload: payload
+        }
+      });
+      return NextResponse.json({
+        message: "invalid_payload",
+        details: {
+          missingFields
+        }
+      }, { status: 400 });
     }
+
+    const ensuredEventId = eventId!;
+    const ensuredExternalOrderId = externalOrderId!;
+    const ensuredChatRoomRef = chatRoomRef!;
+    const ensuredMessageId = messageId!;
+    const ensuredCreatedAt = createdAt!;
+    const ensuredSenderRole = senderRole!;
 
     const supabase = createServiceRoleSupabaseClient();
     await supabase.from("ledger_chat_event_inbox").upsert({
-      event_id: eventId,
-      external_order_id: externalOrderId,
-      chat_room_ref: chatRoomRef,
+      event_id: ensuredEventId,
+      external_order_id: ensuredExternalOrderId,
+      chat_room_ref: ensuredChatRoomRef,
       room_kind: roomKind,
-      message_id: messageId,
-      message_created_at: createdAt,
-      sender_role: senderRole,
+      message_id: ensuredMessageId,
+      message_created_at: ensuredCreatedAt,
+      sender_role: ensuredSenderRole,
       sender_label: payload.message?.senderLabel ?? null,
       has_image: Boolean(payload.message?.imageUrl),
       payload,
@@ -72,18 +158,39 @@ export async function POST(request: NextRequest) {
     }, { onConflict: "event_id" });
 
     await upsertDriverChatRoomState({
-      chatRoomRef,
-      externalOrderId,
+      chatRoomRef: ensuredChatRoomRef,
+      externalOrderId: ensuredExternalOrderId,
       roomKind,
-      latestMessageId: messageId,
-      latestMessageAt: createdAt,
-      latestSenderRole: senderRole,
+      latestMessageId: ensuredMessageId,
+      latestMessageAt: ensuredCreatedAt,
+      latestSenderRole: ensuredSenderRole,
       latestSenderLabel: payload.message?.senderLabel ?? null,
       hasImage: Boolean(payload.message?.imageUrl)
     });
 
+    await writeWebhookLog({
+      status: "success",
+      message: "accepted",
+      externalId: ensuredEventId,
+      payload: {
+        externalOrderId: ensuredExternalOrderId,
+        chatRoomRef: ensuredChatRoomRef,
+        roomKind,
+        messageId: ensuredMessageId,
+        createdAt: ensuredCreatedAt,
+        senderRole: ensuredSenderRole
+      }
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
+    await writeWebhookLog({
+      status: "error",
+      message: error instanceof Error ? error.message : "ledger_chat_event_failed",
+      payload: {
+        raw_body: rawBody
+      }
+    });
     return NextResponse.json({ message: error instanceof Error ? error.message : "ledger_chat_event_failed" }, { status: 500 });
   }
 }
