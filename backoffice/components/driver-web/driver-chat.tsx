@@ -40,7 +40,7 @@ const UNREAD_LOCAL_PREFIX = "driver_chat_unread:";
 const READ_STORAGE_PREFIX = "driver_chat_last_read:";
 const CHAT_CACHE_PREFIX = "driver_chat_cache:";
 const CHAT_MODAL_POLL_INTERVAL_MS = 30000;
-const CHAT_IMAGE_MAX_BYTES = 150 * 1024;
+const CHAT_IMAGE_MAX_BYTES = 200 * 1024;
 const CHAT_IMAGE_MAX_EDGE = 1280;
 
 function buildReadStorageKey(messagesUrl: string) {
@@ -279,6 +279,7 @@ export function DriverOrderChatModal({
   const [imageName, setImageName] = useState<string | null>(null);
   const latestFetchedAtRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const itemsRef = useRef<ChatItem[]>([]);
   const roomKindRef = useRef<string | null>(null);
@@ -450,7 +451,7 @@ export function DriverOrderChatModal({
     }
   }
 
-  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageInputChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
@@ -509,8 +510,9 @@ export function DriverOrderChatModal({
         ) : null}
 
         <div className="driver-chat-composer">
-          <input accept="image/*" hidden onChange={handleFileChange} ref={fileInputRef} type="file" />
-          <button className="driver-chat-inline-icon" disabled={!writable || sending} onClick={() => fileInputRef.current?.click()} type="button" aria-label="選擇圖片">
+          <input accept="image/*" hidden onChange={handleImageInputChange} ref={fileInputRef} type="file" />
+          <input accept="image/*" capture="environment" hidden onChange={handleImageInputChange} ref={cameraInputRef} type="file" />
+          <button className="driver-chat-inline-icon" disabled={!writable || sending} onClick={() => fileInputRef.current?.click()} type="button" aria-label="從相簿選擇圖片">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M5 7.5A2.5 2.5 0 0 1 7.5 5h9A2.5 2.5 0 0 1 19 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 16.5v-9Z" stroke="currentColor" strokeWidth="1.8"/>
               <circle cx="9" cy="10" r="1.4" fill="currentColor"/>
@@ -525,6 +527,12 @@ export function DriverOrderChatModal({
             rows={1}
             value={messageText}
           />
+          <button className="driver-chat-inline-icon" disabled={!writable || sending} onClick={() => cameraInputRef.current?.click()} type="button" aria-label="拍照上傳">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M7 8.5A2.5 2.5 0 0 1 9.5 6h1.1c.5 0 .98-.24 1.28-.64l.25-.33A1.6 1.6 0 0 1 13.41 4h1.09A2.5 2.5 0 0 1 17 6.5h1A2.5 2.5 0 0 1 20.5 9v7A2.5 2.5 0 0 1 18 18.5H6A2.5 2.5 0 0 1 3.5 16V9A2.5 2.5 0 0 1 6 6.5h1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="1.8"/>
+            </svg>
+          </button>
           <button className="driver-chat-inline-icon send" disabled={(!messageText.trim() && !imageBase64) || !writable || sending} onClick={handleSend} type="button" aria-label="發送訊息">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M21 3 10 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
