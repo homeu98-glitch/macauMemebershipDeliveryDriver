@@ -13,6 +13,9 @@ type CompletedOrder = {
   customerAddress: string;
   amountMop: number;
   deliveredAt: string;
+  pickupReadyTimeText: string | null;
+  arrivalTimeText: string | null;
+  remark: string | null;
   chat: OrderChatMeta;
   hasUnread: boolean;
 };
@@ -76,6 +79,9 @@ export function DriverCompletedClient() {
                   地址 {order.customerAddress}
                 </div>
                 <div className="order-subvalue tight">完成時間 {order.deliveredAt}</div>
+                {order.pickupReadyTimeText ? <div className="order-subvalue tight">預取時間 {order.pickupReadyTimeText}</div> : null}
+                {order.arrivalTimeText ? <div className="order-subvalue tight">到貨時間 {order.arrivalTimeText}</div> : null}
+                {order.remark ? <div className="order-subvalue tight" title={order.remark}>備註 {order.remark}</div> : null}
               </div>
               <div className="stack gap-2 align-end">
                 <div className="money-chip large compact">MOP {order.amountMop.toFixed(1)}</div>

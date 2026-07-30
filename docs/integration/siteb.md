@@ -18,6 +18,14 @@
 - 如果沒有 `customer.address`，則 `images[].url` 至少要有一張
 - `images[]` 第一版採用公開可下載 URL
 
+### 額外顯示欄位（free text）
+
+以下 3 個欄位為純文字（free text），會存入 `orders.source_payload`，並在車手端「首頁 / 訂單 / 完成」每張訂單卡片中顯示（有值才顯示）：
+
+- `pickupReadyTimeText`：預取時間（例如：`11:45 可取`）
+- `arrivalTimeText`：到貨時間（例如：`約 12:20 到`）
+- `remark`：備註（例如：`先打電話，不要按門鐘`）
+
 ## 查單重點
 
 `GET /api/v1/orders/{externalOrderId}` 目前回傳的重點欄位包括：

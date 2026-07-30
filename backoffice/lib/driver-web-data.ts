@@ -9,6 +9,9 @@ export type DriverWebOrderSummary = {
   customerContactProvided: boolean;
   chat: { enabled: boolean; messagesUrl: string | null } | null;
   hasUnread: boolean;
+  pickupReadyTimeText: string | null;
+  arrivalTimeText: string | null;
+  remark: string | null;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -200,6 +203,9 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
     order?.source_payload && typeof order.source_payload === "object"
       ? (order.source_payload as Record<string, unknown>)
       : null;
+  const pickupReadyTimeText = typeof sourcePayload?.pickupReadyTimeText === "string" ? sourcePayload.pickupReadyTimeText : null;
+  const arrivalTimeText = typeof sourcePayload?.arrivalTimeText === "string" ? sourcePayload.arrivalTimeText : null;
+  const remark = typeof sourcePayload?.remark === "string" ? sourcePayload.remark : null;
   const customerSnapshot =
     sourcePayload?.customerSnapshot && typeof sourcePayload.customerSnapshot === "object"
       ? (sourcePayload.customerSnapshot as Record<string, unknown>)
@@ -230,6 +236,9 @@ function toOrderSummary(order: any, shop: any, customer: any, totalSentOrdersByS
       messagesUrl: typeof chat?.messagesUrl === "string" ? chat.messagesUrl : null
     },
     hasUnread,
+    pickupReadyTimeText,
+    arrivalTimeText,
+    remark,
     id: order.id,
     externalOrderId: order.external_order_id,
     transactionCode: order.transaction_code ?? null,

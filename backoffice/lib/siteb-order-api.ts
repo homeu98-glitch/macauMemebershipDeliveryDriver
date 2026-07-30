@@ -70,6 +70,9 @@ export type CreateOrderInput = {
   images?: OrderImageInput[];
   items?: ItemInput[];
   chat?: OrderChatInput | null;
+  pickupReadyTimeText?: string | null;
+  arrivalTimeText?: string | null;
+  remark?: string | null;
   notes?: Record<string, unknown>;
   callback?: {
     url: string;
@@ -486,7 +489,10 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       callback: normalizedCallback ?? previousPayload.callback ?? null,
       images: normalizedImages,
       customerSnapshot,
-      chat: normalizedChat
+      chat: normalizedChat,
+      pickupReadyTimeText: normalizeText(input.pickupReadyTimeText),
+      arrivalTimeText: normalizeText(input.arrivalTimeText),
+      remark: normalizeText(input.remark)
     };
 
     if (
@@ -542,6 +548,9 @@ export async function createOrSyncOrder(input: CreateOrderInput) {
       currency: input.currency ?? "MOP",
       chat: normalizedChat,
       notes: input.notes ?? {},
+      pickupReadyTimeText: normalizeText(input.pickupReadyTimeText),
+      arrivalTimeText: normalizeText(input.arrivalTimeText),
+      remark: normalizeText(input.remark),
       callback: normalizedCallback,
       images: normalizedImages,
       customerSnapshot,

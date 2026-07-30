@@ -15,6 +15,9 @@ type OrderSummary = {
   customerContactProvided: boolean;
   chat: OrderChatMeta;
   hasUnread: boolean;
+  pickupReadyTimeText: string | null;
+  arrivalTimeText: string | null;
+  remark: string | null;
   id: string;
   externalOrderId: string;
   transactionCode: string | null;
@@ -436,6 +439,9 @@ export function DriverHomeClient() {
                     <div className="order-subvalue tight">交易編號 {order.transactionCode ?? order.externalOrderId}</div>
                     <div className="order-subvalue tight">已派送 {order.totalSentOrders} 單</div>
                     <div className="order-subvalue tight">送達時間 {order.deliveryDeadlineText}</div>
+                    {order.pickupReadyTimeText ? <div className="order-subvalue tight">預取時間 {order.pickupReadyTimeText}</div> : null}
+                    {order.arrivalTimeText ? <div className="order-subvalue tight">到貨時間 {order.arrivalTimeText}</div> : null}
+                    {order.remark ? <div className="order-subvalue tight" title={order.remark}>備註 {order.remark}</div> : null}
                     <div className="order-subvalue tight">發單日期 {order.publishedAt}</div>
                   </div>
                   <div className="stack gap-2 align-end">
